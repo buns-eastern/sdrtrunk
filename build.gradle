@@ -187,7 +187,7 @@ application {
  * Background: see HYDRASDR_NATIVE_LOAD_FIX.md.  Without this patch, HydraSDR
  * tuners intermittently fail to initialize with "hydrasdr_jni not available".
  */
-def fixWindowsLauncher = { File batFile ->
+def fixWindowsLauncher(File batFile) {
     if(batFile == null || !batFile.exists()) {
         return
     }
