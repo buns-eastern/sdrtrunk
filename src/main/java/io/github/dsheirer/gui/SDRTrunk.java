@@ -42,6 +42,7 @@ import io.github.dsheirer.gui.viewer.ViewRecordingViewerRequest;
 import io.github.dsheirer.icon.IconModel;
 import io.github.dsheirer.log.ApplicationLog;
 import io.github.dsheirer.map.MapService;
+import io.github.dsheirer.module.decode.p25.phase1.PcmStreamManager;
 import io.github.dsheirer.module.log.EventLogManager;
 import io.github.dsheirer.monitor.DiagnosticMonitor;
 import io.github.dsheirer.monitor.ResourceMonitor;
@@ -152,6 +153,18 @@ public class SDRTrunk implements Listener<TunerEvent>
 
         mApplicationLog = new ApplicationLog(mUserPreferences);
         mApplicationLog.start();
+
+        //Start the PCM JSON stream TCP server (port 9503 by default) at app startup if enabled.
+        //This makes the listener available immediately and independent of channel types -- previously
+        //the server was only lazily started by P25 Phase 1 channel setup, so a setup with only NBFM,
+        //AM, DMR, P25 Phase 2, etc. channels would never open the port and clients would get
+        //connection refused indefinitely.  Once running, every protocol broadcasts through it because
+        //all audio modules extend AbstractAudioModule, which owns the broadcast call sites.
+        if(mUserPreferences.getPcmStreamPreference().isEnabled())
+        {
+            int pcmPort = mUserPreferences.getPcmStreamPreference().getPort();
+            PcmStreamManager.getInstance(pcmPort);
+        }
 
         //Note: invoke this early in the application lifecycle, before the TunerManager causes the sdrplay classes
         //to be loaded since the jextract auto-generated code attempts to load the library by name and that can fail
