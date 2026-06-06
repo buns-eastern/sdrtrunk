@@ -20,15 +20,19 @@
 package io.github.dsheirer.gui.symbol;
 
 import io.github.dsheirer.module.decode.FeedbackDecoder;
+import io.github.dsheirer.module.decode.BitErrorReport;
 import io.github.dsheirer.sample.Listener;
 import java.util.Arrays;
+import java.util.ArrayDeque;
 import javafx.application.Platform;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Label;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
+import javafx.scene.control.Separator;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -68,6 +72,20 @@ public class SymbolView extends ChannelView implements Listener<Float>
     private static final double QUALITY_BAR_WIDTH = 220.0;
     private static final double QUALITY_BAR_HEIGHT = 10.0;
     private final Rectangle mQualityMarker = new Rectangle(2, 16);
+
+    //Live BER readout: rolling window of FEC bit error reports from the decoder.  Grays out (NO SYNC) when frames
+    //stop decoding so a stale value can't masquerade as a good signal.
+    private static final long BER_WINDOW_MS = 5000;
+    private static final long BER_STALE_MS = 2500;
+    private static final String BER_CHIP_STALE_STYLE = "-fx-font-size: 10px; -fx-font-weight: bold; " +
+        "-fx-text-fill: #808080; -fx-border-color: #808080; -fx-border-radius: 8; -fx-padding: 0 8 0 8;";
+    private final Label mBerLabel = new Label("BER: --");
+    private final Label mBerChip = new Label("NO SYNC");
+    private final Label mBerDetailLabel = new Label("no decodable frames");
+    private final ArrayDeque<long[]> mBerWindow = new ArrayDeque<>();
+    private long mBerBitsInWindow = 0;
+    private long mBerErrorsInWindow = 0;
+    private long mLastBerReportTime = 0;
     private double mAverageErrorPower = -1.0; //EMA of mean-squared symbol error (radians^2); <0 = uninitialized
 
     /**
@@ -115,7 +133,18 @@ public class SymbolView extends ChannelView implements Listener<Float>
         zoneLabels.setMaxWidth(QUALITY_BAR_WIDTH);
 
         VBox barBox = new VBox(1, barPane, zoneLabels);
-        HBox header = new HBox(15, mQualityLabel, barBox);
+
+        //BER readout box, separated from the quality bar by a vertical divider
+        mBerLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #808080;");
+        mBerChip.setStyle(BER_CHIP_STALE_STYLE);
+        mBerDetailLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #808080;");
+        HBox berRow = new HBox(8, mBerLabel, mBerChip);
+        berRow.setAlignment(Pos.CENTER_LEFT);
+        VBox berBox = new VBox(2, berRow, mBerDetailLabel);
+
+        Separator divider = new Separator(Orientation.VERTICAL);
+
+        HBox header = new HBox(15, mQualityLabel, barBox, divider, berBox);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(4, 0, 0, 8));
 
@@ -125,7 +154,11 @@ public class SymbolView extends ChannelView implements Listener<Float>
             "100% = zero error, 0% = symbols at the decision boundary (0.785 rad RMS).\n\n" +
             "GOOD  >= 75%  (RMS < 0.20 rad)  -  tight symbol rows, clean audio\n" +
             "FAIR  50-74%  (RMS 0.20-0.39 rad)  -  fuzzy rows, occasional dropped frames\n" +
-            "POOR  < 50%  (RMS > 0.39 rad)  -  rows smearing, decode breaking up");
+            "POOR  < 50%  (RMS > 0.39 rad)  -  rows smearing, decode breaking up\n\n" +
+            "BER = bit errors corrected by the FEC within each frame's protected NID bits, rolling 5 second window.\n" +
+            "GOOD < 2%   FAIR 2-5%   POOR > 5% (the P25 reference sensitivity benchmark).\n" +
+            "Shows NO SYNC when frames stop decoding - only counts errors in frames that decoded, so when\n" +
+            "the signal is very poor, trust the symbol quality meter; BER will go silent rather than lie.");
         tooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(header, tooltip);
 
@@ -155,11 +188,17 @@ public class SymbolView extends ChannelView implements Listener<Float>
             mQualityLabel.setText("Symbol Quality:  --");
             mQualityLabel.setStyle(null);
             mQualityMarker.setVisible(false);
+            mBerWindow.clear();
+            mBerBitsInWindow = 0;
+            mBerErrorsInWindow = 0;
+            mLastBerReportTime = 0;
+            refreshBerDisplay(System.currentTimeMillis());
         });
 
         if(mFeedbackDecoder != null)
         {
             mFeedbackDecoder.setSymbolListener(this);
+            mFeedbackDecoder.setBitErrorListener(this::receiveBitErrorReport);
         }
     }
 
@@ -171,6 +210,7 @@ public class SymbolView extends ChannelView implements Listener<Float>
         if(mFeedbackDecoder != null)
         {
             mFeedbackDecoder.removeSymbolListener();
+            mFeedbackDecoder.removeBitErrorListener();
         }
 
         mFeedbackDecoder = null;
@@ -279,5 +319,72 @@ public class SymbolView extends ChannelView implements Listener<Float>
         mQualityLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + color + ";");
         mQualityMarker.setX(Math.min(QUALITY_BAR_WIDTH - 2.0, QUALITY_BAR_WIDTH * quality / 100.0));
         mQualityMarker.setVisible(true);
+
+        long now = System.currentTimeMillis();
+        pruneBerWindow(now);
+        refreshBerDisplay(now);
+    }
+
+    /**
+     * Receives an FEC bit error report from the decoder and updates the rolling BER window.  May be invoked from
+     * a decoder thread; state mutation is confined to the JavaFX thread.
+     * @param report of checked bits and corrected bit errors for a decoded frame.
+     */
+    private void receiveBitErrorReport(BitErrorReport report)
+    {
+        if(isShowing() && report.bitsChecked() > 0)
+        {
+            Platform.runLater(() -> {
+                long now = System.currentTimeMillis();
+                mLastBerReportTime = now;
+                mBerWindow.addLast(new long[]{now, report.bitsChecked(), report.bitErrors()});
+                mBerBitsInWindow += report.bitsChecked();
+                mBerErrorsInWindow += report.bitErrors();
+                pruneBerWindow(now);
+                refreshBerDisplay(now);
+            });
+        }
+    }
+
+    /**
+     * Removes expired entries from the rolling BER window.
+     * @param now current timestamp in milliseconds.
+     */
+    private void pruneBerWindow(long now)
+    {
+        while(!mBerWindow.isEmpty() && (now - mBerWindow.peekFirst()[0]) > BER_WINDOW_MS)
+        {
+            long[] expired = mBerWindow.removeFirst();
+            mBerBitsInWindow -= expired[1];
+            mBerErrorsInWindow -= expired[2];
+        }
+    }
+
+    /**
+     * Refreshes the BER readout labels.  Shows a grayed-out NO SYNC state when no frames have decoded recently so
+     * that a stale BER value can't masquerade as a good signal.
+     * @param now current timestamp in milliseconds.
+     */
+    private void refreshBerDisplay(long now)
+    {
+        if(mLastBerReportTime == 0 || (now - mLastBerReportTime) > BER_STALE_MS || mBerBitsInWindow <= 0)
+        {
+            mBerLabel.setText("BER: --");
+            mBerLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #808080;");
+            mBerChip.setText("NO SYNC");
+            mBerChip.setStyle(BER_CHIP_STALE_STYLE);
+            mBerDetailLabel.setText("no decodable frames");
+            return;
+        }
+
+        double ber = 100.0 * mBerErrorsInWindow / mBerBitsInWindow;
+        String color = ber < 2.0 ? COLOR_GOOD : (ber <= 5.0 ? COLOR_FAIR : COLOR_POOR);
+        mBerLabel.setText(String.format("BER: %.2f%%", ber));
+        mBerLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        mBerChip.setText("SYNC");
+        mBerChip.setStyle("-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: white; " +
+            "-fx-background-color: " + color + "; -fx-background-radius: 8; -fx-padding: 1 8 1 8;");
+        mBerDetailLabel.setText(String.format("%,d corrected / %,d bits - last 5 sec", mBerErrorsInWindow,
+            mBerBitsInWindow));
     }
 }
