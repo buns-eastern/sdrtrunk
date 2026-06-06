@@ -37,6 +37,7 @@ import java.util.List;
 public class DecodeConfigNBFM extends DecodeConfigAnalog
 {
     private boolean mAudioFilter = true;
+    private int mAudioHangtimeMs = 0;
     private float mSquelchNoiseOpenThreshold = NoiseSquelch.DEFAULT_NOISE_OPEN_THRESHOLD;
     private float mSquelchNoiseCloseThreshold = NoiseSquelch.DEFAULT_NOISE_CLOSE_THRESHOLD;
     private int mSquelchHysteresisOpenThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_OPEN_THRESHOLD;
@@ -118,6 +119,26 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     public boolean isAudioFilter()
     {
         return mAudioFilter;
+    }
+
+    /**
+     * Audio hangtime in milliseconds.  When greater than zero, the audio segment close is delayed by this amount
+     * to allow remaining audio buffers to flush.  New audio arriving during the hangtime cancels the pending close.
+     * @return hangtime in milliseconds (0 = immediate close)
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "audioHangtimeMs")
+    public int getAudioHangtimeMs()
+    {
+        return mAudioHangtimeMs;
+    }
+
+    /**
+     * Sets the audio hangtime in milliseconds.
+     * @param audioHangtimeMs delay in milliseconds, constrained to 0-2000 (0 = immediate close)
+     */
+    public void setAudioHangtimeMs(int audioHangtimeMs)
+    {
+        mAudioHangtimeMs = Math.max(0, Math.min(2000, audioHangtimeMs));
     }
 
     /**
