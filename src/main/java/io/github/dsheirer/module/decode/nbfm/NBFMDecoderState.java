@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2026 Dennis Sheirer
+ * Copyright (C) 2014-2023 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,6 +36,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * NBFM decoder state
+ */
+/**
  * NBFM decoder state - tracks channel tone filtering configuration and detected tones
  */
 public class NBFMDecoderState extends AnalogDecoderState
@@ -47,9 +50,6 @@ public class NBFMDecoderState extends AnalogDecoderState
     // Tone filter configuration (from DecodeConfigNBFM)
     private boolean mToneFilterEnabled = false;
     private List<ChannelToneFilter> mConfiguredFilters = new ArrayList<>();
-
-    // De-emphasis configuration
-    private DecodeConfigNBFM.DeemphasisMode mDeemphasisMode = DecodeConfigNBFM.DeemphasisMode.NONE;
 
     // Current status
     private volatile String mToneStatus = "No tone detected";
@@ -64,10 +64,6 @@ public class NBFMDecoderState extends AnalogDecoderState
      */
     public NBFMDecoderState(String channelName, DecodeConfigNBFM decodeConfig)
     {
-        if(decodeConfig == null)
-        {
-            throw new IllegalArgumentException("DecodeConfigNBFM must not be null");
-        }
         mChannelName = (channelName != null && !channelName.isEmpty()) ? channelName : "NBFM CHANNEL";
         mChannelNameIdentifier = new SimpleStringIdentifier(mChannelName, IdentifierClass.CONFIGURATION, Form.CHANNEL_NAME, Role.ANY);
         mTalkgroupIdentifier = new NBFMTalkgroup(decodeConfig.getTalkgroup());
@@ -77,8 +73,14 @@ public class NBFMDecoderState extends AnalogDecoderState
         {
             mConfiguredFilters.addAll(decodeConfig.getToneFilters());
         }
+    }
 
-        mDeemphasisMode = decodeConfig.getDeemphasis();
+    /**
+     * Returns the channel name for this decoder state.
+     */
+    public String getChannelName()
+    {
+        return mChannelName;
     }
 
     @Override
@@ -99,12 +101,6 @@ public class NBFMDecoderState extends AnalogDecoderState
         return mTalkgroupIdentifier;
     }
 
-    // Last code written to mToneStatus — used to skip redundant String allocations
-    // when the same tone fires continuously (~43x/sec while squelch is open).
-    private CTCSSCode mLastToneStatusCTCSS = null;
-    private DCSCode mLastToneStatusDCS = null;
-    private boolean mLastToneStatusWasAllowed = false;
-
     /**
      * Called by NBFMDecoder when a matching CTCSS tone is detected (allowed)
      */
@@ -112,16 +108,7 @@ public class NBFMDecoderState extends AnalogDecoderState
     {
         if(code != null)
         {
-            // Only allocate a new status string when the tone or allowed-state changes.
-            // The detector fires every buffer (~43x/sec); skipping redundant writes
-            // avoids ~43 String allocations per second while the tone is stable.
-            if(code != mLastToneStatusCTCSS || !mLastToneStatusWasAllowed)
-            {
-                mToneStatus = "CTCSS: " + code.getDisplayString() + " [ALLOWED]";
-                mLastToneStatusCTCSS = code;
-                mLastToneStatusDCS = null;
-                mLastToneStatusWasAllowed = true;
-            }
+            mToneStatus = "CTCSS: " + code.getDisplayString() + " [ALLOWED]";
             incrementCount(code.getDisplayString(), true);
         }
     }
@@ -133,13 +120,7 @@ public class NBFMDecoderState extends AnalogDecoderState
     {
         if(code != null)
         {
-            if(code != mLastToneStatusDCS || !mLastToneStatusWasAllowed)
-            {
-                mToneStatus = "DCS: " + code.toString() + " [ALLOWED]";
-                mLastToneStatusDCS = code;
-                mLastToneStatusCTCSS = null;
-                mLastToneStatusWasAllowed = true;
-            }
+            mToneStatus = "DCS: " + code.toString() + " [ALLOWED]";
             incrementCount("DCS " + code.toString(), true);
         }
     }
@@ -151,13 +132,7 @@ public class NBFMDecoderState extends AnalogDecoderState
     {
         if(code != null)
         {
-            if(code != mLastToneStatusCTCSS || mLastToneStatusWasAllowed)
-            {
-                mToneStatus = "CTCSS: " + code.getDisplayString() + " [REJECTED]";
-                mLastToneStatusCTCSS = code;
-                mLastToneStatusDCS = null;
-                mLastToneStatusWasAllowed = false;
-            }
+            mToneStatus = "CTCSS: " + code.getDisplayString() + " [REJECTED]";
             incrementCount(code.getDisplayString(), false);
         }
     }
@@ -169,13 +144,7 @@ public class NBFMDecoderState extends AnalogDecoderState
     {
         if(code != null)
         {
-            if(code != mLastToneStatusDCS || mLastToneStatusWasAllowed)
-            {
-                mToneStatus = "DCS: " + code.toString() + " [REJECTED]";
-                mLastToneStatusDCS = code;
-                mLastToneStatusCTCSS = null;
-                mLastToneStatusWasAllowed = false;
-            }
+            mToneStatus = "DCS: " + code.toString() + " [REJECTED]";
             incrementCount("DCS " + code.toString(), false);
         }
     }
@@ -186,8 +155,6 @@ public class NBFMDecoderState extends AnalogDecoderState
     public void setToneLost()
     {
         mToneStatus = "No tone detected";
-        mLastToneStatusCTCSS = null;
-        mLastToneStatusDCS = null;
     }
 
     private void incrementCount(String toneLabel, boolean accepted)
@@ -212,31 +179,16 @@ public class NBFMDecoderState extends AnalogDecoderState
         StringBuilder sb = new StringBuilder();
         sb.append("Activity Summary - Decoder:NBFM\n");
 
-        if(mDeemphasisMode != DecodeConfigNBFM.DeemphasisMode.NONE)
-        {
-            sb.append("\nDe-emphasis: ").append(mDeemphasisMode.getMicroseconds()).append("\u00b5s");
-        }
-
         sb.append("\n\nTone Filter: ");
         if(mToneFilterEnabled)
         {
             sb.append("ENABLED\n");
-            if(mConfiguredFilters.size() == 1)
+            sb.append("Configured Filter: ");
+            if(!mConfiguredFilters.isEmpty())
             {
-                sb.append("Configured Filter: ").append(mConfiguredFilters.get(0).getDisplayString()).append("\n");
+                sb.append(mConfiguredFilters.get(0).getDisplayString());
             }
-            else if(mConfiguredFilters.size() > 1)
-            {
-                sb.append("Configured Filters (").append(mConfiguredFilters.size()).append("):\n");
-                for(ChannelToneFilter filter : mConfiguredFilters)
-                {
-                    sb.append("  ").append(filter.getDisplayString()).append("\n");
-                }
-            }
-            else
-            {
-                sb.append("Configured Filter: (none)\n");
-            }
+            sb.append("\n");
         }
         else
         {

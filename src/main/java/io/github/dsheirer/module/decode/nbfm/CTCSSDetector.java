@@ -50,8 +50,16 @@ public class CTCSSDetector
     private static final float DETECTION_THRESHOLD_DB = 6.0f;
 
     /**
+     * Frequency cutoff for the spectral leakage preference logic.
+     * Below this frequency, closely-spaced Goertzel bins cause significant leakage,
+     * so we allow preferring a nearby target bin over the peak bin if within 2 dB.
+     */
+    private static final float LOW_FREQ_NARROWBAND_CUTOFF = 120.0f;
+
+    /**
      * Number of consecutive detections required before reporting a match.
      * Prevents false triggers from transient energy.
+     * 3 blocks at ~75ms each = ~225ms detection latency (within normal radio PL decode time).
      */
     private static final int CONFIRMATION_COUNT = 3;
 
@@ -77,6 +85,13 @@ public class CTCSSDetector
     private CTCSSCode mDetectedCode = null;
     private int mConfirmationCounter = 0;
     private int mLossCounter = 0;
+
+    // Tone survey: log top tones periodically regardless of threshold
+    private static final int SURVEY_INTERVAL_BLOCKS = 40; // ~every 3 seconds at 75ms/block
+    private int mSurveyBlockCounter = 0;
+
+    // Channel identification for log messages (e.g. "MetroFire - Red [483.3125]")
+    private String mChannelLabel = "";
 
     // Callback
     private CTCSSDetectorListener mListener;
@@ -163,8 +178,19 @@ public class CTCSSDetector
             mCoefficients[i] = (float)(2.0 * Math.cos(2.0 * Math.PI * normalizedFreq));
         }
 
-        LOGGER.debug("CTCSSDetector initialized: {} target tones, block size {}, sample rate {}",
-                mTargetCodeArray.length, mBlockSize, mSampleRate);
+        LOGGER.debug("{}CTCSSDetector initialized: {} target tones, block size {}, sample rate {}",
+                mChannelLabel, mTargetCodeArray.length, mBlockSize, mSampleRate);
+    }
+
+    /**
+     * Sets a channel label that is prepended to all log messages for channel identification.
+     * Format example: "MetroFire - Red [483.3125]"
+     *
+     * @param label the channel label, or null/empty for no prefix
+     */
+    public void setChannelLabel(String label)
+    {
+        mChannelLabel = (label != null && !label.isEmpty()) ? "[" + label + "] " : "";
     }
 
     /**
@@ -209,6 +235,8 @@ public class CTCSSDetector
 
     /**
      * Analyzes the current block of samples using Goertzel algorithm for each target frequency.
+     * The strongest bin must exceed the total-energy SNR threshold (DETECTION_THRESHOLD_DB)
+     * to be considered a detection.
      */
     private void analyzeBlock()
     {
@@ -227,17 +255,18 @@ public class CTCSSDetector
             return;
         }
 
-        // Run Goertzel for each target frequency and find the strongest
+        // Run Goertzel for each target frequency and store all power values
+        float[] powers = new float[mTargetFrequencies.length];
         float maxPower = 0;
         int maxIndex = -1;
 
         for(int i = 0; i < mTargetFrequencies.length; i++)
         {
-            float power = goertzel(mSampleBuffer, mBlockSize, mCoefficients[i]);
+            powers[i] = goertzel(mSampleBuffer, mBlockSize, mCoefficients[i]);
 
-            if(power > maxPower)
+            if(powers[i] > maxPower)
             {
-                maxPower = power;
+                maxPower = powers[i];
                 maxIndex = i;
             }
         }
@@ -248,13 +277,131 @@ public class CTCSSDetector
         // Convert to dB
         float snrDB = (float)(10.0 * Math.log10(normalizedPower + 1e-10));
 
+        // Periodic tone survey: log top 3 tones regardless of threshold
+        mSurveyBlockCounter++;
+        if(mSurveyBlockCounter >= SURVEY_INTERVAL_BLOCKS)
+        {
+            mSurveyBlockCounter = 0;
+
+            // Find top 3 bins
+            int[] topIdx = {-1, -1, -1};
+            float[] topPow = {0, 0, 0};
+            for(int i = 0; i < powers.length; i++)
+            {
+                if(powers[i] > topPow[0])
+                {
+                    topPow[2] = topPow[1]; topIdx[2] = topIdx[1];
+                    topPow[1] = topPow[0]; topIdx[1] = topIdx[0];
+                    topPow[0] = powers[i]; topIdx[0] = i;
+                }
+                else if(powers[i] > topPow[1])
+                {
+                    topPow[2] = topPow[1]; topIdx[2] = topIdx[1];
+                    topPow[1] = powers[i]; topIdx[1] = i;
+                }
+                else if(powers[i] > topPow[2])
+                {
+                    topPow[2] = powers[i]; topIdx[2] = i;
+                }
+            }
+
+            StringBuilder sb = new StringBuilder(mChannelLabel).append("CTCSS survey: ");
+            for(int rank = 0; rank < 3; rank++)
+            {
+                if(topIdx[rank] >= 0)
+                {
+                    float np = topPow[rank] / (totalEnergy * mBlockSize);
+                    float db = (float)(10.0 * Math.log10(np + 1e-10));
+                    if(rank > 0) sb.append(", ");
+                    sb.append(String.format("#%d %s (%.1f Hz) %.1f dB", rank + 1,
+                            mTargetCodeArray[topIdx[rank]], mTargetFrequencies[topIdx[rank]], db));
+                }
+            }
+            // Include active bin count in survey for diagnostics
+            int surveyActiveBins = 0;
+            for(int i = 0; i < powers.length; i++)
+            {
+                float np2 = powers[i] / (totalEnergy * mBlockSize);
+                float db2 = (float)(10.0 * Math.log10(np2 + 1e-10));
+                if(db2 > DETECTION_THRESHOLD_DB) surveyActiveBins++;
+            }
+            sb.append(String.format(" [activeBins=%d]", surveyActiveBins));
+            LOGGER.debug(sb.toString());
+        }
+
         if(maxIndex >= 0 && snrDB > DETECTION_THRESHOLD_DB)
         {
             CTCSSCode detected = mTargetCodeArray[maxIndex];
+
+            // For low-frequency tones, spectral leakage can cause a neighboring non-target bin
+            // to narrowly beat the actual target bin. If a target tone is within 2 bins of the
+            // winner and within 2 dB, prefer the target tone — it's almost certainly the real tone.
+            if(!mTargetCodes.contains(detected) && mTargetFrequencies[maxIndex] <= LOW_FREQ_NARROWBAND_CUTOFF)
+            {
+                for(int offset = 1; offset <= 2; offset++)
+                {
+                    int belowIdx = maxIndex - offset;
+                    int aboveIdx = maxIndex + offset;
+
+                    if(belowIdx >= 0 && mTargetCodes.contains(mTargetCodeArray[belowIdx]))
+                    {
+                        float diffDB = (float)(10.0 * Math.log10((maxPower / (powers[belowIdx] + 1e-10f)) + 1e-10));
+                        if(diffDB < 2.0f)
+                        {
+                            LOGGER.trace("{}CTCSS preferring target {} over winner {} (diff={} dB)",
+                                    mChannelLabel, mTargetCodeArray[belowIdx], detected, String.format("%.1f", diffDB));
+                            detected = mTargetCodeArray[belowIdx];
+                            maxIndex = belowIdx;
+                            maxPower = powers[belowIdx];
+                            break;
+                        }
+                    }
+                    if(aboveIdx < mTargetCodeArray.length && mTargetCodes.contains(mTargetCodeArray[aboveIdx]))
+                    {
+                        float diffDB = (float)(10.0 * Math.log10((maxPower / (powers[aboveIdx] + 1e-10f)) + 1e-10));
+                        if(diffDB < 2.0f)
+                        {
+                            LOGGER.trace("{}CTCSS preferring target {} over winner {} (diff={} dB)",
+                                    mChannelLabel, mTargetCodeArray[aboveIdx], detected, String.format("%.1f", diffDB));
+                            detected = mTargetCodeArray[aboveIdx];
+                            maxIndex = aboveIdx;
+                            maxPower = powers[aboveIdx];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Log at DEBUG only on confirmation transitions; TRACE for every block
+            if(mConfirmationCounter < CONFIRMATION_COUNT ||
+               (mDetectedCode != detected))
+            {
+                LOGGER.debug("{}CTCSS tone {} ({} Hz) detected: SNR={} dB confirm={}/{} target={}",
+                        mChannelLabel, detected, String.format("%.1f", mTargetFrequencies[maxIndex]),
+                        String.format("%.1f", snrDB),
+                        mConfirmationCounter, CONFIRMATION_COUNT,
+                        mTargetCodes.contains(detected) ? "YES" : "NO");
+            }
+            else
+            {
+                LOGGER.trace("{}CTCSS tone {} ({} Hz) detected: SNR={} dB confirm={}/{} target={}",
+                        mChannelLabel, detected, String.format("%.1f", mTargetFrequencies[maxIndex]),
+                        String.format("%.1f", snrDB),
+                        mConfirmationCounter, CONFIRMATION_COUNT,
+                        mTargetCodes.contains(detected) ? "YES" : "NO");
+            }
+
             handleDetection(detected);
         }
         else
         {
+            // Log near-misses at TRACE to avoid flooding overnight logs
+            if(maxIndex >= 0 && snrDB > (DETECTION_THRESHOLD_DB - 3.0f))
+            {
+                LOGGER.trace("{}CTCSS tone {} ({} Hz) below threshold: SNR={} dB (need {} dB)",
+                        mChannelLabel, mTargetCodeArray[maxIndex], String.format("%.1f", mTargetFrequencies[maxIndex]),
+                        String.format("%.1f", snrDB), DETECTION_THRESHOLD_DB);
+            }
             handleNoDetection();
         }
     }
@@ -287,14 +434,24 @@ public class CTCSSDetector
     /**
      * Handles detection of a CTCSS tone in the current block.
      * Only reports to the listener if the detected tone is in the allowed (target) set.
+     *
+     * IMPORTANT: mLossCounter is only reset when the TARGET tone is detected. Non-target
+     * detections do NOT reset the loss counter. This prevents broadband interference
+     * (which randomly lights up different CTCSS bins each block) from holding the tone
+     * gate open indefinitely via the holdover mechanism. Without this, digital noise
+     * bursts following a valid transmission could leak through for their entire duration
+     * because mLossCounter would never reach LOSS_COUNT.
      */
     private void handleDetection(CTCSSCode code)
     {
-        mLossCounter = 0;
-
         // Only accept tones that are in our allowed set
         if(!mTargetCodes.contains(code))
         {
+            // NON-TARGET tone detected: do NOT reset mLossCounter.
+            // Broadband noise/digital interference lights up random CTCSS bins each block.
+            // If we reset mLossCounter here, it would never reach LOSS_COUNT, and a prior
+            // target match (held over from a valid transmission) would stay active forever.
+
             // Track confirmed rejections — only notify after same wrong tone seen CONFIRMATION_COUNT times
             if(mDetectedCode == code)
             {
@@ -316,6 +473,9 @@ public class CTCSSDetector
             }
             return;
         }
+
+        // TARGET tone detected — reset loss counter
+        mLossCounter = 0;
 
         if(mDetectedCode == code)
         {
@@ -382,5 +542,23 @@ public class CTCSSDetector
     public CTCSSCode getDetectedCode()
     {
         return (mConfirmationCounter >= CONFIRMATION_COUNT) ? mDetectedCode : null;
+    }
+
+    /**
+     * Returns the current loss counter value (number of consecutive blocks without target detection).
+     * Used for diagnostic logging.
+     */
+    public int getLossCounter()
+    {
+        return mLossCounter;
+    }
+
+    /**
+     * Returns the raw detected code (even if not yet confirmed), or null.
+     * Used for diagnostic logging.
+     */
+    public CTCSSCode getRawDetectedCode()
+    {
+        return mDetectedCode;
     }
 }

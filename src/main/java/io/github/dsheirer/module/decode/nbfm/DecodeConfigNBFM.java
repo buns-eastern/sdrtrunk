@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2026 Dennis Sheirer
+ * Copyright (C) 2014-2025 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Decoder configuration for an NBFM channel.
- *
- * Supports channel-level CTCSS/DCS tone filtering, squelch tail removal, and FM de-emphasis.
+ * Decoder configuration for an NBFM channel
  */
 public class DecodeConfigNBFM extends DecodeConfigAnalog
 {
@@ -44,60 +42,34 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     private int mSquelchHysteresisOpenThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_OPEN_THRESHOLD;
     private int mSquelchHysteresisCloseThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_CLOSE_THRESHOLD;
 
-    // Channel-level tone filtering
+    // === NEW: Channel-level tone filtering ===
     private List<ChannelToneFilter> mToneFilters = new ArrayList<>();
     private boolean mToneFilterEnabled = false;
 
-    // Squelch tail/head removal
+    // === NEW: Squelch tail/head removal ===
     private int mSquelchTailRemovalMs = SquelchTailRemover.DEFAULT_TAIL_REMOVAL_MS;
     private int mSquelchHeadRemovalMs = SquelchTailRemover.DEFAULT_HEAD_REMOVAL_MS;
-    private boolean mSquelchTailRemovalEnabled = false;
+    private boolean mSquelchTailRemovalEnabled = true;
 
-    // FM de-emphasis
-    private DeemphasisMode mDeemphasis = DeemphasisMode.US_750US;
-
-    // Audio post-processing configuration
+    // VOXSEND AUDIO FILTER CONFIGURATION
+    private boolean mDeemphasisEnabled = false;
+    private double mDeemphasisTimeConstant = 75.0; // microseconds
     private boolean mLowPassEnabled = true;
-    private double mLowPassCutoff = 3400.0; // Hz
+    private double mLowPassCutoff = 2800.0; // Hz
     private boolean mBassBoostEnabled = false;
     private float mBassBoostDb = 0.0f; // 0 to +12 dB
     private boolean mNoiseGateEnabled = false;
     private float mNoiseGateThreshold = 4.0f; // percentage 0-100%
     private float mNoiseGateReduction = 0.8f; // 0.0 to 1.0
     private int mNoiseGateHoldTime = 500; // milliseconds
-    private boolean mVoiceEnhanceEnabled = true;
-    private float mVoiceEnhanceAmount = 30.0f; // percentage 0-100%
-    private float mOutputGain = 1.0f; // linear gain 0.1 to 5.0
+    private boolean mAgcEnabled = false;
+    private float mAgcTargetLevel = -18.0f; // dB (stores voice enhancement amount)
+    private float mAgcMaxGain = 12.0f; // dB (stores output gain, 12 dB ≈ 2.0x linear)
 
-    /**
-     * FM de-emphasis time constant options
-     */
-    public enum DeemphasisMode
-    {
-        NONE("None", 0),
-        US_750US("750 µs (North America)", 750),
-        CEPT_530US("530 µs (Europe/CEPT)", 530);
-
-        private final String mLabel;
-        private final int mMicroseconds;
-
-        DeemphasisMode(String label, int microseconds)
-        {
-            mLabel = label;
-            mMicroseconds = microseconds;
-        }
-
-        public int getMicroseconds()
-        {
-            return mMicroseconds;
-        }
-
-        @Override
-        public String toString()
-        {
-            return mLabel;
-        }
-    }
+    // Hiss reduction (high-shelf filter above corner frequency)
+    private boolean mHissReductionEnabled = true;
+    private float mHissReductionDb = -6.0f; // -12 to 0 dB (shelf cut)
+    private double mHissReductionCornerHz = 2000.0; // Shelf pivot frequency
 
     /**
      * Constructs an instance
@@ -115,7 +87,7 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     @Override
     protected Bandwidth getDefaultBandwidth()
     {
-        return Bandwidth.BW_12_5;
+        return Bandwidth.BW_7_5;
     }
 
     /**
@@ -138,80 +110,122 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
         }
     }
 
-    // ========== Existing squelch configuration ==========
-
+    /**
+     * Indicates if the user wants the demodulated audio to be high-pass filtered.
+     * @return enable status, defaults to true.
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "audioFilter")
     public boolean isAudioFilter()
     {
         return mAudioFilter;
     }
 
+    /**
+     * Sets the enabled state of high-pass filtering of the demodulated audio.
+     * @param audioFilter to true to enable high-pass filtering.
+     */
     public void setAudioFilter(boolean audioFilter)
     {
         mAudioFilter = audioFilter;
     }
 
+    /**
+     * Squelch noise open threshold in the range 0.0 to 1.0 with a default of 0.1
+     * @return noise open threshold
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "squelchNoiseOpenThreshold")
     public float getSquelchNoiseOpenThreshold()
     {
         return mSquelchNoiseOpenThreshold;
     }
 
+    /**
+     * Squelch noise close threshold in the range 0.0 to 1.0, greater than or equal to open threshold, with a default of 0.2
+     * @return noise close threshold
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "squelchNoiseCloseThreshold")
     public float getSquelchNoiseCloseThreshold()
     {
         return mSquelchNoiseCloseThreshold;
     }
 
+    /**
+     * Sets the squelch noise threshold.
+     * @param open in range 0.0 to 1.0 with a default of 0.1
+     */
     public void setSquelchNoiseOpenThreshold(float open)
     {
         if(open < NoiseSquelch.MINIMUM_NOISE_THRESHOLD || open > NoiseSquelch.MAXIMUM_NOISE_THRESHOLD)
         {
             throw new IllegalArgumentException("Squelch noise open threshold is out of range: " + open);
         }
+
         mSquelchNoiseOpenThreshold = open;
     }
 
+    /**
+     * Sets the squelch noise close threshold.
+     * @param close in range 0.0 to 1.0 and greater than or equal to open, with a default of 0.1
+     */
     public void setSquelchNoiseCloseThreshold(float close)
     {
         if(close < NoiseSquelch.MINIMUM_NOISE_THRESHOLD || close > NoiseSquelch.MAXIMUM_NOISE_THRESHOLD)
         {
             throw new IllegalArgumentException("Squelch noise close threshold is out of range: " + close);
         }
+
         mSquelchNoiseCloseThreshold = close;
     }
 
+    /**
+     * Squelch hysteresis open threshold in range 1-10 with a default of 4.
+     * @return hysteresis open threshold
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "squelchHysteresisOpenThreshold")
     public int getSquelchHysteresisOpenThreshold()
     {
         return mSquelchHysteresisOpenThreshold;
     }
 
+    /**
+     * Sets the squelch time threshold in the range 1-10.
+     * @param open threshold
+     */
     public void setSquelchHysteresisOpenThreshold(int open)
     {
         if(open < NoiseSquelch.MINIMUM_HYSTERESIS_THRESHOLD || open > NoiseSquelch.MAXIMUM_HYSTERESIS_THRESHOLD)
         {
             throw new IllegalArgumentException("Squelch hysteresis open threshold is out of range: " + open);
         }
+
         mSquelchHysteresisOpenThreshold = open;
     }
 
+    /**
+     * Squelch hysteresis close threshold in range 1-10 with a default of 4.
+     * @return hysteresis close threshold
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "squelchHysteresisCloseThreshold")
     public int getSquelchHysteresisCloseThreshold()
     {
         return mSquelchHysteresisCloseThreshold;
     }
 
+    /**
+     * Sets the squelch close threshold in the range 1-10.
+     * @param close threshold
+     */
     public void setSquelchHysteresisCloseThreshold(int close)
     {
         if(close < NoiseSquelch.MINIMUM_HYSTERESIS_THRESHOLD || close > NoiseSquelch.MAXIMUM_HYSTERESIS_THRESHOLD)
         {
             throw new IllegalArgumentException("Squelch hysteresis close threshold is out of range: " + close);
         }
+
         mSquelchHysteresisCloseThreshold = close;
     }
 
-    // ========== Channel-level tone filtering ==========
+    // ========== NEW: Channel-level tone filtering ==========
 
     /**
      * List of CTCSS/DCS tone filters for this channel. When enabled, audio is only passed
@@ -273,7 +287,7 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
         return mToneFilterEnabled && !mToneFilters.isEmpty();
     }
 
-    // ========== Squelch tail/head removal ==========
+    // ========== NEW: Squelch tail/head removal ==========
 
     /**
      * Squelch tail removal enabled state. When enabled, the configured number of
@@ -323,147 +337,311 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
                 Math.min(SquelchTailRemover.MAXIMUM_HEAD_REMOVAL_MS, ms));
     }
 
-    // ========== FM de-emphasis ==========
+    // ========== VOXSEND AUDIO FILTER GETTERS AND SETTERS ==========
 
     /**
-     * FM de-emphasis mode. Standard FM broadcasting uses pre-emphasis to boost high
-     * frequencies during transmission. De-emphasis restores flat frequency response
-     * during receive, improving audio clarity.
-     *
-     * North America uses 750µs time constant, Europe/CEPT uses 530µs.
-     * Default: US_750US for North American NBFM.
+     * Indicates if FM de-emphasis filter is enabled.
+     * @return true if enabled (default)
      */
-    @JacksonXmlProperty(isAttribute = true, localName = "deemphasis")
-    public DeemphasisMode getDeemphasis()
+    @JacksonXmlProperty(isAttribute = true, localName = "deemphasisEnabled")
+    public boolean isDeemphasisEnabled()
     {
-        return mDeemphasis;
+        return mDeemphasisEnabled;
     }
 
-    public void setDeemphasis(DeemphasisMode deemphasis)
+    /**
+     * Sets the enabled state of the FM de-emphasis filter.
+     * @param enabled true to enable de-emphasis filtering
+     */
+    public void setDeemphasisEnabled(boolean enabled)
     {
-        mDeemphasis = deemphasis != null ? deemphasis : DeemphasisMode.NONE;
+        mDeemphasisEnabled = enabled;
     }
 
-    // ========== Audio post-processing getters and setters ==========
+    /**
+     * Gets the de-emphasis time constant in microseconds.
+     * @return time constant (75.0 for North America, 50.0 for Europe)
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "deemphasisTimeConstant")
+    public double getDeemphasisTimeConstant()
+    {
+        return mDeemphasisTimeConstant;
+    }
 
+    /**
+     * Sets the de-emphasis time constant.
+     * @param timeConstant in microseconds (75.0 for North America, 50.0 for Europe)
+     */
+    public void setDeemphasisTimeConstant(double timeConstant)
+    {
+        mDeemphasisTimeConstant = timeConstant;
+    }
+
+    /**
+     * Indicates if low-pass filter is enabled.
+     * @return true if enabled (default)
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "lowPassEnabled")
     public boolean isLowPassEnabled()
     {
         return mLowPassEnabled;
     }
 
+    /**
+     * Sets the enabled state of the low-pass filter.
+     * @param enabled true to enable low-pass filtering
+     */
     public void setLowPassEnabled(boolean enabled)
     {
         mLowPassEnabled = enabled;
     }
 
+    /**
+     * Gets the low-pass filter cutoff frequency in Hz.
+     * @return cutoff frequency (default 3400 Hz)
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "lowPassCutoff")
     public double getLowPassCutoff()
     {
         return mLowPassCutoff;
     }
 
+    /**
+     * Sets the low-pass filter cutoff frequency.
+     * @param cutoff in Hz (recommended 3000-4000 Hz)
+     */
     public void setLowPassCutoff(double cutoff)
     {
         mLowPassCutoff = cutoff;
     }
 
+    /**
+     * Indicates if bass boost is enabled.
+     * @return true if enabled (default false)
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "bassBoostEnabled")
     public boolean isBassBoostEnabled()
     {
         return mBassBoostEnabled;
     }
 
+    /**
+     * Sets the enabled state of bass boost.
+     * @param enabled true to enable bass boost
+     */
     public void setBassBoostEnabled(boolean enabled)
     {
         mBassBoostEnabled = enabled;
     }
 
+    /**
+     * Gets the bass boost amount in dB.
+     * @return boost amount 0-12 dB (default 0)
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "bassBoostDb")
     public float getBassBoostDb()
     {
         return mBassBoostDb;
     }
 
+    /**
+     * Sets the bass boost amount.
+     * @param boostDb Bass boost in dB (0 to +12 dB)
+     */
     public void setBassBoostDb(float boostDb)
     {
         mBassBoostDb = Math.max(0.0f, Math.min(12.0f, boostDb));
     }
 
+    /**
+     * Indicates if noise gate (intelligent squelch) is enabled.
+     * @return true if enabled (default is false)
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "noiseGateEnabled")
     public boolean isNoiseGateEnabled()
     {
         return mNoiseGateEnabled;
     }
 
+    /**
+     * Sets the enabled state of the noise gate.
+     * @param enabled true to enable noise gate
+     */
     public void setNoiseGateEnabled(boolean enabled)
     {
         mNoiseGateEnabled = enabled;
     }
 
+    /**
+     * Gets the noise gate threshold percentage.
+     * @return threshold 0-100% (default 4%)
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "noiseGateThreshold")
     public float getNoiseGateThreshold()
     {
         return mNoiseGateThreshold;
     }
 
+    /**
+     * Sets the noise gate threshold percentage.
+     * @param threshold percentage 0-100% (gate opens when level > threshold)
+     */
     public void setNoiseGateThreshold(float threshold)
     {
         mNoiseGateThreshold = Math.max(0.0f, Math.min(100.0f, threshold));
     }
 
+    /**
+     * Gets the noise gate reduction amount.
+     * @return reduction amount 0.0 to 1.0 (default 0.8 = 80%)
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "noiseGateReduction")
     public float getNoiseGateReduction()
     {
         return mNoiseGateReduction;
     }
 
+    /**
+     * Sets the noise gate reduction amount.
+     * @param reduction 0.0 (no reduction) to 1.0 (full mute)
+     */
     public void setNoiseGateReduction(float reduction)
     {
         mNoiseGateReduction = Math.max(0.0f, Math.min(1.0f, reduction));
     }
 
+    /**
+     * Gets the noise gate hold time in milliseconds.
+     * @return hold time (default 500ms)
+     */
     @JacksonXmlProperty(isAttribute = true, localName = "noiseGateHoldTime")
     public int getNoiseGateHoldTime()
     {
         return mNoiseGateHoldTime;
     }
 
+    /**
+     * Sets the noise gate hold time.
+     * @param timeMs Duration to keep gate open after voice stops (0-1000ms)
+     */
     public void setNoiseGateHoldTime(int timeMs)
     {
         mNoiseGateHoldTime = Math.max(0, Math.min(1000, timeMs));
     }
 
-    @JacksonXmlProperty(isAttribute = true, localName = "voiceEnhanceEnabled")
-    public boolean isVoiceEnhanceEnabled()
+    /**
+     * Indicates if AGC/Voice Enhancement is enabled.
+     * @return true if enabled (default)
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "agcEnabled")
+    public boolean isAgcEnabled()
     {
-        return mVoiceEnhanceEnabled;
+        return mAgcEnabled;
     }
 
-    public void setVoiceEnhanceEnabled(boolean enabled)
+    /**
+     * Sets the enabled state of the AGC/Voice Enhancement.
+     * @param enabled true to enable
+     */
+    public void setAgcEnabled(boolean enabled)
     {
-        mVoiceEnhanceEnabled = enabled;
+        mAgcEnabled = enabled;
     }
 
-    @JacksonXmlProperty(isAttribute = true, localName = "voiceEnhanceAmount")
-    public float getVoiceEnhanceAmount()
+    /**
+     * Gets the AGC target output level in dB FS.
+     * NOTE: This is repurposed to store voice enhancement amount (mapped to -30 to -6 dB range)
+     * @return target level (default -18 dB)
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "agcTargetLevel")
+    public float getAgcTargetLevel()
     {
-        return mVoiceEnhanceAmount;
+        return mAgcTargetLevel;
     }
 
-    public void setVoiceEnhanceAmount(float amount)
+    /**
+     * Sets the AGC target output level.
+     * NOTE: This is repurposed to store voice enhancement amount
+     * @param level in dB FS (mapped from 0-100% voice enhancement)
+     */
+    public void setAgcTargetLevel(float level)
     {
-        mVoiceEnhanceAmount = Math.max(0.0f, Math.min(100.0f, amount));
+        mAgcTargetLevel = level;
     }
 
-    @JacksonXmlProperty(isAttribute = true, localName = "outputGain")
-    public float getOutputGain()
+    /**
+     * Gets the AGC maximum gain in dB.
+     * NOTE: This is repurposed to store input gain (mapped from linear gain)
+     * @return maximum gain (default 24 dB)
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "agcMaxGain")
+    public float getAgcMaxGain()
     {
-        return mOutputGain;
+        return mAgcMaxGain;
     }
 
-    public void setOutputGain(float gain)
+    /**
+     * Sets the AGC maximum gain.
+     * NOTE: This is repurposed to store input gain
+     * @param gain in dB (mapped from 0.1-5.0x linear gain)
+     */
+    public void setAgcMaxGain(float gain)
     {
-        mOutputGain = Math.max(0.1f, Math.min(5.0f, gain));
+        mAgcMaxGain = gain;
     }
+
+    /**
+     * Indicates if the hiss reduction high-shelf filter is enabled.
+     * @return enable status, defaults to false.
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "hissReductionEnabled")
+    public boolean isHissReductionEnabled()
+    {
+        return mHissReductionEnabled;
+    }
+
+    /**
+     * Sets the hiss reduction enabled state.
+     */
+    public void setHissReductionEnabled(boolean enabled)
+    {
+        mHissReductionEnabled = enabled;
+    }
+
+    /**
+     * Hiss reduction shelf gain in dB (negative = cut). Range: -12 to 0 dB.
+     * @return shelf gain (default -6 dB)
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "hissReductionDb")
+    public float getHissReductionDb()
+    {
+        return mHissReductionDb;
+    }
+
+    /**
+     * Sets the hiss reduction shelf gain in dB (clamped to -12..0).
+     */
+    public void setHissReductionDb(float db)
+    {
+        mHissReductionDb = Math.max(-12.0f, Math.min(0.0f, db));
+    }
+
+    /**
+     * Hiss reduction shelf corner frequency in Hz. Range: 500-3800 Hz.
+     * @return corner frequency (default 2000 Hz)
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "hissReductionCornerHz")
+    public double getHissReductionCornerHz()
+    {
+        return mHissReductionCornerHz;
+    }
+
+    /**
+     * Sets the hiss reduction corner frequency (clamped to 500-3800 Hz).
+     */
+    public void setHissReductionCornerHz(double hz)
+    {
+        mHissReductionCornerHz = Math.max(500.0, Math.min(3800.0, hz));
+    }
+
 }

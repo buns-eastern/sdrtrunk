@@ -19,127 +19,145 @@
 
 package io.github.dsheirer.module.decode.nbfm;
 
-import io.github.dsheirer.dsp.filter.FilterFactory;
-import io.github.dsheirer.dsp.filter.design.FilterDesignException;
-import io.github.dsheirer.dsp.filter.fir.FIRFilterSpecification;
-import io.github.dsheirer.dsp.filter.fir.real.IRealFilter;
-import io.github.dsheirer.dsp.filter.fir.remez.RemezFIRFilterDesigner;
+import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.module.decode.dcs.DCSCode;
+import io.github.dsheirer.module.decode.dcs.DCSDecoder;
+import io.github.dsheirer.module.decode.dcs.DCSMessage;
+import io.github.dsheirer.sample.Listener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 
 /**
- * DCS (Digital-Coded Squelch) detector for channel-level tone filtering.
+ * Channel-level DCS (Digital-Coded Squelch) detector for use in NBFMDecoder.
  *
- * Adapted from SDRTrunk's DCSDecoder to work as an inline detector within
- * the NBFM decoder pipeline. Uses the same proven slope-based symbol detection
- * approach that reliably decodes 134.4 bps DCS from FM-demodulated audio.
+ * Wraps the existing DCSDecoder (which decodes 134.4 bps signalling from 8 kHz audio)
+ * and adds channel-level filtering logic: accept/reject/lost callbacks based on a
+ * configured set of allowed DCS codes.
  *
- * Designed for the decimated sample rate of the NBFM decoder pipeline.
+ * Operates identically to CTCSSDetector in concept:
+ * - Feeds 8 kHz resampled audio to the underlying DCSDecoder
+ * - When a DCS code is detected, checks if it's in the allowed set
+ * - Reports detected (allowed), rejected (wrong code), or lost (no code for a period)
+ *
+ * DCS codes repeat at ~5.84 Hz (every ~171ms). We require CONFIRMATION_COUNT consecutive
+ * detections of the same code before reporting, and LOSS_COUNT consecutive decode cycles
+ * with no detection before reporting lost.
  */
 public class DCSDetector
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(DCSDetector.class);
 
-    private static final float DCS_BAUD_RATE = 134.4f;
-    private static final int CODE_MASK = 0x7FFFFF;
-    private static final int MAX_ONES_SEQUENCE = 6;
+    /**
+     * Number of consecutive detections of the same code required before reporting.
+     */
     private static final int CONFIRMATION_COUNT = 2;
-    private static final int LOSS_CODEWORDS = 4;
-    private static final int SLOPE_CALCULATION_PERIOD = 30;
-    private static final double SLOPE_CALCULATION_SUM_XX = 2247.5;
+
+    /**
+     * Number of audio blocks processed without a DCS detection before declaring lost.
+     * At 8 kHz with typical buffer sizes, this gives roughly 500ms-1s of silence.
+     */
+    private static final int LOSS_COUNT = 6;
+
+    /**
+     * Minimum interval between loss counter increments, in samples processed.
+     * DCS repeats every ~1369 samples at 8 kHz. We check every ~1400 samples.
+     */
+    private static final int LOSS_CHECK_INTERVAL_SAMPLES = 1400;
+
+    /**
+     * Minimum ratio of low-band energy (DCS sub-audible range, <200 Hz) to wideband energy
+     * for a DCS detection to be considered valid. Real DCS modulation concentrates energy
+     * below 200 Hz. Broadband digital interference has roughly equal energy across all
+     * frequencies, producing a ratio near 1.0. A ratio threshold of 1.5 means the low band
+     * must have at least 50% more energy density than the wideband average.
+     */
+    private static final float DCS_BAND_RATIO_THRESHOLD = 1.5f;
 
     private final Set<DCSCode> mTargetCodes;
-    private final float mSampleRate;
-    private final float mBaudLength;
-    private final float mSlopeThreshold;
-    private final int mPostTransitionSkip;
-    private final int mIdealTransitionMin;
-    private final int mIdealTransitionMax;
-    private final int mOverlap;
+    private final DCSDecoder mDCSDecoder;
 
-    private IRealFilter mLowPassFilter;
-
-    private boolean mSymbol = false;
-    private float mBaudCounter = 0f;
-    private float mMaxSlope = 0;
-    private float[] mResidual;
-    private int mCode = 0;
-    private int mExcessiveOneSequenceCounter = 0;
-    private int mSamplesToSkip = 0;
-
+    // Detection state
     private DCSCode mDetectedCode = null;
     private int mConfirmationCounter = 0;
-    private int mCodewordsSinceMatch = 0;
+    private int mLossCounter = 0;
+    private int mSamplesSinceLastDetection = 0;
+    private int mTotalSamplesProcessed = 0;
 
+    // Band energy tracking for broadband interference rejection
+    private float mLowBandEnergy = 0;
+    private float mWideBandEnergy = 0;
+    private boolean mSignalQualityValid = true;
+
+    // Channel identification for log messages (e.g. "MetroFire - Red [483.3125]")
+    private String mChannelLabel = "";
+
+    // Callback
     private DCSDetectorListener mListener;
 
+    /**
+     * Listener interface for DCS detection events
+     */
     public interface DCSDetectorListener
     {
         void dcsDetected(DCSCode code);
+        void dcsRejected(DCSCode code);
         void dcsLost();
     }
 
-    public DCSDetector(Set<DCSCode> targetCodes, float sampleRate)
+    /**
+     * Constructs a DCS detector for channel-level filtering.
+     *
+     * @param targetCodes the set of DCS codes to accept. Audio is only passed when one of these is detected.
+     */
+    public DCSDetector(Set<DCSCode> targetCodes)
     {
         mTargetCodes = targetCodes;
-        mSampleRate = sampleRate;
-        mBaudLength = sampleRate / DCS_BAUD_RATE;
 
-        float scale = sampleRate / 8000.0f;
-        mSlopeThreshold = 0.002750f / scale;
-        mPostTransitionSkip = (int)(30 * scale);
-        mIdealTransitionMin = (int)(11 * scale);
-        mIdealTransitionMax = (int)(19 * scale);
-        mOverlap = (int)Math.ceil(mBaudLength);
-        mResidual = new float[mOverlap];
-
-        try
+        // Create the underlying DCS decoder and register our message listener
+        mDCSDecoder = new DCSDecoder();
+        mDCSDecoder.setMessageListener(new Listener<IMessage>()
         {
-            FIRFilterSpecification specification = FIRFilterSpecification.lowPassBuilder()
-                    .sampleRate((int)sampleRate)
-                    .gridDensity(16)
-                    .oddLength(true)
-                    .passBandCutoff(200)
-                    .passBandAmplitude(1.0)
-                    .passBandRipple(0.01)
-                    .stopBandStart(300)
-                    .stopBandAmplitude(0.0)
-                    .stopBandRipple(0.03)
-                    .build();
-
-            RemezFIRFilterDesigner designer = new RemezFIRFilterDesigner(specification);
-
-            if(designer.isValid())
+            @Override
+            public void receive(IMessage message)
             {
-                mLowPassFilter = FilterFactory.getRealFilter(designer.getImpulseResponse());
+                if(message instanceof DCSMessage dcsMessage)
+                {
+                    handleDetection(dcsMessage.getDCSCode());
+                }
             }
-            else
-            {
-                LOGGER.warn("DCS low-pass filter design failed - using fallback");
-                mLowPassFilter = FilterFactory.getRealFilter(
-                        FilterFactory.getLowPass(sampleRate, 200, 300, 60,
-                                io.github.dsheirer.dsp.window.WindowType.HAMMING, true));
-            }
-        }
-        catch(FilterDesignException e)
-        {
-            LOGGER.warn("DCS filter design exception - using fallback", e);
-            mLowPassFilter = FilterFactory.getRealFilter(
-                    FilterFactory.getLowPass(sampleRate, 200, 300, 60,
-                            io.github.dsheirer.dsp.window.WindowType.HAMMING, true));
-        }
+        });
 
-        LOGGER.debug("DCSDetector initialized: sample rate={}, baud length={}", sampleRate, mBaudLength);
+        LOGGER.debug("{}DCSDetector initialized with {} target code(s)", mChannelLabel, targetCodes.size());
     }
 
+    /**
+     * Sets a channel label that is prepended to all log messages for channel identification.
+     * Format example: "MetroFire - Red [483.3125]"
+     *
+     * @param label the channel label, or null/empty for no prefix
+     */
+    public void setChannelLabel(String label)
+    {
+        mChannelLabel = (label != null && !label.isEmpty()) ? "[" + label + "] " : "";
+    }
+
+    /**
+     * Sets the listener for detection events.
+     */
     public void setListener(DCSDetectorListener listener)
     {
         mListener = listener;
     }
 
+    /**
+     * Processes a buffer of 8 kHz demodulated FM audio samples.
+     * Feeds them to the underlying DCSDecoder for 134.4 bps decoding.
+     * Also computes band energy ratio to detect broadband interference.
+     *
+     * @param samples demodulated audio samples at 8 kHz
+     */
     public void process(float[] samples)
     {
         if(samples == null || samples.length == 0)
@@ -147,151 +165,76 @@ public class DCSDetector
             return;
         }
 
-        float[] filtered = mLowPassFilter.filter(samples);
-        float[] buffer = new float[filtered.length + mOverlap];
-        int timingAdjust;
-
-        try
+        // Compute band energy ratio to detect broadband interference.
+        // DCS modulation is below 200 Hz, so real DCS signals concentrate energy in the low band.
+        // Broadband digital interference spreads energy evenly across all frequencies.
+        // We use a simple time-domain approximation: low-frequency energy correlates with
+        // sample-to-sample differences being small (slowly varying signal), while wideband
+        // energy produces large sample-to-sample differences.
+        float lowBand = 0;
+        float wideBand = 0;
+        for(int i = 1; i < samples.length; i++)
         {
-            System.arraycopy(mResidual, 0, buffer, 0, mResidual.length);
-            System.arraycopy(filtered, 0, buffer, mResidual.length, filtered.length);
+            float sample = samples[i] * samples[i];
+            float diff = samples[i] - samples[i - 1];
+            wideBand += sample;
+            // Low-frequency content: energy minus high-frequency component (proportional to diff^2)
+            lowBand += sample - (diff * diff);
+        }
 
-            if(filtered.length >= mOverlap)
+        if(samples.length > 1)
+        {
+            // Exponential moving average for stability across buffers
+            mWideBandEnergy = mWideBandEnergy * 0.7f + (wideBand / samples.length) * 0.3f;
+            mLowBandEnergy = mLowBandEnergy * 0.7f + (Math.max(0, lowBand) / samples.length) * 0.3f;
+
+            // Update signal quality flag
+            if(mWideBandEnergy > 1e-10f)
             {
-                System.arraycopy(filtered, filtered.length - mOverlap, mResidual, 0, mOverlap);
+                float bandRatio = mLowBandEnergy / mWideBandEnergy;
+                mSignalQualityValid = bandRatio >= DCS_BAND_RATIO_THRESHOLD;
             }
-
-            for(int bufferPointer = 0; bufferPointer < samples.length; bufferPointer++)
+            else
             {
-                if(bufferPointer + SLOPE_CALCULATION_PERIOD >= buffer.length)
+                mSignalQualityValid = true; // No signal — don't block
+            }
+        }
+
+        // Feed audio to the DCS decoder — it will call our message listener when a code is found
+        mDCSDecoder.receive(samples);
+
+        // Track samples since last detection for loss detection
+        mSamplesSinceLastDetection += samples.length;
+        mTotalSamplesProcessed += samples.length;
+
+        // Check for loss: if we've processed enough samples without a detection, increment loss counter
+        if(mSamplesSinceLastDetection >= LOSS_CHECK_INTERVAL_SAMPLES)
+        {
+            // No DCS code detected in this interval
+            if(mDetectedCode != null)
+            {
+                mLossCounter++;
+
+                if(mLossCounter >= LOSS_COUNT)
                 {
-                    break;
-                }
+                    mDetectedCode = null;
+                    mConfirmationCounter = 0;
 
-                if(mSamplesToSkip > 0)
-                {
-                    mSamplesToSkip--;
-                }
-                else
-                {
-                    float slope = calculateSlope(buffer, bufferPointer);
-
-                    if(mSymbol)
+                    if(mListener != null)
                     {
-                        if(slope > mMaxSlope && mMaxSlope < -mSlopeThreshold)
-                        {
-                            mSymbol = false;
-
-                            if(mBaudCounter < mIdealTransitionMin)
-                            {
-                                timingAdjust = 1;
-                            }
-                            else if(mBaudCounter > mIdealTransitionMax)
-                            {
-                                timingAdjust = -1;
-                            }
-                            else
-                            {
-                                timingAdjust = 0;
-                            }
-
-                            mBaudCounter += timingAdjust;
-                            mSamplesToSkip = mPostTransitionSkip + timingAdjust;
-                        }
-                        else if(slope < mMaxSlope)
-                        {
-                            mMaxSlope = slope;
-                        }
-                    }
-                    else
-                    {
-                        if(slope < mMaxSlope && mMaxSlope > mSlopeThreshold)
-                        {
-                            mSymbol = true;
-
-                            if(mBaudCounter < mIdealTransitionMin)
-                            {
-                                timingAdjust = 1;
-                            }
-                            else if(mBaudCounter > mIdealTransitionMax)
-                            {
-                                timingAdjust = -1;
-                            }
-                            else
-                            {
-                                timingAdjust = 0;
-                            }
-
-                            mBaudCounter += timingAdjust;
-                            mSamplesToSkip = mPostTransitionSkip + timingAdjust;
-                        }
-                        else if(slope > mMaxSlope)
-                        {
-                            mMaxSlope = slope;
-                        }
-                    }
-                }
-
-                mBaudCounter++;
-
-                if(mBaudCounter > mBaudLength)
-                {
-                    mCode = (Integer.rotateLeft(mCode, 1) + (mSymbol ? 1 : 0)) & CODE_MASK;
-
-                    if(DCSCode.hasValue(mCode))
-                    {
-                        handleDetection(DCSCode.fromValue(mCode));
-                    }
-                    else
-                    {
-                        handleNoDetection();
-                    }
-
-                    mBaudCounter -= mBaudLength;
-
-                    if(mSymbol)
-                    {
-                        mExcessiveOneSequenceCounter++;
-                        if(mExcessiveOneSequenceCounter > MAX_ONES_SEQUENCE)
-                        {
-                            mSymbol = false;
-                            mMaxSlope = -1f;
-                            mExcessiveOneSequenceCounter = 0;
-                        }
-                    }
-                    else
-                    {
-                        mExcessiveOneSequenceCounter = 0;
+                        mListener.dcsLost();
                     }
                 }
             }
-        }
-        catch(Exception e)
-        {
-            LOGGER.warn("Unexpected error while processing DCS samples", e);
+
+            mSamplesSinceLastDetection = 0;
         }
     }
 
-    private float calculateSlope(float[] samples, int offset)
-    {
-        double xbar = 0;
-        double ybar = samples[offset];
-        double sumXY = 0;
-        double fact1, dx, dy;
-
-        for(int x = 1; x < SLOPE_CALCULATION_PERIOD; x++)
-        {
-            fact1 = 1.0 + x;
-            dx = x - xbar;
-            dy = samples[offset + x] - ybar;
-            sumXY += dx * dy * (x / (1.0 + x));
-            xbar += dx / fact1;
-            ybar += dy / fact1;
-        }
-
-        return (float)(sumXY / SLOPE_CALCULATION_SUM_XX);
-    }
-
+    /**
+     * Handles detection of a DCS code from the underlying decoder.
+     * Applies confirmation counting before reporting accepted or rejected codes.
+     */
     private void handleDetection(DCSCode code)
     {
         if(code == null || code == DCSCode.UNKNOWN)
@@ -299,23 +242,64 @@ public class DCSDetector
             return;
         }
 
-        if(mTargetCodes != null && !mTargetCodes.isEmpty() && !mTargetCodes.contains(code))
+        // Note: broadband interference check removed in ap-14.10. Real DCS signals mixed with
+        // voice audio produce low band ratios (0.05-0.40), well below any useful threshold.
+        // The DCS 23-bit codeword + parity check is sufficient to reject false detections.
+
+        mSamplesSinceLastDetection = 0;
+
+        float bandRatio = (mWideBandEnergy > 1e-10f) ? (mLowBandEnergy / mWideBandEnergy) : 0;
+        LOGGER.trace("{}DCS code {} detected (ratio={} confirm={}/{} target={})",
+                mChannelLabel, code, String.format("%.3f", bandRatio), mConfirmationCounter, CONFIRMATION_COUNT,
+                mTargetCodes.contains(code) ? "YES" : "NO");
+
+        // Check if this code is in our allowed set
+        if(!mTargetCodes.contains(code))
         {
+            // NON-TARGET code detected: do NOT reset mLossCounter.
+            // Same rationale as CTCSSDetector — broadband interference can produce spurious
+            // DCS codeword matches. If mLossCounter resets on every non-target detection,
+            // a previous target match held over from a valid transmission stays active forever.
+
+            // Wrong code — track for confirmed rejection
+            if(mDetectedCode == code)
+            {
+                if(mConfirmationCounter < CONFIRMATION_COUNT)
+                {
+                    mConfirmationCounter++;
+
+                    if(mConfirmationCounter >= CONFIRMATION_COUNT && mListener != null)
+                    {
+                        mListener.dcsRejected(code);
+                    }
+                }
+                // Already confirmed rejected
+            }
+            else
+            {
+                mDetectedCode = code;
+                mConfirmationCounter = 1;
+            }
             return;
         }
 
-        mCodewordsSinceMatch = 0;
+        // TARGET code detected — reset loss counter
+        mLossCounter = 0;
 
+        // Code is in our allowed set
         if(mDetectedCode == code)
         {
+            // Same code again — increment confirmation
             if(mConfirmationCounter < CONFIRMATION_COUNT)
             {
                 mConfirmationCounter++;
+
                 if(mConfirmationCounter >= CONFIRMATION_COUNT && mListener != null)
                 {
                     mListener.dcsDetected(code);
                 }
             }
+            // Already confirmed — keep reporting
             else if(mListener != null)
             {
                 mListener.dcsDetected(code);
@@ -323,42 +307,29 @@ public class DCSDetector
         }
         else
         {
+            // Different code — restart confirmation
             mDetectedCode = code;
             mConfirmationCounter = 1;
         }
     }
 
-    private void handleNoDetection()
-    {
-        if(mDetectedCode != null)
-        {
-            mCodewordsSinceMatch++;
-            if(mCodewordsSinceMatch >= (LOSS_CODEWORDS * 23))
-            {
-                mDetectedCode = null;
-                mConfirmationCounter = 0;
-                if(mListener != null)
-                {
-                    mListener.dcsLost();
-                }
-            }
-        }
-    }
-
+    /**
+     * Resets the detector state.
+     */
     public void reset()
     {
-        mSymbol = false;
-        mBaudCounter = 0;
-        mMaxSlope = 0;
-        mCode = 0;
-        mExcessiveOneSequenceCounter = 0;
-        mSamplesToSkip = 0;
         mDetectedCode = null;
         mConfirmationCounter = 0;
-        mCodewordsSinceMatch = 0;
-        mResidual = new float[mOverlap];
+        mLossCounter = 0;
+        mSamplesSinceLastDetection = 0;
+        mLowBandEnergy = 0;
+        mWideBandEnergy = 0;
+        mSignalQualityValid = true;
     }
 
+    /**
+     * Returns the currently detected DCS code, or null if none confirmed.
+     */
     public DCSCode getDetectedCode()
     {
         return (mConfirmationCounter >= CONFIRMATION_COUNT) ? mDetectedCode : null;
