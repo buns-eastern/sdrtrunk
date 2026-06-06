@@ -26,6 +26,7 @@ import javafx.application.Platform;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.XYChart;
+import javafx.scene.control.Label;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
@@ -40,10 +41,20 @@ public class SymbolView extends ChannelView implements Listener<Float>
     private int mSymbolQueuePointer = 0;
     private int mChartSymbolPointer = 0;
     private final NumberAxis mSymbolTiming = new NumberAxis();
-    private final NumberAxis mSymbolPhase = new NumberAxis(-Math.PI, Math.PI, Math.PI / 2);
+    private final NumberAxis mSymbolPhase = new NumberAxis(-Math.PI, Math.PI, Math.PI / 4);
     private final XYChart.Series<Number, Number> mSymbolSeries = new XYChart.Series<>();
     private final ScatterChart<Number, Number> mSymbolChart = new ScatterChart<>(mSymbolTiming, mSymbolPhase);
     private FeedbackDecoder mFeedbackDecoder;
+
+    //Symbol quality (EVM-style) tracking.  For C4FM/4FSK DQPSK the four ideal soft-symbol levels are +/-PI/4 and
+    //+/-3PI/4, with decision boundaries at 0 and +/-PI/2.  We measure how far each received symbol lands from its
+    //nearest ideal level and report a rolling quality figure so the user can tell if the signal is good and whether
+    //antenna/tuner changes are improving or degrading it.
+    private static final double QUADRANT_BOUNDARY = Math.PI / 2.0;
+    private static final double DECISION_HALF_WIDTH = Math.PI / 4.0; //distance from an ideal level to a boundary
+    private static final double QUALITY_SMOOTHING = 0.2; //EMA weight applied to each flushed batch
+    private final Label mQualityLabel = new Label("Symbol Quality:  --");
+    private double mAverageErrorPower = -1.0; //EMA of mean-squared symbol error (radians^2); <0 = uninitialized
 
     /**
      * Constructs an instance
@@ -62,7 +73,7 @@ public class SymbolView extends ChannelView implements Listener<Float>
         mSymbolChart.setMaxWidth(Double.MAX_VALUE);
         mSymbolChart.setAnimated(false);
         VBox.setVgrow(mSymbolChart, Priority.ALWAYS);
-        getChildren().add(mSymbolChart);
+        getChildren().addAll(mQualityLabel, mSymbolChart);
     }
 
     /**
@@ -83,6 +94,8 @@ public class SymbolView extends ChannelView implements Listener<Float>
         removeSymbolProvider();
 
         mFeedbackDecoder = feedbackDecoder;
+        mAverageErrorPower = -1.0;
+        Platform.runLater(() -> mQualityLabel.setText("Symbol Quality:  --"));
 
         if(mFeedbackDecoder != null)
         {
@@ -118,16 +131,71 @@ public class SymbolView extends ChannelView implements Listener<Float>
                 //Execute the chart data update on the JavaFX UI thread
                 Platform.runLater(() ->
                 {
+                    double sumSquaredError = 0.0;
+
                     for(float v : symbolDataCopy)
                     {
                         mSymbolSeries.getData().get(mChartSymbolPointer++).setYValue(v);
                         mChartSymbolPointer %= SYMBOL_DISPLAY_COUNT;
+
+                        double error = v - nearestIdealPhase(v);
+                        sumSquaredError += (error * error);
                     }
 
+                    updateQuality(sumSquaredError / symbolDataCopy.length);
                 });
 
                 mSymbolQueuePointer = 0;
             }
         }
+    }
+
+    /**
+     * Returns the nearest ideal soft-symbol phase (+/-PI/4 or +/-3PI/4) for the supplied received symbol value.
+     * @param symbol received soft-symbol value in radians.
+     * @return nearest ideal phase in radians.
+     */
+    private static double nearestIdealPhase(double symbol)
+    {
+        if(symbol >= QUADRANT_BOUNDARY)
+        {
+            return 3.0 * Math.PI / 4.0;
+        }
+        else if(symbol >= 0)
+        {
+            return Math.PI / 4.0;
+        }
+        else if(symbol > -QUADRANT_BOUNDARY)
+        {
+            return -Math.PI / 4.0;
+        }
+        else
+        {
+            return -3.0 * Math.PI / 4.0;
+        }
+    }
+
+    /**
+     * Smooths the per-batch mean-squared symbol error and updates the quality readout label.  Quality is scaled so
+     * that zero error reads 100% and an RMS error at the decision boundary (PI/4) reads 0%.
+     * @param batchMeanSquaredError mean of squared symbol errors for the most recent batch (radians^2).
+     */
+    private void updateQuality(double batchMeanSquaredError)
+    {
+        if(mAverageErrorPower < 0)
+        {
+            mAverageErrorPower = batchMeanSquaredError;
+        }
+        else
+        {
+            mAverageErrorPower = (QUALITY_SMOOTHING * batchMeanSquaredError) +
+                ((1.0 - QUALITY_SMOOTHING) * mAverageErrorPower);
+        }
+
+        double rmsError = Math.sqrt(Math.max(0.0, mAverageErrorPower));
+        double quality = Math.max(0.0, Math.min(100.0, 100.0 * (1.0 - (rmsError / DECISION_HALF_WIDTH))));
+        String rating = quality >= 75.0 ? "GOOD" : (quality >= 50.0 ? "FAIR" : "POOR");
+        mQualityLabel.setText(String.format("Symbol Quality: %3.0f%%   (RMS error %.2f rad)   %s", quality, rmsError,
+            rating));
     }
 }
