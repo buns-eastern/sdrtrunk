@@ -170,6 +170,8 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
         mFrequencyOverlayPanel = new FrequencyOverlayPanel(settingsManager);
         mSpectrumPanel = new SpectrumPanel(settingsManager);
         mSpectrumPanel.setSampleSize(18.0);
+        //Show the vertical dBFS amplitude reference grid on the channel spectrum
+        mSpectrumPanel.setDbReferenceVisible(true);
 
         /**
          * The layered pane holds the overlapping spectrum and channel panels

@@ -80,6 +80,10 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
     //Reference dB value set according to the source sample size
     private float mDBScale;
 
+    //When true, draws a horizontal dBFS amplitude reference grid.  Enabled by the channel spectrum view via
+    //setDbReferenceVisible(true) so the user has a vertical reference for relative signal strength.
+    private boolean mShowDbReference = false;
+
     private int mZoom = 0;
     private int mZoomWindowOffset = 0;
 
@@ -261,6 +265,61 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
             size.height - mSpectrumInset,
             size.width,
             size.height - mSpectrumInset));
+
+        if(mShowDbReference)
+        {
+            drawDbReference(graphics, size);
+        }
+    }
+
+    /**
+     * Draws horizontal dBFS reference grid lines and labels so the user has a vertical amplitude reference for the
+     * spectrum.  The top of the panel is 0 dBFS (source full-scale) and the bottom is -mDBScale dBFS.  Values are
+     * relative (dBFS), which is useful for "is the peak taller than before" comparisons when adjusting the antenna or
+     * tuner - they are not calibrated absolute power (dBm).  Enabled via {@link #setDbReferenceVisible(boolean)}.
+     *
+     * @param graphics to draw with.
+     * @param size of the panel.
+     */
+    private void drawDbReference(Graphics2D graphics, Dimension size)
+    {
+        float insideHeight = size.height - mSpectrumInset;
+
+        if(insideHeight <= 0 || mDBScale <= 0)
+        {
+            return;
+        }
+
+        //Top of panel = 0 dBFS, bottom = -mDBScale dBFS
+        float pixelsPerDb = insideHeight / mDBScale;
+
+        //Pick a label interval that keeps the grid readable across the current dB span
+        int interval = 10;
+
+        if(mDBScale > 120)
+        {
+            interval = 20;
+        }
+        else if(mDBScale < 40)
+        {
+            interval = 5;
+        }
+
+        Color gridColor = new Color(mColorSpectrumLine.getRed(), mColorSpectrumLine.getGreen(),
+            mColorSpectrumLine.getBlue(), 64);
+
+        for(int db = interval; db < mDBScale; db += interval)
+        {
+            float y = db * pixelsPerDb;
+
+            //Faint horizontal grid line across the spectrum
+            graphics.setColor(gridColor);
+            graphics.draw(new Line2D.Float(0, y, size.width, y));
+
+            //dBFS label near the left edge
+            graphics.setColor(mColorSpectrumLine);
+            graphics.drawString("-" + db, 2, y - 1);
+        }
     }
 
     /**
@@ -304,6 +363,16 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
         Validate.isTrue(2.0 <= sampleSize && sampleSize <= 64.0);
 
         mDBScale = (float)(20.0 * FastMath.log10(FastMath.pow(2.0, sampleSize - 1)));
+    }
+
+    /**
+     * Enables or disables the horizontal dBFS amplitude reference grid.
+     * @param visible true to draw the dB reference grid lines and labels.
+     */
+    public void setDbReferenceVisible(boolean visible)
+    {
+        mShowDbReference = visible;
+        repaint();
     }
 
     /**
