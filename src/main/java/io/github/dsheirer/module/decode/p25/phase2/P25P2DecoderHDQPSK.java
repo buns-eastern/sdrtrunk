@@ -123,6 +123,8 @@ public class P25P2DecoderHDQPSK extends P25P2Decoder implements IdentifierUpdate
         //The Costas Loop receives symbol-inversion correction requests when detected.
         //The PLL gain monitor receives sync detect/loss signals from the message framer
         mMessageFramer = new P25P2MessageFramer(mCostasLoop);
+        //Forward sync bit error reports to an optional registered listener (eg channel tab BER display)
+        mMessageFramer.setBitErrorListener(this::broadcast);
 
         if(mDecodeConfigP25Phase2 !=null)
         {
