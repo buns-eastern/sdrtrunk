@@ -34,6 +34,7 @@ import io.github.dsheirer.module.decode.p25.phase2.timeslot.AbstractSignalingTim
 import io.github.dsheirer.module.decode.p25.phase2.timeslot.ScramblingSequence;
 import io.github.dsheirer.module.decode.p25.phase2.timeslot.Timeslot;
 import io.github.dsheirer.protocol.Protocol;
+import io.github.dsheirer.module.decode.BitErrorReport;
 import io.github.dsheirer.sample.Listener;
 import java.util.List;
 import org.slf4j.Logger;
@@ -224,8 +225,35 @@ public class P25P2SuperFrameDetector implements Listener<Dibit>, ISyncDetectList
      * @param dibitOffset to shift the extraction left (-) or right (+) by one or two dibits when dibit stuffing or
      * deletion are detected.
      */
+    //Each super frame fragment is checked against two 40-bit S-ISCH sync patterns
+    private static final int FRAGMENT_SYNC_BIT_LENGTH = 80;
+    private Listener<BitErrorReport> mBitErrorListener;
+
+    /**
+     * Registers an optional listener to receive sync pattern bit error reports suitable for deriving a live bit
+     * error rate (BER) measurement (eg the channel tab BER display).
+     * @param listener to receive bit error reports.
+     */
+    public void setBitErrorListener(Listener<BitErrorReport> listener)
+    {
+        mBitErrorListener = listener;
+    }
+
+    /**
+     * Reports sync pattern bit errors to an optional registered listener.
+     * @param bitErrors detected across both 40-bit S-ISCH sync patterns.
+     */
+    private void reportSyncBitErrors(int bitErrors)
+    {
+        if(mBitErrorListener != null)
+        {
+            mBitErrorListener.receive(new BitErrorReport(bitErrors, FRAGMENT_SYNC_BIT_LENGTH));
+        }
+    }
+
     private void broadcastFragment(int bitErrors, int dibitOffset)
     {
+        reportSyncBitErrors(bitErrors);
         if((mDibitsProcessed + dibitOffset) > FRAGMENT_DIBIT_LENGTH)
         {
             broadcastSyncLoss(mDibitsProcessed + dibitOffset - FRAGMENT_DIBIT_LENGTH);
@@ -254,6 +282,7 @@ public class P25P2SuperFrameDetector implements Listener<Dibit>, ISyncDetectList
      */
     private void broadcastSplitFragment(int bitErrors, int sync1Offset, int sync2Offset)
     {
+        reportSyncBitErrors(bitErrors);
         if((mDibitsProcessed) > FRAGMENT_DIBIT_LENGTH)
         {
             broadcastSyncLoss(mDibitsProcessed + FRAGMENT_DIBIT_LENGTH);

@@ -22,6 +22,7 @@ package io.github.dsheirer.module.decode.dmr;
 import io.github.dsheirer.bits.CorrectedBinaryMessage;
 import io.github.dsheirer.dsp.symbol.Dibit;
 import io.github.dsheirer.message.IMessage;
+import io.github.dsheirer.module.decode.BitErrorReport;
 import io.github.dsheirer.message.SyncLossMessage;
 import io.github.dsheirer.module.decode.dmr.message.CACH;
 import io.github.dsheirer.module.decode.dmr.message.DMRMessage;
@@ -41,6 +42,11 @@ import java.util.Arrays;
  */
 public class DMRMessageFramer implements Listener<Dibit>
 {
+    //DMR burst sync field: CACH (24 bits) + payload prefix (108 bits) precede the 48-bit sync field
+    private static final int SYNC_BIT_START = 132;
+    private static final int SYNC_BIT_END = 180;
+    private static final int SYNC_BIT_LENGTH = SYNC_BIT_END - SYNC_BIT_START;
+    private static final long SYNC_PATTERN_MASK = 0xFFFFFFFFFFFFL;
     private static final int DIBIT_CACH_START = 0;
     private static final int DIBIT_BURST_END = 144;
     private Listener<IMessage> mMessageListener;
@@ -48,6 +54,7 @@ public class DMRMessageFramer implements Listener<Dibit>
     private final Dibit[] mBufferB = new Dibit[144];
     private int mBufferAPointer = 0;
     private int mBufferBPointer = 0;
+    private Listener<BitErrorReport> mBitErrorListener;
     private DMRSyncPattern mBufferAPattern = DMRSyncPattern.UNKNOWN;
     private DMRSyncPattern mBufferBPattern = DMRSyncPattern.UNKNOWN;
     private int mBufferATimeslot;
@@ -150,6 +157,7 @@ public class DMRMessageFramer implements Listener<Dibit>
         mDibitCounter = 0;
 
         CorrectedBinaryMessage message = getMessage(mBufferA);
+        reportSyncBitErrors(message, mBufferAPattern);
         CACH cach = CACH.getCACH(message);
 
         if(mBufferAPattern.hasCACH() && cach.isValid() && mBufferATimeslot != cach.getTimeslot())
@@ -218,6 +226,7 @@ public class DMRMessageFramer implements Listener<Dibit>
         mDibitCounter = 0;
 
         CorrectedBinaryMessage burst = getMessage(mBufferB);
+        reportSyncBitErrors(burst, mBufferBPattern);
         CACH cach = CACH.getCACH(burst);
 
         if(mBufferBPattern.hasCACH() && cach.isValid() && mBufferBTimeslot != cach.getTimeslot())
@@ -301,6 +310,40 @@ public class DMRMessageFramer implements Listener<Dibit>
      * @param buffer containing dibits
      * @return binary message
      */
+    /**
+     * Registers an optional listener to receive FEC/sync bit error reports suitable for deriving a live bit error
+     * rate (BER) measurement (eg the channel tab BER display).
+     * @param listener to receive bit error reports.
+     */
+    public void setBitErrorListener(Listener<BitErrorReport> listener)
+    {
+        mBitErrorListener = listener;
+    }
+
+    /**
+     * Compares the demodulated sync field of the burst against the known sync pattern and reports the quantity of
+     * bit errors to an optional registered listener.  Only bursts captured with an actual sync pattern are compared;
+     * sync-less voice sub-frames (B-F) are ignored.
+     * @param burst containing a demodulated sync field.
+     * @param pattern that was detected for the burst.
+     */
+    private void reportSyncBitErrors(CorrectedBinaryMessage burst, DMRSyncPattern pattern)
+    {
+        if(mBitErrorListener != null && DMRSyncPattern.SYNC_PATTERNS.contains(pattern) &&
+           burst.size() >= SYNC_BIT_END)
+        {
+            long observed = 0;
+
+            for(int i = SYNC_BIT_START; i < SYNC_BIT_END; i++)
+            {
+                observed = (observed << 1) | (burst.get(i) ? 1 : 0);
+            }
+
+            int bitErrors = Long.bitCount((observed ^ pattern.getPattern()) & SYNC_PATTERN_MASK);
+            mBitErrorListener.receive(new BitErrorReport(bitErrors, SYNC_BIT_LENGTH));
+        }
+    }
+
     private CorrectedBinaryMessage getMessage(Dibit[] buffer)
     {
         CorrectedBinaryMessage message = new CorrectedBinaryMessage(2 * (DMRMessageFramer.DIBIT_BURST_END - DMRMessageFramer.DIBIT_CACH_START));

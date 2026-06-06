@@ -155,7 +155,7 @@ public class SymbolView extends ChannelView implements Listener<Float>
             "GOOD  >= 75%  (RMS < 0.20 rad)  -  tight symbol rows, clean audio\n" +
             "FAIR  50-74%  (RMS 0.20-0.39 rad)  -  fuzzy rows, occasional dropped frames\n" +
             "POOR  < 50%  (RMS > 0.39 rad)  -  rows smearing, decode breaking up\n\n" +
-            "BER = bit errors corrected by the FEC within each frame's protected NID bits, rolling 5 second window.\n" +
+            "BER = measured bit errors within each frame's FEC-protected sync/NID bits, rolling 5 second window.\n" +
             "GOOD < 2%   FAIR 2-5%   POOR > 5% (the P25 reference sensitivity benchmark).\n" +
             "Shows NO SYNC when frames stop decoding - only counts errors in frames that decoded, so when\n" +
             "the signal is very poor, trust the symbol quality meter; BER will go silent rather than lie.");

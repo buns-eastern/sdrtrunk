@@ -36,6 +36,7 @@ import io.github.dsheirer.module.decode.p25.phase2.message.P25P2Message;
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.record.AudioRecordingManager;
 import io.github.dsheirer.record.binary.BinaryReader;
+import io.github.dsheirer.module.decode.BitErrorReport;
 import io.github.dsheirer.sample.Listener;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -64,6 +65,16 @@ public class P25P2MessageFramer implements Listener<Dibit>
     public P25P2MessageFramer(IPhaseLockedLoop phaseLockedLoop)
     {
         mSuperFrameDetector = new P25P2SuperFrameDetector(phaseLockedLoop);
+    }
+
+    /**
+     * Registers an optional listener to receive sync pattern bit error reports suitable for deriving a live bit
+     * error rate (BER) measurement (eg the channel tab BER display).
+     * @param listener to receive bit error reports.
+     */
+    public void setBitErrorListener(Listener<BitErrorReport> listener)
+    {
+        mSuperFrameDetector.setBitErrorListener(listener);
     }
 
     /**

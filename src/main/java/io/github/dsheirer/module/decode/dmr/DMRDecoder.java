@@ -111,6 +111,8 @@ public class DMRDecoder extends FeedbackDecoder implements IByteBufferProvider, 
     {
         DMRCrcMaskManager crcMaskManager = new DMRCrcMaskManager(config.getIgnoreCRCChecksums());
         mMessageFramer = new DMRMessageFramer(crcMaskManager);
+        //Forward FEC/sync bit error reports to an optional registered listener (eg channel tab BER display)
+        mMessageFramer.setBitErrorListener(this::broadcast);
         mSymbolProcessor = new DMRSoftSymbolProcessor(mMessageFramer, this);
         mMessageProcessor = new DMRMessageProcessor(config, crcMaskManager);
         mMessageProcessor.setMessageListener(getMessageListener());
