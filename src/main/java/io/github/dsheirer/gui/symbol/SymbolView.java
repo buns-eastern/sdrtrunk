@@ -27,6 +27,14 @@ import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Label;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.Tooltip;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
+import javafx.util.Duration;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
@@ -54,6 +62,12 @@ public class SymbolView extends ChannelView implements Listener<Float>
     private static final double DECISION_HALF_WIDTH = Math.PI / 4.0; //distance from an ideal level to a boundary
     private static final double QUALITY_SMOOTHING = 0.2; //EMA weight applied to each flushed batch
     private final Label mQualityLabel = new Label("Symbol Quality:  --");
+    private static final String COLOR_GOOD = "#639922";
+    private static final String COLOR_FAIR = "#EF9F27";
+    private static final String COLOR_POOR = "#E24B4A";
+    private static final double QUALITY_BAR_WIDTH = 220.0;
+    private static final double QUALITY_BAR_HEIGHT = 10.0;
+    private final Rectangle mQualityMarker = new Rectangle(2, 16);
     private double mAverageErrorPower = -1.0; //EMA of mean-squared symbol error (radians^2); <0 = uninitialized
 
     /**
@@ -73,7 +87,49 @@ public class SymbolView extends ChannelView implements Listener<Float>
         mSymbolChart.setMaxWidth(Double.MAX_VALUE);
         mSymbolChart.setAnimated(false);
         VBox.setVgrow(mSymbolChart, Priority.ALWAYS);
-        getChildren().addAll(mQualityLabel, mSymbolChart);
+        //Quality zone bar: 0-50% poor (red), 50-75% fair (amber), 75-100% good (green), with a live marker
+        Rectangle poorZone = new Rectangle(0, 3, QUALITY_BAR_WIDTH * 0.50, QUALITY_BAR_HEIGHT);
+        poorZone.setFill(Color.web(COLOR_POOR));
+        Rectangle fairZone = new Rectangle(QUALITY_BAR_WIDTH * 0.50, 3, QUALITY_BAR_WIDTH * 0.25, QUALITY_BAR_HEIGHT);
+        fairZone.setFill(Color.web(COLOR_FAIR));
+        Rectangle goodZone = new Rectangle(QUALITY_BAR_WIDTH * 0.75, 3, QUALITY_BAR_WIDTH * 0.25, QUALITY_BAR_HEIGHT);
+        goodZone.setFill(Color.web(COLOR_GOOD));
+        mQualityMarker.setFill(Color.web("#333333"));
+        mQualityMarker.setVisible(false);
+
+        Pane barPane = new Pane(poorZone, fairZone, goodZone, mQualityMarker);
+        barPane.setMinSize(QUALITY_BAR_WIDTH, 16);
+        barPane.setPrefSize(QUALITY_BAR_WIDTH, 16);
+        barPane.setMaxSize(QUALITY_BAR_WIDTH, 16);
+
+        String zoneStyle = "-fx-font-size: 10px; -fx-text-fill: #808080;";
+        Label poorLabel = new Label("poor");
+        poorLabel.setMinWidth(QUALITY_BAR_WIDTH * 0.50);
+        poorLabel.setStyle(zoneStyle);
+        Label fairLabel = new Label("fair");
+        fairLabel.setMinWidth(QUALITY_BAR_WIDTH * 0.25);
+        fairLabel.setStyle(zoneStyle);
+        Label goodLabel = new Label("good");
+        goodLabel.setStyle(zoneStyle);
+        HBox zoneLabels = new HBox(poorLabel, fairLabel, goodLabel);
+        zoneLabels.setMaxWidth(QUALITY_BAR_WIDTH);
+
+        VBox barBox = new VBox(1, barPane, zoneLabels);
+        HBox header = new HBox(15, mQualityLabel, barBox);
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.setPadding(new Insets(4, 0, 0, 8));
+
+        Tooltip tooltip = new Tooltip(
+            "Symbol quality measures how far each demodulated symbol lands from its ideal level.\n" +
+            "RMS error (radians) is the raw measurement; quality % is the same value rescaled:\n" +
+            "100% = zero error, 0% = symbols at the decision boundary (0.785 rad RMS).\n\n" +
+            "GOOD  >= 75%  (RMS < 0.20 rad)  -  tight symbol rows, clean audio\n" +
+            "FAIR  50-74%  (RMS 0.20-0.39 rad)  -  fuzzy rows, occasional dropped frames\n" +
+            "POOR  < 50%  (RMS > 0.39 rad)  -  rows smearing, decode breaking up");
+        tooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(header, tooltip);
+
+        getChildren().addAll(header, mSymbolChart);
     }
 
     /**
@@ -95,7 +151,11 @@ public class SymbolView extends ChannelView implements Listener<Float>
 
         mFeedbackDecoder = feedbackDecoder;
         mAverageErrorPower = -1.0;
-        Platform.runLater(() -> mQualityLabel.setText("Symbol Quality:  --"));
+        Platform.runLater(() -> {
+            mQualityLabel.setText("Symbol Quality:  --");
+            mQualityLabel.setStyle(null);
+            mQualityMarker.setVisible(false);
+        });
 
         if(mFeedbackDecoder != null)
         {
@@ -194,8 +254,30 @@ public class SymbolView extends ChannelView implements Listener<Float>
 
         double rmsError = Math.sqrt(Math.max(0.0, mAverageErrorPower));
         double quality = Math.max(0.0, Math.min(100.0, 100.0 * (1.0 - (rmsError / DECISION_HALF_WIDTH))));
-        String rating = quality >= 75.0 ? "GOOD" : (quality >= 50.0 ? "FAIR" : "POOR");
+
+        String rating;
+        String color;
+
+        if(quality >= 75.0)
+        {
+            rating = "GOOD";
+            color = COLOR_GOOD;
+        }
+        else if(quality >= 50.0)
+        {
+            rating = "FAIR";
+            color = COLOR_FAIR;
+        }
+        else
+        {
+            rating = "POOR";
+            color = COLOR_POOR;
+        }
+
         mQualityLabel.setText(String.format("Symbol Quality: %3.0f%%   (RMS error %.2f rad)   %s", quality, rmsError,
             rating));
+        mQualityLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        mQualityMarker.setX(Math.min(QUALITY_BAR_WIDTH - 2.0, QUALITY_BAR_WIDTH * quality / 100.0));
+        mQualityMarker.setVisible(true);
     }
 }
