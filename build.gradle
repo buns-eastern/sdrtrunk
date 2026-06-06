@@ -146,6 +146,8 @@ def jvmArgsWindows =
          '--enable-native-access=javafx.graphics', //JDK24 - suppress restricted java.lang.System calls
          '--sun-misc-unsafe-memory-access=allow', //JDK24 - suppress sun.misc.Unsafe::allocateMemory warning
          '-XX:+UseCompactObjectHeaders',   //JDK25 - use compact object headers
+         '-Xms6g', //Initial heap size
+         '-Xmx12g', //Maximum heap size (override per-machine with SDR_TRUNK_OPTS env var if needed)
          '-Djava.library.path=c:\\Program Files\\SDRplay\\API\\x64;c:\\Program Files\\HydraSDR;jni\\build;lib\\native;..\\lib\\native'] //SDRPlay + HydraSDR library paths
 
 /**
@@ -158,7 +160,9 @@ def jvmArgsLinux =
          '--sun-misc-unsafe-memory-access=allow', //JDK24 - suppress sun.misc.Unsafe::allocateMemory warning
          '-XX:+UseCompactObjectHeaders',   //JDK25 - use compact object headers
          '--enable-native-access=javafx.graphics', //JDK24 - suppress restricted java.lang.System calls
-         '--enable-native-access=ALL-UNNAMED'] //SDRPlay API library path
+         '--enable-native-access=ALL-UNNAMED', //SDRPlay API library path
+         '-Xms3g', //Initial heap size
+         '-Xmx6g'] //Maximum heap size (override per-machine with SDR_TRUNK_OPTS env var if needed)
 
 application {
     mainClass = "io.github.dsheirer.gui.SDRTrunk"
