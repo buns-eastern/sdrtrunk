@@ -35,6 +35,9 @@ import io.github.dsheirer.module.decode.p25.phase1.PcmStreamManager;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.atomic.AtomicInteger;
+import io.github.dsheirer.util.ThreadPool;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,13 +100,65 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
         return mTimeslot;
     }
 
+    //Audio hangtime: when greater than zero, segment close is delayed to allow remaining audio to flush.
+    public static final int DEFAULT_AUDIO_HANGTIME_MS = 0;
+    private int mAudioHangtimeMs = DEFAULT_AUDIO_HANGTIME_MS;
+    private volatile ScheduledFuture<?> mPendingClose;
+
     /**
-     * Closes the current audio segment
+     * Closes the current audio segment.  If a hangtime is configured, the close is delayed to allow any remaining
+     * audio buffers to flush.  If new audio arrives during the hangtime period, the pending close is cancelled.
      */
     protected void closeAudioSegment()
     {
+        if(mAudioHangtimeMs > 0)
+        {
+            synchronized(this)
+            {
+                if(mAudioSegment != null && mPendingClose == null)
+                {
+                    mPendingClose = ThreadPool.SCHEDULED.schedule(this::closeAudioSegmentNow, mAudioHangtimeMs,
+                        TimeUnit.MILLISECONDS);
+                }
+            }
+        }
+        else
+        {
+            closeAudioSegmentNow();
+        }
+    }
+
+    /**
+     * Cancels any pending delayed close.  Called when new audio arrives during hangtime.
+     */
+    private void cancelPendingClose()
+    {
+        if(mPendingClose != null)
+        {
+            mPendingClose.cancel(false);
+            mPendingClose = null;
+        }
+    }
+
+    /**
+     * Sets the audio hangtime in milliseconds.  When greater than zero, audio segment close is delayed by this
+     * amount to allow remaining audio buffers to flush.  New audio arriving during hangtime cancels the close.
+     * @param hangtimeMs delay in milliseconds (0 = immediate close)
+     */
+    public void setAudioHangtimeMs(int hangtimeMs)
+    {
+        mAudioHangtimeMs = Math.max(0, hangtimeMs);
+    }
+
+    /**
+     * Immediately closes the current audio segment without delay.
+     */
+    private void closeAudioSegmentNow()
+    {
         synchronized(this)
         {
+            cancelPendingClose();
+
             if(mAudioSegment != null)
             {
                 mAudioSegment.completeProperty().set(true);
@@ -172,7 +227,7 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
     @Override
     public void stop()
     {
-        closeAudioSegment();
+        closeAudioSegmentNow();
     }
 
     /**
@@ -243,14 +298,20 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
 
     public void addAudio(float[] audioBuffer)
     {
+        //Cancel any pending hangtime close - new audio means the call continues
+        synchronized(this)
+        {
+            cancelPendingClose();
+        }
+
         AudioSegment audioSegment = getAudioSegment();
 
         //If the current segment exceeds the max samples length, close it so that a new segment gets generated
-        //and then link the segments together
+        //and then link the segments together.  Use immediate close - segment rollover should not be delayed.
         if(mAudioSampleCount >= mMaxSegmentAudioSampleLength)
         {
             AudioSegment previous = getAudioSegment();
-            closeAudioSegment();
+            closeAudioSegmentNow();
             audioSegment = getAudioSegment();
             audioSegment.linkTo(previous);
         }

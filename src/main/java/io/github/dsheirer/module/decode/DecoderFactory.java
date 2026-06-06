@@ -491,7 +491,9 @@ public class DecoderFactory
         decoder.setDecoderState(decoderState);
         modules.add(decoder);
         modules.add(decoderState);
-        modules.add(new AudioModule(aliasList, 0, 60000, decodeConfigNBFM.isAudioFilter()));
+        AudioModule audioModule = new AudioModule(aliasList, 0, 60000, decodeConfigNBFM.isAudioFilter());
+        audioModule.setAudioHangtimeMs(decodeConfigNBFM.getAudioHangtimeMs());
+        modules.add(audioModule);
     }
 
     /**
