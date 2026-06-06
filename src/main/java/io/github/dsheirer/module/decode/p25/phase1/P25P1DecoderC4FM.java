@@ -147,6 +147,8 @@ public class P25P1DecoderC4FM extends FeedbackDecoder implements IByteBufferProv
         mDemodulator = DifferentialDemodulatorFactory.getFloatDemodulator(decimatedSampleRate, SYMBOL_RATE);
         mSymbolProcessor.setSamplesPerSymbol(mDemodulator.getSamplesPerSymbol());
         mMessageFramer.setListener(mMessageProcessor);
+        //Forward FEC bit error reports to an optional registered listener (eg channel tab BER display)
+        mMessageFramer.setBitErrorListener(this::broadcast);
         mMessageProcessor.setMessageListener(getMessageListener());
     }
 

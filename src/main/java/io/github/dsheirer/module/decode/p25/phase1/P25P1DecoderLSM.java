@@ -142,6 +142,8 @@ public class P25P1DecoderLSM extends FeedbackDecoder implements IByteBufferProvi
         mBasebandFilterQ = FilterFactory.getRealFilter(getBasebandFilter(decimatedSampleRate));
         mDemodulator.setSamplesPerSymbol(decimatedSampleRate / (float)SYMBOL_RATE);
         mMessageFramer.setListener(mMessageProcessor);
+        //Forward FEC bit error reports to an optional registered listener (eg channel tab BER display)
+        mMessageFramer.setBitErrorListener(this::broadcast);
     }
 
     /**

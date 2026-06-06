@@ -31,6 +31,7 @@ public abstract class FeedbackDecoder extends PrimaryDecoder implements ISourceE
 {
     private Listener<SourceEvent> mSourceEventListener;
     private Listener<Float> mSymbolListener;
+    private Listener<BitErrorReport> mBitErrorListener;
 
     /**
      * Protocol description suitable for display in the user interface
@@ -75,6 +76,35 @@ public abstract class FeedbackDecoder extends PrimaryDecoder implements ISourceE
     {
         long frequencyError = (long)(baudRate / 2.0 * (pllError / Math.PI));
         broadcast(SourceEvent.frequencyErrorMeasurementSyncLocked(frequencyError, "Decoder measured error sync locked"));
+    }
+
+    /**
+     * Registers the listener to receive FEC bit error reports.
+     * @param listener to receive bit error reports.
+     */
+    public void setBitErrorListener(Listener<BitErrorReport> listener)
+    {
+        mBitErrorListener = listener;
+    }
+
+    /**
+     * Removes any registered bit error report listener
+     */
+    public void removeBitErrorListener()
+    {
+        mBitErrorListener = null;
+    }
+
+    /**
+     * Broadcasts the FEC bit error report to an optional registered listener.
+     * @param report of checked bits and corrected bit errors.
+     */
+    public void broadcast(BitErrorReport report)
+    {
+        if(mBitErrorListener != null)
+        {
+            mBitErrorListener.receive(report);
+        }
     }
 
     /**
