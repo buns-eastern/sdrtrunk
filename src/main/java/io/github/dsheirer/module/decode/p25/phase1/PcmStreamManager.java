@@ -28,6 +28,8 @@ import java.util.Base64;
 import java.util.Iterator;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import io.github.dsheirer.util.ThreadPool;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +40,7 @@ import org.slf4j.LoggerFactory;
  *   call_start — once when a new transmission begins (squelch opens)
  *   pcm        — once per decoded audio chunk (float[] samples converted to 16-bit little-endian PCM)
  *   call_end   — once when a transmission ends (squelch closes)
+ *   heartbeat  — every ~5 seconds while idle, so clients can distinguish quiet air from a dead socket
  *
  * Audio format: 16-bit signed little-endian PCM at 8000 Hz mono, Base64-encoded.
  * No JMBE library is required on the client — the audio has already been decoded by SDRTrunk.
@@ -54,6 +57,12 @@ public class PcmStreamManager
     private final CopyOnWriteArrayList<ClientWriter> mClients = new CopyOnWriteArrayList<>();
     private volatile boolean mRunning = false;
 
+    //Idle heartbeat: when no broadcast has occurred within this interval, send a heartbeat line so connected
+    //clients can distinguish a quiet system from a dead/half-open socket (prevents client-side stall watchdogs
+    //from forcing unnecessary reconnects during quiet air).
+    private static final long HEARTBEAT_INTERVAL_MS = 5000;
+    private volatile long mLastBroadcast = System.currentTimeMillis();
+
     private PcmStreamManager() {}
 
     /**
@@ -66,6 +75,8 @@ public class PcmStreamManager
         {
             PcmStreamManager mgr = new PcmStreamManager();
             mgr.startAcceptLoop(port);
+            ThreadPool.SCHEDULED.scheduleAtFixedRate(mgr::sendHeartbeatIfIdle, HEARTBEAT_INTERVAL_MS,
+                HEARTBEAT_INTERVAL_MS, TimeUnit.MILLISECONDS);
             sInstance = mgr;
         }
         return sInstance;
@@ -93,6 +104,8 @@ public class PcmStreamManager
      */
     public void broadcast(String json)
     {
+        mLastBroadcast = System.currentTimeMillis();
+
         Iterator<ClientWriter> it = mClients.iterator();
         while (it.hasNext())
         {
@@ -105,6 +118,27 @@ public class PcmStreamManager
             {
                 writer.offer(json);
             }
+        }
+    }
+
+    /**
+     * Sends a heartbeat line to connected clients when no broadcast has occurred within the heartbeat
+     * interval.  Quiet air keeps the line verifiably alive; busy air needs no heartbeat because the
+     * audio itself proves liveness.  Exceptions are swallowed so the scheduled task can never die.
+     */
+    private void sendHeartbeatIfIdle()
+    {
+        try
+        {
+            if(mRunning && !mClients.isEmpty() &&
+               (System.currentTimeMillis() - mLastBroadcast) >= HEARTBEAT_INTERVAL_MS)
+            {
+                broadcast("{\"type\":\"heartbeat\"}");
+            }
+        }
+        catch(Throwable t)
+        {
+            //Never let an exception kill the scheduled heartbeat task
         }
     }
 

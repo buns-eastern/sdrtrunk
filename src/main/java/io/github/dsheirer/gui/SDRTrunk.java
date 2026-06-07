@@ -42,6 +42,8 @@ import io.github.dsheirer.gui.viewer.ViewRecordingViewerRequest;
 import io.github.dsheirer.icon.IconModel;
 import io.github.dsheirer.log.ApplicationLog;
 import io.github.dsheirer.map.MapService;
+import io.github.dsheirer.module.decode.p25.phase1.ImbeStreamManager;
+import io.github.dsheirer.module.decode.p25.phase1.NetworkStreamManager;
 import io.github.dsheirer.module.decode.p25.phase1.PcmStreamManager;
 import io.github.dsheirer.module.log.EventLogManager;
 import io.github.dsheirer.monitor.DiagnosticMonitor;
@@ -164,6 +166,21 @@ public class SDRTrunk implements Listener<TunerEvent>
         {
             int pcmPort = mUserPreferences.getPcmStreamPreference().getPort();
             PcmStreamManager.getInstance(pcmPort);
+        }
+
+        //Start the event/raw-message stream servers (ports 9500/9501 by default) and the IMBE frame
+        //stream server (port 9502 by default) at app startup when enabled -- same rationale as the PCM
+        //server above: the listeners open at launch and stay open, independent of channel lifecycle,
+        //so clients never see connection-refused while waiting for the first qualifying channel to start.
+        if(mUserPreferences.getNetworkStreamPreference().isEnabled())
+        {
+            NetworkStreamManager.getInstance(mUserPreferences.getNetworkStreamPreference().getEventPort(),
+                mUserPreferences.getNetworkStreamPreference().getRawPort());
+        }
+
+        if(mUserPreferences.getImbeStreamPreference().isEnabled())
+        {
+            ImbeStreamManager.getInstance(mUserPreferences.getImbeStreamPreference().getPort());
         }
 
         //Note: invoke this early in the application lifecycle, before the TunerManager causes the sdrplay classes
