@@ -41,7 +41,9 @@ import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.sample.complex.ComplexSamples;
 import io.github.dsheirer.sample.complex.IComplexSamplesListener;
 import io.github.dsheirer.sample.real.IRealBufferProvider;
+import io.github.dsheirer.module.carrier.CarrierOffsetProcessor;
 import io.github.dsheirer.source.ISourceEventListener;
+import io.github.dsheirer.source.ISourceEventProvider;
 import io.github.dsheirer.source.SourceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,10 +53,15 @@ import org.slf4j.LoggerFactory;
  * audio to Noise Squelch.  Squelch operates on the noise level with open and close thresholds to pass low-noise audio
  * and block high-noise audio.  Audio is filtered and resampled to 8 kHz for downstream consumers.
  */
-public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventListener, IComplexSamplesListener,
+public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventProvider, ISourceEventListener, IComplexSamplesListener,
         Listener<ComplexSamples>, IRealBufferProvider, IDecoderStateEventProvider, INoiseSquelchController
 {
     private final static Logger mLog = LoggerFactory.getLogger(NBFMDecoder.class);
+
+    //Estimates the analog FM carrier offset from channel center for the tuner's auto-PPM monitor and the
+    //channel spectral display.  Same protocol-agnostic spectral estimator the DMR decoder uses.
+    private final CarrierOffsetProcessor mCarrierOffsetProcessor = new CarrierOffsetProcessor();
+    private Listener<SourceEvent> mSourceEventBroadcastListener;
     private static final double DEMODULATED_AUDIO_SAMPLE_RATE = 8000.0;
     private final IDemodulator mDemodulator = FmDemodulatorFactory.getFmDemodulator();
     private final SourceEventProcessor mSourceEventProcessor = new SourceEventProcessor();
@@ -254,6 +261,25 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
 
         mNoiseSquelch.process(demodulated);
 
+        //Estimate carrier offset and broadcast at each update.  The tuner's PPM error monitor (when auto-PPM
+        //is enabled) uses this to adjust the tuner PPM, and the channel spectral display shows the offset.
+        //Same mechanism the DMR decoder uses, applied to the analog FM carrier.  The processor's internal
+        //SNR gate (>15 dB across consecutive buffers) prevents measurements when no carrier is present.
+        if(mCarrierOffsetProcessor.process(samples))
+        {
+            //Negate the value to indicate channel error from tuner's PPM that's causing the offset
+            broadcastSourceEvent(SourceEvent.frequencyErrorMeasurement(-mCarrierOffsetProcessor.getEstimatedOffset()));
+
+            if(mCarrierOffsetProcessor.hasCarrier())
+            {
+                broadcastSourceEvent(SourceEvent.carrierOffsetMeasurement(mCarrierOffsetProcessor.getEstimatedOffset()));
+            }
+            else
+            {
+                broadcastSourceEvent(SourceEvent.carrierOffsetMeasurement(0));
+            }
+        }
+
         //Once we process the sample buffer, if the ending state is squelch closed, update the decoder state that we
         // are idle.
         if(mNoiseSquelch.isSquelched())
@@ -327,8 +353,39 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
      * Updates the decoder to process complex sample buffers at the specified sample rate.
      * @param sampleRate of the incoming complex sample buffer stream.
      */
+    /**
+     * Registers the listener to receive source events from this decoder (eg measured carrier offset and
+     * frequency error used by the tuner's auto-PPM monitor).
+     */
+    @Override
+    public void setSourceEventListener(Listener<SourceEvent> listener)
+    {
+        mSourceEventBroadcastListener = listener;
+    }
+
+    /**
+     * Deregisters the source event listener.
+     */
+    @Override
+    public void removeSourceEventListener()
+    {
+        mSourceEventBroadcastListener = null;
+    }
+
+    /**
+     * Broadcasts the source event to an optional registered listener.
+     */
+    private void broadcastSourceEvent(SourceEvent event)
+    {
+        if(mSourceEventBroadcastListener != null)
+        {
+            mSourceEventBroadcastListener.receive(event);
+        }
+    }
+
     private void setSampleRate(double sampleRate)
     {
+        mCarrierOffsetProcessor.setSampleRate(sampleRate);
         int decimationRate = 0;
         double decimatedSampleRate = sampleRate;
 
