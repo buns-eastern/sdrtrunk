@@ -218,38 +218,39 @@ jobs:
           name: Nightly Build
           prerelease: true
           body: |
-            Automatic nightly build of the HydraSDR fork of sdrtrunk.
+            Nightly build of the **master** branch — buns-eastern fork of sdrtrunk.
 
-            **HydraSDR support**
-            - Native JNI bridge to **libhydrasdr v1.1.x** (hardware-agnostic HAL)
-            - Near-zero-copy streaming via pre-allocated double-buffered float arrays
-            - ~25x lower streaming CPU overhead vs the previous pure-Java USB path
-            - HydraSDR RFOne supported via libhydrasdr's device-info / capabilities API
-            - USB disconnect detection via independent watchdog timer
+            ## Which build do I want?
 
-            **Bundled native libraries**
-            - Linux x86_64 / aarch64: `libhydrasdr_jni.so`
-            - macOS aarch64 / x86_64: `libhydrasdr_jni.dylib`
-            - Windows x86_64: `hydrasdr_jni.dll` + `hydrasdr.dll` + `libusb-1.0.dll`
+            | Build | Get it if... |
+            |---|---|
+            | **Nightly Build** (this one) | You monitor digital systems (P25 / DMR) and want the streaming + diagnostics extras below. |
+            | **Nightly Build (nbfm-filters)** | Everything here **plus** the analog NBFM suite: per-channel audio filter pipeline, CTCSS/DCS tone squelch, squelch tail removal. Get that one if you listen to analog FM channels. |
 
-            **Windows** release zips are fully self-contained - `hydrasdr.dll`, `libusb-1.0.dll`, and `hydrasdr_jni.dll` are all bundled in `lib/native/`. Just unzip and run.
+            ## What this fork adds over stock sdrtrunk
 
-            **macOS** release zips bundle `libhydrasdr.dylib` and `libhydrasdr_jni.dylib` in `lib/native/`. You only need to install **libusb** via Homebrew:
-            ```
-            brew install libusb
-            ```
+            **TCP streaming suite** (Preferences > Network) for feeding external apps:
+            - Port 9500 — decode events  ·  9501 — raw control channel messages  ·  9502 — raw IMBE frames  ·  9503 — decoded PCM call audio with call metadata (NDJSON)
+            - All listeners open at app startup (no waiting for a channel to start); the PCM stream sends an idle heartbeat every ~5s so clients can tell quiet air from a dead socket
 
-            **Linux** release zips bundle only the JNI bridge (`libhydrasdr_jni.so`). You must also install **libhydrasdr** and **libusb-1.0**.
+            **Channel tab diagnostics** (click a channel in Now Playing > Channel tab):
+            - dBFS amplitude reference grid on the channel spectrum
+            - Live symbol-quality meter (EVM) with GOOD/FAIR/POOR zone bar and explanatory tooltip
+            - Measured BER readout for P25 Phase 1, P25 Phase 2 and DMR, with SYNC/NO SYNC state
 
-            The official `hydrasdr-host` nightly provides prebuilt distro packages (libhydrasdr + tools) for Debian 11/12/13, Ubuntu 20.04/22.04/24.04, Linux Mint 21/22, Fedora 41/42, AlmaLinux 9, openSUSE Tumbleweed, and Arch Linux:
+            **Tuner / decoder improvements:**
+            - Auto-PPM now works with analog **NBFM** channels (carrier-offset measurement, same mechanism as DMR) — a steady analog carrier such as a NOAA weather station keeps the tuner disciplined without any digital channel running
+            - NBFM audio dropout fix (resampler input chunking)
 
-            https://github.com/hydrasdr/hydrasdr-host/releases/tag/nightly
+            **HydraSDR RFOne support** — native JNI bridge to libhydrasdr v1.1.x (~25x lower streaming CPU vs the pure-Java USB path) with USB disconnect detection. Credit: Benjamin Vernoux.
 
-            Pick the package that matches your distro and install it (`sudo dpkg -i` / `sudo rpm -i` / `sudo pacman -U`). For libusb-1.0 on Debian/Ubuntu: `sudo apt install libusb-1.0-0` (most distros already have it as a transitive dependency).
+            ## Install notes
 
-            If your distro is not in the list, build libhydrasdr from source: https://github.com/hydrasdr/hydrasdr-host
+            - **Windows:** zips are self-contained — unzip and run.
+            - **macOS:** `brew install libusb` (HydraSDR libs are bundled).
+            - **Linux:** HydraSDR owners must install libhydrasdr + libusb-1.0 — prebuilt distro packages: https://github.com/hydrasdr/hydrasdr-host/releases/tag/nightly — non-HydraSDR users only need libusb-1.0.
 
-            See `build_info.txt` in this release for the exact commit and build timestamp.
+            Based on the DSheirer/sdrtrunk nightly. See `build_info.txt` for the exact commit and build timestamp.
           files: |
             build/image/*.zip
             build/image/build_info.txt
