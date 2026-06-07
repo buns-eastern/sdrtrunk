@@ -242,8 +242,8 @@ jobs:
 
             - **TCP streaming suite:** decode events (9500), raw control channel (9501), raw IMBE frames (9502), decoded PCM call audio (9503, NDJSON) — all open at app startup, PCM has an idle heartbeat so clients can tell quiet air from a dead socket
             - **Channel tab diagnostics:** dBFS spectrum grid, live symbol-quality (EVM) meter with zone bar, measured BER for P25 Phase 1/2 and DMR
-            - **NBFM auto-PPM:** analog carriers (e.g. NOAA weather) discipline the tuner PPM, same mechanism as DMR
-            - **HydraSDR RFOne support** via native JNI bridge to libhydrasdr v1.1.x (credit: Benjamin Vernoux)
+            - **NBFM auto-PPM:** analog carriers discipline the tuner PPM, same mechanism as DMR
+            - **HydraSDR RFOne support** via native JNI bridge to libhydrasdr v1.1.x
 
             ## Install notes
 
@@ -251,7 +251,14 @@ jobs:
             - **macOS:** `brew install libusb` (HydraSDR libs are bundled).
             - **Linux:** HydraSDR owners must install libhydrasdr + libusb-1.0 — prebuilt packages: https://github.com/hydrasdr/hydrasdr-host/releases/tag/nightly — non-HydraSDR users only need libusb-1.0.
 
-            Based on the DSheirer/sdrtrunk nightly. See `build_info.txt` for the exact commit and build timestamp.
+            ## Credits
+
+            - **Dennis Sheirer** — sdrtrunk itself, the foundation of everything here: https://github.com/DSheirer/sdrtrunk
+            - **Benjamin Vernoux** (@bvernoux) — native JNI bridge to libhydrasdr / HydraSDR support: https://github.com/DSheirer/sdrtrunk/pull/2403
+            - **actionpagezello** — the NBFM audio filter pipeline, CTCSS/DCS tone squelch, and squelch tail removal in the nbfm-filters build: https://github.com/actionpagezello/sdrtrunk
+            - **TPSSCW** — original NBFM audio filter concept (SDRTrunk-Pro): https://github.com/TPSSCW/SDRTrunk-Pro
+
+            See `build_info.txt` for the exact commit and build timestamp.
           files: |
             build/image/*.zip
             build/image/build_info.txt

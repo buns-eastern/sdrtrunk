@@ -239,10 +239,10 @@ jobs:
             - Measured BER readout for P25 Phase 1, P25 Phase 2 and DMR, with SYNC/NO SYNC state
 
             **Tuner / decoder improvements:**
-            - Auto-PPM now works with analog **NBFM** channels (carrier-offset measurement, same mechanism as DMR) — a steady analog carrier such as a NOAA weather station keeps the tuner disciplined without any digital channel running
+            - Auto-PPM now works with analog **NBFM** channels (carrier-offset measurement, same mechanism as DMR) — a steady analog carrier keeps the tuner disciplined without any digital channel running
             - NBFM audio dropout fix (resampler input chunking)
 
-            **HydraSDR RFOne support** — native JNI bridge to libhydrasdr v1.1.x (~25x lower streaming CPU vs the pure-Java USB path) with USB disconnect detection. Credit: Benjamin Vernoux.
+            **HydraSDR RFOne support** — native JNI bridge to libhydrasdr v1.1.x (~25x lower streaming CPU vs the pure-Java USB path) with USB disconnect detection.
 
             ## Install notes
 
@@ -250,7 +250,14 @@ jobs:
             - **macOS:** `brew install libusb` (HydraSDR libs are bundled).
             - **Linux:** HydraSDR owners must install libhydrasdr + libusb-1.0 — prebuilt distro packages: https://github.com/hydrasdr/hydrasdr-host/releases/tag/nightly — non-HydraSDR users only need libusb-1.0.
 
-            Based on the DSheirer/sdrtrunk nightly. See `build_info.txt` for the exact commit and build timestamp.
+            ## Credits
+
+            - **Dennis Sheirer** — sdrtrunk itself, the foundation of everything here: https://github.com/DSheirer/sdrtrunk
+            - **Benjamin Vernoux** (@bvernoux) — native JNI bridge to libhydrasdr / HydraSDR support: https://github.com/DSheirer/sdrtrunk/pull/2403
+            - **actionpagezello** — the NBFM audio filter pipeline, CTCSS/DCS tone squelch, and squelch tail removal in the nbfm-filters build: https://github.com/actionpagezello/sdrtrunk
+            - **TPSSCW** — original NBFM audio filter concept (SDRTrunk-Pro): https://github.com/TPSSCW/SDRTrunk-Pro
+
+            See `build_info.txt` for the exact commit and build timestamp.
           files: |
             build/image/*.zip
             build/image/build_info.txt
