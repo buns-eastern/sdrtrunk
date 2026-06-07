@@ -117,6 +117,9 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     private TextField mHissReductionDbField;
     private Slider mHissReductionCornerSlider;
     private TextField mHissReductionCornerField;
+    private ToggleSwitch mDeemphasisEnabledSwitch;
+    private Slider mDeemphasisTimeConstantSlider;
+    private TextField mDeemphasisTimeConstantField;
     private ToggleSwitch mSquelchEnabledSwitch;
     private Slider mSquelchThresholdSlider;
     private TextField mSquelchThresholdField;
@@ -399,15 +402,19 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             contentBox.getChildren().add(createHissReductionSection());
             contentBox.getChildren().add(new Separator());
 
-            // 3. Bass Boost
+            // 3. FM De-emphasis
+            contentBox.getChildren().add(createDeemphasisSection());
+            contentBox.getChildren().add(new Separator());
+
+            // 4. Bass Boost
             contentBox.getChildren().add(createBassBoostSection());
             contentBox.getChildren().add(new Separator());
 
-            // 4. Voice Enhancement
+            // 5. Voice Enhancement
             contentBox.getChildren().add(createVoiceEnhanceSection());
             contentBox.getChildren().add(new Separator());
 
-            // 5. Intelligent Squelch
+            // 6. Intelligent Squelch
             contentBox.getChildren().add(createSquelchSection());
             contentBox.getChildren().add(new Separator());
 
@@ -535,7 +542,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     private VBox createInputGainSection()
     {
         VBox section = new VBox(5);
-        Label title = new Label("6. Output Gain (Applied Last)");
+        Label title = new Label("7. Output Gain (Applied Last)");
         title.setFont(Font.font(null, FontWeight.BOLD, 12));
 
         GridPane controlsPane = new GridPane();
@@ -641,7 +648,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     private VBox createVoiceEnhanceSection()
     {
         VBox section = new VBox(5);
-        Label title = new Label("4. Voice Enhancement");
+        Label title = new Label("5. Voice Enhancement");
         title.setFont(Font.font(null, FontWeight.BOLD, 12));
 
         mVoiceEnhanceEnabledSwitch = new ToggleSwitch("Enable Voice Enhancement");
@@ -690,7 +697,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     private VBox createBassBoostSection()
     {
         VBox section = new VBox(5);
-        Label title = new Label("3. Bass Boost");
+        Label title = new Label("4. Bass Boost");
         title.setFont(Font.font(null, FontWeight.BOLD, 12));
 
         mBassBoostEnabledSwitch = new ToggleSwitch("Enable Bass Boost");
@@ -819,10 +826,64 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         return section;
     }
 
+    private VBox createDeemphasisSection()
+    {
+        VBox section = new VBox(5);
+        Label title = new Label("3. FM De-emphasis");
+        title.setFont(Font.font(null, FontWeight.BOLD, 12));
+
+        mDeemphasisEnabledSwitch = new ToggleSwitch("Enable FM De-emphasis");
+        mDeemphasisEnabledSwitch.setTooltip(new Tooltip(
+                "Corrects FM transmit pre-emphasis by rolling off high frequencies.\n" +
+                "75 us is the broadcast FM standard.  NBFM varies by manufacturer -\n" +
+                "try 250-530 us if voices sound thin or hissy with this enabled."));
+        mDeemphasisEnabledSwitch.selectedProperty().addListener((obs, old, val) -> {
+            if(!mLoadingConfiguration)
+            {
+                modifiedProperty().set(true);
+                mDeemphasisTimeConstantSlider.setDisable(!val);
+            }
+        });
+
+        GridPane controlsPane = new GridPane();
+        controlsPane.setHgap(10);
+        controlsPane.setVgap(5);
+
+        Label timeConstantLabel = new Label("Time Constant:");
+        GridPane.setConstraints(timeConstantLabel, 0, 0);
+        controlsPane.getChildren().add(timeConstantLabel);
+
+        mDeemphasisTimeConstantSlider = new Slider(25, 530, 75);
+        mDeemphasisTimeConstantSlider.setMajorTickUnit(100);
+        mDeemphasisTimeConstantSlider.setMinorTickCount(3);
+        mDeemphasisTimeConstantSlider.setShowTickMarks(true);
+        mDeemphasisTimeConstantSlider.setShowTickLabels(true);
+        mDeemphasisTimeConstantSlider.setPrefWidth(300);
+        mDeemphasisTimeConstantSlider.setTooltip(new Tooltip(
+                "Higher = stronger high-frequency rolloff (warmer, less hiss).\n" +
+                "75 us = broadcast standard, 333-530 us = common NBFM values.\nDefault: 75 us"));
+        mDeemphasisTimeConstantSlider.valueProperty().addListener((obs, old, val) -> {
+            if(!mLoadingConfiguration)
+            {
+                mDeemphasisTimeConstantField.setText(String.format("%.0f us", val.doubleValue()));
+                modifiedProperty().set(true);
+            }
+        });
+        GridPane.setConstraints(mDeemphasisTimeConstantSlider, 1, 0);
+        controlsPane.getChildren().add(mDeemphasisTimeConstantSlider);
+
+        mDeemphasisTimeConstantField = createSliderTextField(mDeemphasisTimeConstantSlider, "75 us", " us", "%.0f");
+        GridPane.setConstraints(mDeemphasisTimeConstantField, 2, 0);
+        controlsPane.getChildren().add(mDeemphasisTimeConstantField);
+
+        section.getChildren().addAll(title, mDeemphasisEnabledSwitch, controlsPane);
+        return section;
+    }
+
     private VBox createSquelchSection()
     {
         VBox section = new VBox(5);
-        Label title = new Label("5. Squelch / Noise Gate");
+        Label title = new Label("6. Squelch / Noise Gate");
         title.setFont(Font.font(null, FontWeight.BOLD, 12));
 
         mSquelchEnabledSwitch = new ToggleSwitch("Enable Squelch/Noise Gate");
@@ -1332,6 +1393,13 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         mHissReductionDbSlider.setDisable(!config.isHissReductionEnabled());
         mHissReductionCornerSlider.setDisable(!config.isHissReductionEnabled());
 
+        // FM De-emphasis
+        mDeemphasisEnabledSwitch.setSelected(config.isDeemphasisEnabled());
+        double deemphasisUs = config.getDeemphasisTimeConstant();
+        mDeemphasisTimeConstantSlider.setValue(deemphasisUs);
+        mDeemphasisTimeConstantField.setText(String.format("%.0f us", deemphasisUs));
+        mDeemphasisTimeConstantSlider.setDisable(!config.isDeemphasisEnabled());
+
         // Squelch / Noise Gate (Vox-Send style)
         mSquelchEnabledSwitch.setSelected(config.isNoiseGateEnabled());
 
@@ -1366,6 +1434,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         mHissReductionEnabledSwitch.setSelected(false);
         mHissReductionDbSlider.setDisable(true);
         mHissReductionCornerSlider.setDisable(true);
+        mDeemphasisEnabledSwitch.setSelected(false);
+        mDeemphasisTimeConstantSlider.setDisable(true);
         mSquelchEnabledSwitch.setSelected(false);
         mSquelchThresholdSlider.setDisable(true);
         mSquelchReductionSlider.setDisable(true);
@@ -1399,6 +1469,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         config.setHissReductionEnabled(mHissReductionEnabledSwitch.isSelected());
         config.setHissReductionDb((float)mHissReductionDbSlider.getValue());
         config.setHissReductionCornerHz(mHissReductionCornerSlider.getValue());
+        config.setDeemphasisEnabled(mDeemphasisEnabledSwitch.isSelected());
+        config.setDeemphasisTimeConstant(mDeemphasisTimeConstantSlider.getValue());
 
         // Squelch / Noise Gate (Vox-Send style)
         config.setNoiseGateEnabled(mSquelchEnabledSwitch.isSelected());
