@@ -83,6 +83,8 @@ import io.github.dsheirer.module.decode.p25.phase2.message.mac.structure.MacStru
 import io.github.dsheirer.module.decode.p25.phase2.message.mac.structure.MessageUpdateAbbreviated;
 import io.github.dsheirer.module.decode.p25.phase2.message.mac.structure.MessageUpdateExtendedLCCH;
 import io.github.dsheirer.module.decode.p25.phase2.message.mac.structure.MessageUpdateExtendedVCH;
+import io.github.dsheirer.identifier.integer.IntegerIdentifier;
+import io.github.dsheirer.module.decode.p25.phase1.DecodeConfigP25;
 import io.github.dsheirer.module.decode.p25.phase2.message.mac.structure.NetworkStatusBroadcastImplicit;
 import io.github.dsheirer.module.decode.p25.phase2.message.mac.structure.PowerControlSignalQuality;
 import io.github.dsheirer.module.decode.p25.phase2.message.mac.structure.PushToTalk;
@@ -147,6 +149,10 @@ public class P25P2DecoderState extends TimeslotDecoderState implements Identifie
     private P25P2NetworkConfigurationMonitor mNetworkConfigurationMonitor = new P25P2NetworkConfigurationMonitor();
     private P25TrafficChannelManager mTrafficChannelManager;
     private int mEndPttOnFacchCounter = 0;
+    private DecodeConfigP25 mDecodeConfigP25;
+    private Integer mObservedNac;
+    private Integer mObservedSystem;
+    private Integer mObservedSite;
 
     /**
      * Constructs an APCO-25 decoder state instance for a traffic or control channel.
@@ -163,6 +169,7 @@ public class P25P2DecoderState extends TimeslotDecoderState implements Identifie
         mChannel = channel;
         mTrafficChannelManager = trafficChannelManager;
         mPatchGroupManager = patchGroupManager;
+        mDecodeConfigP25 = (channel.getDecodeConfiguration() instanceof DecodeConfigP25 cfg) ? cfg : null;
     }
 
     /**
@@ -192,6 +199,9 @@ public class P25P2DecoderState extends TimeslotDecoderState implements Identifie
         super.resetState();
         mTrafficChannelManager.processP2TrafficCallEnd(getCurrentFrequency(), getTimeslot(), System.currentTimeMillis(), "RESET STATE INVOKED");
         mEndPttOnFacchCounter = 0;
+        mObservedNac = null;
+        mObservedSystem = null;
+        mObservedSite = null;
     }
 
     /**
@@ -218,11 +228,47 @@ public class P25P2DecoderState extends TimeslotDecoderState implements Identifie
     /**
      * Primary message processing method.
      */
+    /**
+     * Indicates if messages should be rejected because this channel has an optional identity filter (NAC/System/Site)
+     * configured and the most recently observed NAC/System/Site (from network/RFSS status messages) does not match.
+     * When no filter is configured, or before any identity has been observed, this returns false so behavior is
+     * identical to a channel without filters.
+     */
+    private boolean isIdentityFilterRejected()
+    {
+        if(mDecodeConfigP25 == null || !mDecodeConfigP25.hasIdentityFilter())
+        {
+            return false;
+        }
+
+        if(mObservedNac != null && !mDecodeConfigP25.isNacAllowed(mObservedNac))
+        {
+            return true;
+        }
+
+        if(mObservedSystem != null && !mDecodeConfigP25.isSystemAllowed(mObservedSystem))
+        {
+            return true;
+        }
+
+        if(mObservedSite != null && !mDecodeConfigP25.isSiteAllowed(mObservedSite))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     @Override
     public void receive(IMessage message)
     {
         if(message.isValid() && message.getTimeslot() == getTimeslot())
         {
+            if(isIdentityFilterRejected())
+            {
+                return;
+            }
+
             if(message instanceof MacMessage macMessage)
             {
                 processMacMessage(macMessage);
@@ -1345,10 +1391,26 @@ public class P25P2DecoderState extends TimeslotDecoderState implements Identifie
         if(mac instanceof NetworkStatusBroadcastImplicit nsbi)
         {
             setCurrentChannel(nsbi.getChannel());
+            if(nsbi.getNAC() instanceof IntegerIdentifier nsbNac)
+            {
+                mObservedNac = nsbNac.getValue();
+            }
+            if(nsbi.getSystem() instanceof IntegerIdentifier nsbSystem)
+            {
+                mObservedSystem = nsbSystem.getValue();
+            }
         }
         else if(mac instanceof RfssStatusBroadcastImplicit rsbi)
         {
             setCurrentChannel(rsbi.getChannel());
+            if(rsbi.getSystem() instanceof IntegerIdentifier rsbSystem)
+            {
+                mObservedSystem = rsbSystem.getValue();
+            }
+            if(rsbi.getSite() instanceof IntegerIdentifier rsbSite)
+            {
+                mObservedSite = rsbSite.getValue();
+            }
         }
 
         //Send the frequency bands to the traffic channel manager to use for traffic channel preload data
