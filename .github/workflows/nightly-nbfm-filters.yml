@@ -242,6 +242,7 @@ jobs:
 
             - **TCP streaming suite:** decode events (9500), raw control channel (9501), raw IMBE frames (9502), decoded PCM call audio (9503, NDJSON) — all open at app startup, PCM has an idle heartbeat so clients can tell quiet air from a dead socket
             - **Channel tab diagnostics:** dBFS spectrum grid, live symbol-quality (EVM) meter with zone bar, measured BER for P25 Phase 1/2 and DMR
+            - **P25 site lock filters:** optional NAC / System / Site filters (Decoder: P25 Phase 1). Blank = unchanged: identical decode behavior, and filters aren't written to the playlist when empty (older builds open newer playlists fine)
             - **NBFM auto-PPM:** analog carriers discipline the tuner PPM, same mechanism as DMR
             - **HydraSDR RFOne support** via native JNI bridge to libhydrasdr v1.1.x
 

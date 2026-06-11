@@ -242,6 +242,9 @@ jobs:
             - Auto-PPM now works with analog **NBFM** channels (carrier-offset measurement, same mechanism as DMR) — a steady analog carrier keeps the tuner disciplined without any digital channel running
             - NBFM audio dropout fix (resampler input chunking)
 
+            **P25 site lock filters** (Channel editor > Decoder: P25 Phase 1) — optional **NAC / System / Site** filters that lock a channel to one specific control channel/site:
+            - Blank = unchanged: identical decode behavior, and filters aren't written to the playlist when empty (older builds open newer playlists fine)
+
             **HydraSDR RFOne support** — native JNI bridge to libhydrasdr v1.1.x (~25x lower streaming CPU vs the pure-Java USB path) with USB disconnect detection.
 
             ## Install notes
