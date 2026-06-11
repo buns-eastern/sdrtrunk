@@ -139,12 +139,16 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
         {
             mIgnoreDataCalls = phase1.getIgnoreDataCalls();
             createPhase1TrafficChannels(phase1.getTrafficChannelPoolSize(), phase1);
-            createPhase2TrafficChannels(phase1.getTrafficChannelPoolSize(), new DecodeConfigP25Phase2());
+            DecodeConfigP25Phase2 phase2TrafficConfig = new DecodeConfigP25Phase2();
+            phase1.copyIdentityFiltersTo(phase2TrafficConfig);
+            createPhase2TrafficChannels(phase1.getTrafficChannelPoolSize(), phase2TrafficConfig);
         }
         else if(parentChannel.getDecodeConfiguration() instanceof DecodeConfigP25Phase2 phase2)
         {
             mIgnoreDataCalls = phase2.getIgnoreDataCalls();
-            createPhase1TrafficChannels(phase2.getTrafficChannelPoolSize(), new DecodeConfigP25Phase1());
+            DecodeConfigP25Phase1 phase1TrafficConfig = new DecodeConfigP25Phase1();
+            phase2.copyIdentityFiltersTo(phase1TrafficConfig);
+            createPhase1TrafficChannels(phase2.getTrafficChannelPoolSize(), phase1TrafficConfig);
             createPhase2TrafficChannels(phase2.getTrafficChannelPoolSize(), phase2);
         }
     }

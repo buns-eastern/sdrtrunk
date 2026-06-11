@@ -203,6 +203,9 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private ServiceOptions mCurrentServiceOptions;
     private List<ControlChannelHeartbeat> mHeartbeatMonitors = new ArrayList<>();
     private Listener<IMessage> mRawStreamListener;
+    private final DecodeConfigP25 mDecodeConfigP25;
+    private Integer mObservedSystem;
+    private Integer mObservedSite;
 
     /**
      * Constructs an APCO-25 decoder state with an optional traffic channel manager.
@@ -214,6 +217,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         mChannel = channel;
         mModulation = ((DecodeConfigP25Phase1)channel.getDecodeConfiguration()).getModulation();
         mNetworkConfigurationMonitor = new P25P1NetworkConfigurationMonitor(mModulation);
+        mDecodeConfigP25 = (channel.getDecodeConfiguration() instanceof DecodeConfigP25 cfg) ? cfg : null;
 
         if(trafficChannelManager != null)
         {
@@ -299,6 +303,37 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         mRawStreamListener = listener;
     }
 
+    /**
+     * Indicates if the message should be rejected because this channel has an optional identity filter (NAC/System/
+     * Site) configured and the message's NAC, or the most recently observed System/Site, does not match.  When no
+     * filter is configured this always returns false, so behavior is identical to a channel without filters.
+     */
+    private boolean isIdentityFilterRejected(P25P1Message message)
+    {
+        if(mDecodeConfigP25 == null || !mDecodeConfigP25.hasIdentityFilter())
+        {
+            return false;
+        }
+
+        if(message.getNAC() instanceof IntegerIdentifier nacIdentifier &&
+                !mDecodeConfigP25.isNacAllowed(nacIdentifier.getValue()))
+        {
+            return true;
+        }
+
+        if(mObservedSystem != null && !mDecodeConfigP25.isSystemAllowed(mObservedSystem))
+        {
+            return true;
+        }
+
+        if(mObservedSite != null && !mDecodeConfigP25.isSiteAllowed(mObservedSite))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     @Override
     public void receive(IMessage iMessage)
     {
@@ -309,6 +344,11 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
 
         if(iMessage instanceof P25P1Message message)
         {
+            if(isIdentityFilterRejected(message))
+            {
+                return;
+            }
+
             getIdentifierCollection().update(message.getNAC());
 
             switch(message.getDUID())
@@ -648,6 +688,11 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                         getIdentifierCollection().update(frequencyID);
 
                     }
+                    if(ambtc instanceof AMBTCNetworkStatusBroadcast nsbAmbtcIdentity &&
+                            nsbAmbtcIdentity.getSystem() instanceof IntegerIdentifier nsbAmbtcSystem)
+                    {
+                        mObservedSystem = nsbAmbtcSystem.getValue();
+                    }
                     mNetworkConfigurationMonitor.process(ambtc);
                     break;
                 case OSP_RFSS_STATUS_BROADCAST:
@@ -664,6 +709,17 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                                 .create(rsb.getChannel().getDownlinkFrequency());
                         getIdentifierCollection().update(frequencyID);
 
+                    }
+                    if(ambtc instanceof AMBTCRFSSStatusBroadcast rsbIdentity)
+                    {
+                        if(rsbIdentity.getSystem() instanceof IntegerIdentifier rsbSystem)
+                        {
+                            mObservedSystem = rsbSystem.getValue();
+                        }
+                        if(rsbIdentity.getSite() instanceof IntegerIdentifier rsbSite)
+                        {
+                            mObservedSite = rsbSite.getValue();
+                        }
                     }
                     mNetworkConfigurationMonitor.process(ambtc);
                     if(!mHeartbeatMonitors.isEmpty() && ambtc instanceof AMBTCRFSSStatusBroadcast rsbHb
@@ -1299,6 +1355,11 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                         getIdentifierCollection().update(frequencyID);
 
                     }
+                    if(tsbk instanceof NetworkStatusBroadcast nsbIdentity &&
+                            nsbIdentity.getSystem() instanceof IntegerIdentifier nsbSystem)
+                    {
+                        mObservedSystem = nsbSystem.getValue();
+                    }
                     mNetworkConfigurationMonitor.process(tsbk);
                     break;
                 case OSP_RFSS_STATUS_BROADCAST:
@@ -1314,6 +1375,17 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                         FrequencyConfigurationIdentifier frequencyID = FrequencyConfigurationIdentifier
                                 .create(rfss.getChannel().getDownlinkFrequency());
                         getIdentifierCollection().update(frequencyID);
+                    }
+                    if(tsbk instanceof RFSSStatusBroadcast rfssIdentity)
+                    {
+                        if(rfssIdentity.getSystem() instanceof IntegerIdentifier rfssSystem)
+                        {
+                            mObservedSystem = rfssSystem.getValue();
+                        }
+                        if(rfssIdentity.getSite() instanceof IntegerIdentifier rfssSite)
+                        {
+                            mObservedSite = rfssSite.getValue();
+                        }
                     }
                     mNetworkConfigurationMonitor.process(tsbk);
                     if(!mHeartbeatMonitors.isEmpty() && tsbk instanceof RFSSStatusBroadcast rfssHb
@@ -2211,6 +2283,8 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
             case REQUEST_RESET:
                 resetState();
                 mNetworkConfigurationMonitor.reset();
+                mObservedSystem = null;
+                mObservedSite = null;
                 break;
             case NOTIFICATION_SOURCE_FREQUENCY:
                 long frequency = event.getFrequency();
