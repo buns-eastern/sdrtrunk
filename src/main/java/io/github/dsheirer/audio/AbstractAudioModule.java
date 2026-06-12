@@ -35,6 +35,12 @@ import io.github.dsheirer.module.decode.p25.phase1.PcmStreamManager;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.List;
+import io.github.dsheirer.audio.broadcast.PatchGroupStreamingOption;
+import io.github.dsheirer.identifier.Identifier;
+import io.github.dsheirer.identifier.patch.PatchGroupIdentifier;
+import io.github.dsheirer.identifier.talkgroup.TalkgroupIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,13 +64,28 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
 
     // PCM stream state — used to broadcast decoded audio to connected TCP clients on port 9503
     private static final DateTimeFormatter PCM_TIMESTAMP_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private volatile String mPcmCallId = null;
-    private final AtomicInteger mPcmFrameSeq = new AtomicInteger(0);
-    private final AtomicInteger mPcmFrameCount = new AtomicInteger(0);
+    private volatile List<PcmCall> mPcmCalls = List.of();
     private String mPcmCachedSystem = "";
     private String mPcmCachedSite = "";
-    private String mPcmCachedTalkgroup = "";
     private String mPcmCachedFrom = "";
+
+    /**
+     * Per-stream PCM call context. A normal call has exactly one; a patch group decomposed into individual
+     * talkgroups has one per patched talkgroup, each appearing to clients as an independent, normal call.
+     */
+    private static final class PcmCall
+    {
+        private final String callId;
+        private final String talkgroup;
+        private final AtomicInteger seq = new AtomicInteger(0);
+        private final AtomicInteger count = new AtomicInteger(0);
+
+        private PcmCall(String callId, String talkgroup)
+        {
+            this.callId = callId;
+            this.talkgroup = talkgroup;
+        }
+    }
 
     /**
      * Constructs an abstract audio module
@@ -98,6 +119,16 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
     }
 
     /**
+     * Patch group streaming option governing how a patched call is emitted on the PCM stream. Default is PATCH_GROUP
+     * (emit the patch group as-is). Subclasses with user-preference access (JmbeAudioModule) override this to honor
+     * the user's Individual Talkgroups / Patch Group preference.
+     */
+    protected PatchGroupStreamingOption getPatchGroupStreamingOption()
+    {
+        return PatchGroupStreamingOption.PATCH_GROUP;
+    }
+
+    /**
      * Closes the current audio segment
      */
     protected void closeAudioSegment()
@@ -116,13 +147,17 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
             // Wrapped in try-catch so any PCM failure cannot affect the existing audio pipeline.
             try
             {
-                if(mPcmCallId != null)
+                List<PcmCall> calls = mPcmCalls;
+                if(!calls.isEmpty())
                 {
                     PcmStreamManager pcmMgr = PcmStreamManager.getInstance();
                     if(pcmMgr != null && pcmMgr.isRunning())
                     {
-                        pcmMgr.broadcastCallEnd(mPcmCallId, mPcmCachedSystem, mPcmCachedSite,
-                                mPcmCachedTalkgroup, mPcmFrameCount.get());
+                        for(PcmCall call : calls)
+                        {
+                            pcmMgr.broadcastCallEnd(call.callId, mPcmCachedSystem, mPcmCachedSite,
+                                    call.talkgroup, call.count.get());
+                        }
                     }
                 }
             }
@@ -133,10 +168,9 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
             finally
             {
                 // Always clear PCM state regardless of broadcast success or failure
-                mPcmCallId = null;
+                mPcmCalls = List.of();
                 mPcmCachedSystem = "";
                 mPcmCachedSite = "";
-                mPcmCachedTalkgroup = "";
                 mPcmCachedFrom = "";
             }
         }
@@ -208,31 +242,59 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
                 try
                 {
                     PcmStreamManager pcmMgr = PcmStreamManager.getInstance();
-                    if(pcmMgr != null && pcmMgr.isRunning() && mPcmCallId == null)
+                    if(pcmMgr != null && pcmMgr.isRunning() && mPcmCalls.isEmpty())
                     {
-                        mPcmCallId = Long.toHexString(System.currentTimeMillis()).substring(4);
-                        mPcmFrameSeq.set(0);
-                        mPcmFrameCount.set(0);
                         // Cache metadata once at call_start — reused on every addAudio() frame
                         mPcmCachedSystem = pcmGetSystem();
                         mPcmCachedSite = pcmGetSite();
-                        mPcmCachedTalkgroup = pcmEscape(mIdentifierCollection.getToIdentifier() != null
-                                ? mIdentifierCollection.getToIdentifier().toString() : "");
                         mPcmCachedFrom = pcmEscape(mIdentifierCollection.getFromIdentifier() != null
                                 ? mIdentifierCollection.getFromIdentifier().toString() : "");
-                        pcmMgr.broadcastCallStart(mPcmCallId, mPcmCachedSystem, mPcmCachedSite,
-                                mPcmCachedTalkgroup, mPcmCachedFrom,
-                                LocalDateTime.now().format(PCM_TIMESTAMP_FMT));
+
+                        // Determine the talkgroup(s) for this call. When the TO identifier is a patch group and the
+                        // user preference is Individual Talkgroups, decompose into one PCM stream per patched
+                        // talkgroup so each appears to clients as an independent, normal call.
+                        Identifier toIdentifier = mIdentifierCollection.getToIdentifier();
+                        List<String> talkgroups = new ArrayList<>();
+                        if(toIdentifier instanceof PatchGroupIdentifier patchGroupIdentifier
+                                && getPatchGroupStreamingOption() == PatchGroupStreamingOption.TALKGROUPS)
+                        {
+                            for(TalkgroupIdentifier patched : patchGroupIdentifier.getValue().getPatchedTalkgroupIdentifiers())
+                            {
+                                talkgroups.add(pcmEscape(patched.toString()));
+                            }
+                        }
+                        if(talkgroups.isEmpty())
+                        {
+                            // Not a decomposed patch group (or patch membership not yet known) — single stream
+                            // using the TO identifier as-is (identical to prior behavior).
+                            talkgroups.add(pcmEscape(toIdentifier != null ? toIdentifier.toString() : ""));
+                        }
+
+                        String callIdBase = Long.toHexString(System.currentTimeMillis()).substring(4);
+                        String timestamp = LocalDateTime.now().format(PCM_TIMESTAMP_FMT);
+                        boolean single = talkgroups.size() == 1;
+                        List<PcmCall> calls = new ArrayList<>(talkgroups.size());
+                        for(int i = 0; i < talkgroups.size(); i++)
+                        {
+                            String callId = single ? callIdBase : callIdBase + "-" + i;
+                            calls.add(new PcmCall(callId, talkgroups.get(i)));
+                        }
+                        mPcmCalls = calls;
+
+                        for(PcmCall call : calls)
+                        {
+                            pcmMgr.broadcastCallStart(call.callId, mPcmCachedSystem, mPcmCachedSite,
+                                    call.talkgroup, mPcmCachedFrom, timestamp);
+                        }
                     }
                 }
                 catch(Exception e)
                 {
                     mLog.warn("PCM call_start broadcast error: {}", e.getMessage());
                     // Reset PCM state so the next call gets a clean slate
-                    mPcmCallId = null;
+                    mPcmCalls = List.of();
                     mPcmCachedSystem = "";
                     mPcmCachedSite = "";
-                    mPcmCachedTalkgroup = "";
                     mPcmCachedFrom = "";
                 }
             }
@@ -260,12 +322,16 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
         try
         {
             PcmStreamManager pcmMgr = PcmStreamManager.getInstance();
-            if(pcmMgr != null && pcmMgr.isRunning() && mPcmCallId != null)
+            List<PcmCall> calls = mPcmCalls;
+            if(pcmMgr != null && pcmMgr.isRunning() && !calls.isEmpty())
             {
-                pcmMgr.broadcastPcm(mPcmCallId, mPcmCachedSystem, mPcmCachedSite,
-                        mPcmCachedTalkgroup, mPcmCachedFrom,
-                        mPcmFrameSeq.getAndIncrement(), audioBuffer);
-                mPcmFrameCount.incrementAndGet();
+                for(PcmCall call : calls)
+                {
+                    pcmMgr.broadcastPcm(call.callId, mPcmCachedSystem, mPcmCachedSite,
+                            call.talkgroup, mPcmCachedFrom,
+                            call.seq.getAndIncrement(), audioBuffer);
+                    call.count.incrementAndGet();
+                }
             }
         }
         catch(Exception e)
