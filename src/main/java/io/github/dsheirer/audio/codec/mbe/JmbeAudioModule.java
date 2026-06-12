@@ -27,6 +27,7 @@ import io.github.dsheirer.eventbus.MyEventBus;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.message.IMessageListener;
 import io.github.dsheirer.preference.PreferenceType;
+import io.github.dsheirer.audio.broadcast.PatchGroupStreamingOption;
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.sample.Listener;
 import java.lang.reflect.InvocationTargetException;
@@ -60,6 +61,15 @@ public abstract class JmbeAudioModule extends AbstractAudioModule implements Lis
         mUserPreferences = userPreferences;
         MyEventBus.getGlobalEventBus().register(this);
         loadConverter();
+    }
+
+    /**
+     * Honors the user's patch group streaming preference (Individual Talkgroups vs Patch Group) for the PCM stream.
+     */
+    @Override
+    protected PatchGroupStreamingOption getPatchGroupStreamingOption()
+    {
+        return mUserPreferences.getCallManagementPreference().getPatchGroupStreamingOption();
     }
 
     @Override
