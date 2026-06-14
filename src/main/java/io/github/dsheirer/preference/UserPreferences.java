@@ -40,6 +40,7 @@ import io.github.dsheirer.preference.network.HeartbeatPreference;
 import io.github.dsheirer.preference.network.NetworkStreamPreference;
 import io.github.dsheirer.preference.network.ImbeStreamPreference;
 import io.github.dsheirer.preference.network.PcmStreamPreference;
+import io.github.dsheirer.preference.network.StandaloneStreamPreference;
 import io.github.dsheirer.sample.Listener;
 
 /**
@@ -78,6 +79,7 @@ public class UserPreferences implements Listener<PreferenceType>
     private HeartbeatPreference mHeartbeatPreference;
     private ImbeStreamPreference mImbeStreamPreference;
     private PcmStreamPreference mPcmStreamPreference;
+    private StandaloneStreamPreference mStandaloneStreamPreference;
 
     private SwingPreference mSwingPreference = new SwingPreference();
     private JavaFxPreferences mJavaFxPreferences = new JavaFxPreferences();
@@ -253,6 +255,11 @@ public class UserPreferences implements Listener<PreferenceType>
         return mPcmStreamPreference;
     }
 
+    public StandaloneStreamPreference getStandaloneStreamPreference()
+    {
+        return mStandaloneStreamPreference;
+    }
+
     /**
      * Loads the managed preferences
      */
@@ -276,6 +283,7 @@ public class UserPreferences implements Listener<PreferenceType>
         mHeartbeatPreference = new HeartbeatPreference(this::receive);
         mImbeStreamPreference = new ImbeStreamPreference(this::receive);
         mPcmStreamPreference = new PcmStreamPreference(this::receive);
+        mStandaloneStreamPreference = new StandaloneStreamPreference(this::receive);
     }
 
     /**

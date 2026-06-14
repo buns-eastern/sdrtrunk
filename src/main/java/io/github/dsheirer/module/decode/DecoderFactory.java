@@ -107,6 +107,7 @@ import io.github.dsheirer.module.decode.tait.Tait1200MessageFilter;
 import io.github.dsheirer.module.decode.traffic.TrafficChannelManager;
 import io.github.dsheirer.module.demodulate.fm.FMDemodulatorModule;
 import io.github.dsheirer.identifier.alias.TalkerAliasLogger;
+import io.github.dsheirer.module.decode.p25.phase1.ChannelHeartbeatModule;
 import io.github.dsheirer.module.decode.p25.phase1.ControlChannelHeartbeat;
 import io.github.dsheirer.module.decode.p25.phase1.NetworkEventBroadcastModule;
 import io.github.dsheirer.module.decode.p25.phase1.NetworkStreamManager;
@@ -205,6 +206,24 @@ public class DecoderFactory
                 break;
             default:
                 throw new IllegalArgumentException("Unknown decoder type [" + decodeConfig.getDecoderType().toString() + "]");
+        }
+
+        //Standalone (non-trunking) channel heartbeat: emit liveness for conventional channels on the
+        //standalone channel stream while they run.  Limited to standard (non-traffic) channels so that
+        //dynamically-spawned trunking traffic channels are excluded.
+        if(userPreferences.getStandaloneStreamPreference().isEnabled() && channel.isStandardChannel())
+        {
+            switch(decodeConfig.getDecoderType())
+            {
+                case AM:
+                case NBFM:
+                case DMR:
+                    modules.add(new ChannelHeartbeatModule(channel.getName(),
+                            userPreferences.getStandaloneStreamPreference().getIntervalSeconds()));
+                    break;
+                default:
+                    break;
+            }
         }
 
         return modules;
