@@ -121,18 +121,19 @@ public class P25P1MessageProcessor implements Listener<IMessage>
             {
                 LinkControlWord lcw = ldu1.getLinkControlWord();;
 
-                if(lcw instanceof IExtendedSourceMessage esm)
+                if(lcw instanceof IExtendedSourceMessage)
                 {
                     if(lcw instanceof LCSourceIDExtension extension)
                     {
+                        //Apply this extension to any held TDULC awaiting it (terminator path — unchanged).
                         processSourceIDExtension(extension);
                     }
-                    else if(esm.isExtensionRequired())
-                    {
-                        processSourceIDExtension(null);
-                        mHeldLDU1Message = ldu1;
-                        return;
-                    }
+                    //NOTE: voice frames (LDU1/LDU2) are NO LONGER held to wait for the source ID extension.
+                    //Holding them stalled the live PCM stream ~360ms on every ISSI call while the extension
+                    //arrived over the air. The frame is dispatched immediately so audio flows in real time; the
+                    //fully-qualified (ISSI) source is applied to the identifier collection later, in
+                    //P25P1DecoderState's SOURCE_ID_EXTENSION handler. The un-enriched frame carries only the
+                    //talkgroup (no source), so an early dispatch cannot mis-attribute the call.
                 }
                 else if(lcw instanceof LCHarrisTalkerAliasBase harrisTalkerAlias)
                 {
@@ -167,15 +168,8 @@ public class P25P1MessageProcessor implements Listener<IMessage>
             }
             else if(message instanceof LDU2Message ldu2)
             {
-                //If we held onto an LDU1 awaiting a source ID extension, then also hold onto this LDU2 and flush them in sequence.
-                if(mHeldLDU1Message != null)
-                {
-                    mHeldLDU2Message = ldu2;
-                }
-                else
-                {
-                    dispatch(ldu2);
-                }
+                //Voice frames are no longer held (see the LDU1 branch) — dispatch immediately so audio is not stalled.
+                dispatch(ldu2);
             }
             else if(message instanceof TDULCMessage tdulc)
             {

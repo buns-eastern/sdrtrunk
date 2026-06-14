@@ -64,7 +64,9 @@ import io.github.dsheirer.module.decode.p25.phase1.message.IFrequencyBand;
 import io.github.dsheirer.module.decode.p25.phase1.message.P25P1Message;
 import io.github.dsheirer.module.decode.p25.phase1.message.hdu.HDUMessage;
 import io.github.dsheirer.module.decode.p25.phase1.message.hdu.HeaderData;
+import io.github.dsheirer.module.decode.p25.phase1.message.lc.IExtendedSourceMessage;
 import io.github.dsheirer.module.decode.p25.phase1.message.lc.LinkControlWord;
+import io.github.dsheirer.module.decode.p25.phase1.message.lc.standard.LCSourceIDExtension;
 import io.github.dsheirer.module.decode.p25.phase1.message.lc.l3harris.LCHarrisReturnToControlChannel;
 import io.github.dsheirer.module.decode.p25.phase1.message.lc.l3harris.LCHarrisTalkerAliasComplete;
 import io.github.dsheirer.module.decode.p25.phase1.message.lc.l3harris.LCHarrisTalkerGPSComplete;
@@ -197,6 +199,10 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private final Channel mChannel;
     private final Modulation mModulation;
     private final PatchGroupManager mPatchGroupManager = new PatchGroupManager();
+    //Pending voice-channel source LC awaiting its SOURCE_ID_EXTENSION. Set when an extension-required
+    //channel-user LC is processed un-enriched; the fully-qualified (ISSI) source is applied to it when the
+    //extension arrives. Voice audio is no longer held upstream to wait for this (see P25P1MessageProcessor).
+    private IExtendedSourceMessage mPendingSourceExtension;
     private final P25P1NetworkConfigurationMonitor mNetworkConfigurationMonitor;
     private final Listener<ChannelEvent> mChannelEventListener;
     private final P25TrafficChannelManager mTrafficChannelManager;
@@ -485,6 +491,14 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private void processLCChannelUser(LinkControlWord lcw, long timestamp)
     {
         getIdentifierCollection().update(mPatchGroupManager.update(lcw.getIdentifiers(), timestamp));
+
+        //If this channel-user LC carries an ISSI/roaming source that needs a separate SOURCE_ID_EXTENSION, remember
+        //it so the fully-qualified source can be applied when that extension arrives. Audio is no longer held to wait.
+        if(lcw instanceof IExtendedSourceMessage esm && esm.isExtensionRequired() && !esm.isFullyExtended())
+        {
+            mPendingSourceExtension = esm;
+        }
+
         DecodeEventType decodeEventType = getLCDecodeEventType(lcw);
 
         ServiceOptions serviceOptions = null;
@@ -1991,7 +2005,17 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         switch(lcw.getOpcode())
         {
             case SOURCE_ID_EXTENSION:
-                //Ignore - handled elsewhere
+                //Apply the late-arriving fully-qualified (ISSI) source to the pending voice-channel LC and commit it
+                //to the identifier collection. Voice frames are no longer held upstream waiting for this extension
+                //(that stalled PCM audio ~360ms on ISSI calls). The audio has already flowed; this resolves the caller
+                //ID to its full WACN.SYSTEM.ID form — the same value as before, just without gating the audio on it.
+                if(lcw instanceof LCSourceIDExtension sourceIdExtension && mPendingSourceExtension != null)
+                {
+                    mPendingSourceExtension.setSourceIDExtension(sourceIdExtension);
+                    getIdentifierCollection().update(
+                            mPatchGroupManager.update(mPendingSourceExtension.getIdentifiers(), timestamp));
+                    mPendingSourceExtension = null;
+                }
                 break;
             //Calls getting ready to start or in-progress on this channel
             case GROUP_VOICE_CHANNEL_USER:
@@ -2282,6 +2306,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         {
             case REQUEST_RESET:
                 resetState();
+                mPendingSourceExtension = null;
                 mNetworkConfigurationMonitor.reset();
                 mObservedSystem = null;
                 mObservedSite = null;
