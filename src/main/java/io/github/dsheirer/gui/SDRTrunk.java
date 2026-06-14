@@ -45,6 +45,7 @@ import io.github.dsheirer.map.MapService;
 import io.github.dsheirer.module.decode.p25.phase1.ImbeStreamManager;
 import io.github.dsheirer.module.decode.p25.phase1.NetworkStreamManager;
 import io.github.dsheirer.module.decode.p25.phase1.PcmStreamManager;
+import io.github.dsheirer.module.decode.p25.phase1.StandaloneChannelStreamManager;
 import io.github.dsheirer.module.log.EventLogManager;
 import io.github.dsheirer.monitor.DiagnosticMonitor;
 import io.github.dsheirer.monitor.ResourceMonitor;
@@ -166,6 +167,14 @@ public class SDRTrunk implements Listener<TunerEvent>
         {
             int pcmPort = mUserPreferences.getPcmStreamPreference().getPort();
             PcmStreamManager.getInstance(pcmPort);
+        }
+
+        //Start the Standalone Channel Heartbeat TCP server (port 9504 by default) at app startup if enabled,
+        //so the listener is open immediately and independent of channel lifecycle.
+        if(mUserPreferences.getStandaloneStreamPreference().isEnabled())
+        {
+            int standalonePort = mUserPreferences.getStandaloneStreamPreference().getPort();
+            StandaloneChannelStreamManager.getInstance(standalonePort);
         }
 
         //Start the event/raw-message stream servers (ports 9500/9501 by default) and the IMBE frame
