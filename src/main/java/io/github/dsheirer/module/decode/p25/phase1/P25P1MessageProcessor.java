@@ -74,6 +74,15 @@ public class P25P1MessageProcessor implements Listener<IMessage>
     private LCHarrisTalkerGPSBlock1 mHeldHarrisGPSBlock1;
     private long mHeldHarrisGPSBlock1Timestamp;
 
+    //=== ISSIPROBE instrumentation (TEMPORARY, log-only — remove after diagnosis) =====================
+    //Counts every LDU1/LDU2 voice frame entering the processor vs. actually dispatched downstream.
+    //If, on quiet, lduIn != lduDispatched, the hold mechanism lost audio (DROP). If they reconcile, it's DELAY.
+    private long mProbeLduIn = 0;
+    private long mProbeLduDispatched = 0;
+    private long mProbeHeldWallNanos = 0;
+    private int mProbeHeldCount = 0;
+    //=================================================================================================
+
     /**
      * Motorola talker alias assembler for link control header and data blocks.
      */
@@ -116,6 +125,7 @@ public class P25P1MessageProcessor implements Listener<IMessage>
     {
         if(message.isValid())
         {
+            if(message instanceof LDU1Message || message instanceof LDU2Message) { mProbeLduIn++; }   //ISSIPROBE
             //Reassemble extended source link control messages.
             if(message instanceof LDU1Message ldu1)
             {
@@ -131,6 +141,11 @@ public class P25P1MessageProcessor implements Listener<IMessage>
                     {
                         processSourceIDExtension(null);
                         mHeldLDU1Message = ldu1;
+                        //ISSIPROBE: audio starts being withheld here, awaiting the SOURCE_ID_EXTENSION message.
+                        mProbeHeldWallNanos = System.nanoTime();
+                        mProbeHeldCount++;
+                        try { mLog.info("ISSIPROBE HOLD  opcode={} airTs={} heldCount={} lduIn={} dispatched={} (audio withheld, awaiting SOURCE_ID_EXTENSION)",
+                                lcw.getOpcode(), ldu1.getTimestamp(), mProbeHeldCount, mProbeLduIn, mProbeLduDispatched); } catch(Exception e) {}
                         return;
                     }
                 }
@@ -170,6 +185,12 @@ public class P25P1MessageProcessor implements Listener<IMessage>
                 //If we held onto an LDU1 awaiting a source ID extension, then also hold onto this LDU2 and flush them in sequence.
                 if(mHeldLDU1Message != null)
                 {
+                    //ISSIPROBE: an already-held LDU2 being overwritten = ~9 IMBE frames (~180ms) silently LOST.
+                    if(mHeldLDU2Message != null)
+                    {
+                        try { mLog.warn("ISSIPROBE DROP  held LDU2 OVERWRITTEN before flush — ~9 IMBE frames (~180ms) LOST. lduIn={} dispatched={}",
+                                mProbeLduIn, mProbeLduDispatched); } catch(Exception e) {}
+                    }
                     mHeldLDU2Message = ldu2;
                 }
                 else
@@ -250,6 +271,13 @@ public class P25P1MessageProcessor implements Listener<IMessage>
 
         if(mHeldLDU1Message != null && mHeldLDU1Message.getLinkControlWord() instanceof IExtendedSourceMessage esm)
         {
+            //ISSIPROBE: wall-clock held duration ~= over-the-air wait (NOT cpu). Held audio is released here = DELAY (not drop).
+            try {
+                long heldWallMs = (System.nanoTime() - mProbeHeldWallNanos) / 1_000_000L;
+                mLog.info("ISSIPROBE FLUSH heldFor={}ms extensionPresent={} heldLDU2Present={} lduIn={} dispatched={} (held audio released now)",
+                        heldWallMs, (extension != null), (mHeldLDU2Message != null), mProbeLduIn, mProbeLduDispatched);
+            } catch(Exception e) {}
+            mProbeHeldCount = 0;
             esm.setSourceIDExtension(extension);
             dispatch(mHeldLDU1Message);
             mHeldLDU1Message = null;
@@ -268,6 +296,8 @@ public class P25P1MessageProcessor implements Listener<IMessage>
         {
             return;
         }
+
+        if(message instanceof LDU1Message || message instanceof LDU2Message) { mProbeLduDispatched++; }   //ISSIPROBE
 
         processForFrequencyBands(message);
 
