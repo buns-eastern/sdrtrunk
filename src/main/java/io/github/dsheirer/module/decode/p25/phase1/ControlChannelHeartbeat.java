@@ -120,7 +120,13 @@ public class ControlChannelHeartbeat
                     .build();
 
             HttpResponse<Void> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.discarding());
-            mLog.debug("Heartbeat ping [{}] channel [{}] -> HTTP {}", url, mChannelName, response.statusCode());
+            int status = response.statusCode();
+            //Successful pings are intentionally NOT logged — they fire every interval and flood the log.
+            //Only surface a ping that did not succeed (non-2xx), so a broken monitor path is still visible.
+            if(status < 200 || status >= 300)
+            {
+                mLog.warn("Heartbeat ping [{}] channel [{}] -> HTTP {}", url, mChannelName, status);
+            }
         }
         catch(Exception e)
         {
