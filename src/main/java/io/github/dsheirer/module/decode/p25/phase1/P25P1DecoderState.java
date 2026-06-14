@@ -502,10 +502,21 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
             serviceOptions = VoiceServiceOptions.createUnencrypted();
         }
 
+        long probeT0 = System.nanoTime();   //ISSIPROBE
         mTrafficChannelManager.getTalkerAliasManager().enrichMutable(getIdentifierCollection());
+        long probeT1 = System.nanoTime();   //ISSIPROBE
         MutableIdentifierCollection mic = getMutableIdentifierCollection(getIdentifierCollection().getIdentifiers(), timestamp);
         mTrafficChannelManager.processP1TrafficCurrentUser(getCurrentFrequency(), getCurrentChannel(), decodeEventType,
                 serviceOptions, mic, timestamp, null, lcw.toString());
+        //ISSIPROBE: if SLOWSTEP never logs, no single call eats real CPU -> the ~350ms gap is the over-the-air hold, not blocking.
+        try {
+            long enrichMs = (probeT1 - probeT0) / 1_000_000L;
+            long trafficMs = (System.nanoTime() - probeT1) / 1_000_000L;
+            if(enrichMs > 5 || trafficMs > 5)
+            {
+                LOGGER.info("ISSIPROBE SLOWSTEP enrichMutable={}ms processTrafficCurrentUser={}ms (a step consumed real CPU time)", enrichMs, trafficMs);
+            }
+        } catch(Exception e) {}
 
         if(serviceOptions.isEncrypted())
         {
