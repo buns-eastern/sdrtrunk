@@ -74,15 +74,6 @@ public class P25P1MessageProcessor implements Listener<IMessage>
     private LCHarrisTalkerGPSBlock1 mHeldHarrisGPSBlock1;
     private long mHeldHarrisGPSBlock1Timestamp;
 
-    //=== ISSIPROBE instrumentation (TEMPORARY, log-only — remove after diagnosis) =====================
-    //Counts every LDU1/LDU2 voice frame entering the processor vs. actually dispatched downstream.
-    //If, on quiet, lduIn != lduDispatched, the hold mechanism lost audio (DROP). If they reconcile, it's DELAY.
-    private long mProbeLduIn = 0;
-    private long mProbeLduDispatched = 0;
-    private long mProbeHeldWallNanos = 0;
-    private int mProbeHeldCount = 0;
-    //=================================================================================================
-
     /**
      * Motorola talker alias assembler for link control header and data blocks.
      */
@@ -125,29 +116,24 @@ public class P25P1MessageProcessor implements Listener<IMessage>
     {
         if(message.isValid())
         {
-            if(message instanceof LDU1Message || message instanceof LDU2Message) { mProbeLduIn++; }   //ISSIPROBE
             //Reassemble extended source link control messages.
             if(message instanceof LDU1Message ldu1)
             {
                 LinkControlWord lcw = ldu1.getLinkControlWord();;
 
-                if(lcw instanceof IExtendedSourceMessage esm)
+                if(lcw instanceof IExtendedSourceMessage)
                 {
                     if(lcw instanceof LCSourceIDExtension extension)
                     {
+                        //Apply this extension to any held TDULC awaiting it (terminator path — unchanged).
                         processSourceIDExtension(extension);
                     }
-                    else if(esm.isExtensionRequired())
-                    {
-                        processSourceIDExtension(null);
-                        mHeldLDU1Message = ldu1;
-                        //ISSIPROBE: audio starts being withheld here, awaiting the SOURCE_ID_EXTENSION message.
-                        mProbeHeldWallNanos = System.nanoTime();
-                        mProbeHeldCount++;
-                        try { mLog.info("ISSIPROBE HOLD  opcode={} airTs={} heldCount={} lduIn={} dispatched={} (audio withheld, awaiting SOURCE_ID_EXTENSION)",
-                                lcw.getOpcode(), ldu1.getTimestamp(), mProbeHeldCount, mProbeLduIn, mProbeLduDispatched); } catch(Exception e) {}
-                        return;
-                    }
+                    //NOTE: voice frames (LDU1/LDU2) are NO LONGER held to wait for the source ID extension.
+                    //Holding them stalled the live PCM stream ~360ms on every ISSI call while the extension
+                    //arrived over the air. The frame is dispatched immediately so audio flows in real time; the
+                    //fully-qualified (ISSI) source is applied to the identifier collection later, in
+                    //P25P1DecoderState's SOURCE_ID_EXTENSION handler. The un-enriched frame carries only the
+                    //talkgroup (no source), so an early dispatch cannot mis-attribute the call.
                 }
                 else if(lcw instanceof LCHarrisTalkerAliasBase harrisTalkerAlias)
                 {
@@ -182,21 +168,8 @@ public class P25P1MessageProcessor implements Listener<IMessage>
             }
             else if(message instanceof LDU2Message ldu2)
             {
-                //If we held onto an LDU1 awaiting a source ID extension, then also hold onto this LDU2 and flush them in sequence.
-                if(mHeldLDU1Message != null)
-                {
-                    //ISSIPROBE: an already-held LDU2 being overwritten = ~9 IMBE frames (~180ms) silently LOST.
-                    if(mHeldLDU2Message != null)
-                    {
-                        try { mLog.warn("ISSIPROBE DROP  held LDU2 OVERWRITTEN before flush — ~9 IMBE frames (~180ms) LOST. lduIn={} dispatched={}",
-                                mProbeLduIn, mProbeLduDispatched); } catch(Exception e) {}
-                    }
-                    mHeldLDU2Message = ldu2;
-                }
-                else
-                {
-                    dispatch(ldu2);
-                }
+                //Voice frames are no longer held (see the LDU1 branch) — dispatch immediately so audio is not stalled.
+                dispatch(ldu2);
             }
             else if(message instanceof TDULCMessage tdulc)
             {
@@ -271,28 +244,7 @@ public class P25P1MessageProcessor implements Listener<IMessage>
 
         if(mHeldLDU1Message != null && mHeldLDU1Message.getLinkControlWord() instanceof IExtendedSourceMessage esm)
         {
-            //ISSIPROBE: capture the UN-ENRICHED identifiers (exactly what the decoder state WOULD see if we dispatched
-            //the audio early, before the extension arrives) so we can tell whether an early dispatch would attach a
-            //partial/WRONG FROM (mis-attribution risk) or NO from at all (safe). Read-only — real behavior is unchanged.
-            String probeUnenriched = "";
-            long probeHeldWallMs = 0;
-            try {
-                probeHeldWallMs = (System.nanoTime() - mProbeHeldWallNanos) / 1_000_000L;
-                probeUnenriched = String.valueOf(mHeldLDU1Message.getLinkControlWord().getIdentifiers());
-            } catch(Exception e) {}
-
             esm.setSourceIDExtension(extension);
-
-            //ISSIPROBE: enriched (correct, full ISSI) identifiers, logged beside the un-enriched ones for direct compare.
-            //If unenrichedIDs has the same FROM as enrichedIDs minus qualification => safe. If it shows a different/bare
-            //radio FROM => an early dispatch would briefly mis-attribute (drives whether the fix needs FROM suppression).
-            try {
-                mLog.info("ISSIPROBE FLUSH heldFor={}ms extensionPresent={} heldLDU2Present={} lduIn={} dispatched={} unenrichedIDs={} enrichedIDs={}",
-                        probeHeldWallMs, (extension != null), (mHeldLDU2Message != null), mProbeLduIn, mProbeLduDispatched,
-                        probeUnenriched, mHeldLDU1Message.getLinkControlWord().getIdentifiers());
-            } catch(Exception e) {}
-            mProbeHeldCount = 0;
-
             dispatch(mHeldLDU1Message);
             mHeldLDU1Message = null;
             dispatch(mHeldLDU2Message);
@@ -310,8 +262,6 @@ public class P25P1MessageProcessor implements Listener<IMessage>
         {
             return;
         }
-
-        if(message instanceof LDU1Message || message instanceof LDU2Message) { mProbeLduDispatched++; }   //ISSIPROBE
 
         processForFrequencyBands(message);
 
