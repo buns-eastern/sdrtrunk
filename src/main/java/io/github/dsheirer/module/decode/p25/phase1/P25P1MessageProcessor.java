@@ -271,14 +271,28 @@ public class P25P1MessageProcessor implements Listener<IMessage>
 
         if(mHeldLDU1Message != null && mHeldLDU1Message.getLinkControlWord() instanceof IExtendedSourceMessage esm)
         {
-            //ISSIPROBE: wall-clock held duration ~= over-the-air wait (NOT cpu). Held audio is released here = DELAY (not drop).
+            //ISSIPROBE: capture the UN-ENRICHED identifiers (exactly what the decoder state WOULD see if we dispatched
+            //the audio early, before the extension arrives) so we can tell whether an early dispatch would attach a
+            //partial/WRONG FROM (mis-attribution risk) or NO from at all (safe). Read-only — real behavior is unchanged.
+            String probeUnenriched = "";
+            long probeHeldWallMs = 0;
             try {
-                long heldWallMs = (System.nanoTime() - mProbeHeldWallNanos) / 1_000_000L;
-                mLog.info("ISSIPROBE FLUSH heldFor={}ms extensionPresent={} heldLDU2Present={} lduIn={} dispatched={} (held audio released now)",
-                        heldWallMs, (extension != null), (mHeldLDU2Message != null), mProbeLduIn, mProbeLduDispatched);
+                probeHeldWallMs = (System.nanoTime() - mProbeHeldWallNanos) / 1_000_000L;
+                probeUnenriched = String.valueOf(mHeldLDU1Message.getLinkControlWord().getIdentifiers());
+            } catch(Exception e) {}
+
+            esm.setSourceIDExtension(extension);
+
+            //ISSIPROBE: enriched (correct, full ISSI) identifiers, logged beside the un-enriched ones for direct compare.
+            //If unenrichedIDs has the same FROM as enrichedIDs minus qualification => safe. If it shows a different/bare
+            //radio FROM => an early dispatch would briefly mis-attribute (drives whether the fix needs FROM suppression).
+            try {
+                mLog.info("ISSIPROBE FLUSH heldFor={}ms extensionPresent={} heldLDU2Present={} lduIn={} dispatched={} unenrichedIDs={} enrichedIDs={}",
+                        probeHeldWallMs, (extension != null), (mHeldLDU2Message != null), mProbeLduIn, mProbeLduDispatched,
+                        probeUnenriched, mHeldLDU1Message.getLinkControlWord().getIdentifiers());
             } catch(Exception e) {}
             mProbeHeldCount = 0;
-            esm.setSourceIDExtension(extension);
+
             dispatch(mHeldLDU1Message);
             mHeldLDU1Message = null;
             dispatch(mHeldLDU2Message);
