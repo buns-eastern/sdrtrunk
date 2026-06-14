@@ -208,22 +208,19 @@ public class DecoderFactory
                 throw new IllegalArgumentException("Unknown decoder type [" + decodeConfig.getDecoderType().toString() + "]");
         }
 
-        //Standalone (non-trunking) channel heartbeat: emit liveness for conventional channels on the
-        //standalone channel stream while they run.  Limited to standard (non-traffic) channels so that
-        //dynamically-spawned trunking traffic channels are excluded.
-        if(userPreferences.getStandaloneStreamPreference().isEnabled() && channel.isStandardChannel())
+        //Standalone channel heartbeat: emit liveness for any actively-decoding channel whose name does NOT
+        //start with "T-".  SDRTrunk names dynamically-spawned trunking voice (traffic) channels "T-<parent>"
+        //(see P25/DMR/MPT1327 traffic channel managers), so excluding that prefix leaves the conventional
+        //channels of every protocol -- NBFM, AM, conventional DMR, and conventional P25 -- while keeping
+        //trunking voice channels off this stream.  A channel reaches this point only as its processing chain
+        //starts (i.e. it is in "Now Playing"), so the heartbeat tracks exactly what SDRTrunk is decoding.
+        //Note: trunking CONTROL channels are not "T-" prefixed, so they are included here too; their liveness
+        //is also available on the raw control stream (9501) and can be filtered out downstream by name if not wanted.
+        if(userPreferences.getStandaloneStreamPreference().isEnabled()
+                && channel.getName() != null && !channel.getName().startsWith("T-"))
         {
-            switch(decodeConfig.getDecoderType())
-            {
-                case AM:
-                case NBFM:
-                case DMR:
-                    modules.add(new ChannelHeartbeatModule(channel.getName(),
-                            userPreferences.getStandaloneStreamPreference().getIntervalSeconds()));
-                    break;
-                default:
-                    break;
-            }
+            modules.add(new ChannelHeartbeatModule(channel.getName(),
+                    userPreferences.getStandaloneStreamPreference().getIntervalSeconds()));
         }
 
         return modules;
