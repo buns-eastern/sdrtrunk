@@ -24,12 +24,18 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import io.github.dsheirer.util.ThreadPool;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
+import io.github.dsheirer.util.ThreadPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +46,7 @@ import org.slf4j.LoggerFactory;
  *   call_start — once when a new transmission begins (squelch opens)
  *   pcm        — once per decoded audio chunk (float[] samples converted to 16-bit little-endian PCM)
  *   call_end   — once when a transmission ends (squelch closes)
+ *   voice_id   — fast SUID notification, emitted ~180ms after squelch open
  *   heartbeat  — every ~5 seconds while idle, so clients can distinguish quiet air from a dead socket
  *
  * Audio format: 16-bit signed little-endian PCM at 8000 Hz mono, Base64-encoded.
@@ -47,6 +54,31 @@ import org.slf4j.LoggerFactory;
  *
  * Multiple clients can connect simultaneously; each receives a full copy of the stream.
  * Consumers should demultiplex by the "callId" field, which is unique per transmission.
+ *
+ * ---------------------------------------------------------------------------------------------------
+ * EGRESS PACE BUFFER (even-pacing fix)
+ * ---------------------------------------------------------------------------------------------------
+ * Decoded audio is handed to {@link #broadcastPcm} as it is produced. Locally-decoded (native) calls
+ * produce frames in near real-time, but ISSI/bridged calls arrive in network batches — the decoder
+ * emits a clump of frames at once. Broadcasting inline therefore produced a "stall, then burst" shape
+ * on the wire (e.g. ~548ms of dead air followed by ~27 frames with ~0ms inter-frame gap), which any
+ * real-time client audio scheduler chokes on (jitter-buffer overflow then underrun, ~2x/second).
+ *
+ * To normalize ALL sources in one place, pcm frames are no longer written inline. Each frame is
+ * appended to a small per-callId FIFO. A single drain thread pops one frame per active call every
+ * {@link #FRAME_INTERVAL_MS} (20ms = one 8kHz/160-sample voice frame) and broadcasts it — so the wire
+ * cadence becomes a steady ~1 frame / 20ms for native and ISSI alike, exactly what the existing
+ * clients already handle with their default buffer.
+ *
+ * Properties:
+ *   - Metadata (call_start / voice_id) is NOT paced — it is broadcast immediately so caller IDs and
+ *     call boundaries stay prompt and correctly ordered ahead of the (delayed) audio.
+ *   - call_end is deferred until that call's buffered audio has fully drained, so no frames are ever
+ *     truncated (zero audio loss); the tail flushes at the 20ms cadence and call_end follows it.
+ *   - Added latency is bounded by buffer depth and drains back toward zero between bursts; it does not
+ *     accumulate. A gentle catch-up ({@link #CATCHUP_HIGH_WATER}) and a {@link #HARD_CAP} safety valve
+ *     prevent any unbounded growth if a source ever runs persistently faster than real time.
+ *   - The JSON schema is unchanged.
  */
 public class PcmStreamManager
 {
@@ -63,6 +95,24 @@ public class PcmStreamManager
     private static final long HEARTBEAT_INTERVAL_MS = 5000;
     private volatile long mLastBroadcast = System.currentTimeMillis();
 
+    //--- Egress pace buffer tuning -------------------------------------------------------------------
+    /** One 8kHz / 160-sample voice frame represents 20ms of audio; drain one frame per this interval. */
+    private static final long FRAME_INTERVAL_MS = 20;
+    /** Drain thread loop interval in nanoseconds. */
+    private static final long FRAME_INTERVAL_NANOS = FRAME_INTERVAL_MS * 1_000_000L;
+    /** Above this backlog (~800ms) the drain gently accelerates to catch up; well above a normal ISSI burst (~27). */
+    private static final int CATCHUP_HIGH_WATER = 40;
+    /** Frames drained per tick while above the high-water mark (2 = 2x real time — transient, never bursty). */
+    private static final int CATCHUP_RATE = 2;
+    /** Absolute per-call backlog cap (~5s). Beyond this the oldest frame is dropped to bound memory (pathological only). */
+    private static final int HARD_CAP = 250;
+    /** A call with an empty buffer and no call_end seen for this long is purged as a safety net against lost call_end. */
+    private static final long STALE_CALL_MS = 60_000;
+
+    /** Active per-call pace buffers, keyed by callId. */
+    private final ConcurrentHashMap<String, PacedCall> mPacedCalls = new ConcurrentHashMap<>();
+    private volatile boolean mDrainStarted = false;
+
     private PcmStreamManager() {}
 
     /**
@@ -75,6 +125,7 @@ public class PcmStreamManager
         {
             PcmStreamManager mgr = new PcmStreamManager();
             mgr.startAcceptLoop(port);
+            mgr.startDrainLoop();
             ThreadPool.SCHEDULED.scheduleAtFixedRate(mgr::sendHeartbeatIfIdle, HEARTBEAT_INTERVAL_MS,
                 HEARTBEAT_INTERVAL_MS, TimeUnit.MILLISECONDS);
             sInstance = mgr;
@@ -160,14 +211,16 @@ public class PcmStreamManager
                 ",\"talkgroup\":\"" + escape(talkgroup) + "\"" +
                 ",\"from\":\"" + escape(from) + "\"" +
                 ",\"timestamp\":\"" + escape(timestamp) + "\"}";
+        //Metadata is not paced — emit promptly, ahead of this call's (paced) audio.
         broadcast(json);
     }
 
     /**
      * Broadcasts a pcm chunk message.
      *
-     * Converts the float[] samples to 16-bit signed little-endian PCM and Base64-encodes them.
-     * Conversion: (short) Math.max(-32768, Math.min(32767, Math.round(sample * 32767f)))
+     * Converts the float[] samples to 16-bit signed little-endian PCM and Base64-encodes them, then
+     * appends the line to this call's pace buffer. The drain loop releases it at a steady 20ms cadence;
+     * the frame is NOT written to the socket inline (see EGRESS PACE BUFFER in the class javadoc).
      *
      * @param callId    unique identifier for this call
      * @param system    system name
@@ -194,11 +247,33 @@ public class PcmStreamManager
                 ",\"from\":\"" + escape(from) + "\"" +
                 ",\"seq\":" + seq +
                 ",\"samples\":\"" + samplesB64 + "\"}";
-        broadcast(json);
+
+        //Pace buffer: enqueue rather than broadcast inline.
+        PacedCall call = mPacedCalls.computeIfAbsent(callId, PacedCall::new);
+        synchronized(call)
+        {
+            if(call.queue.size() >= HARD_CAP)
+            {
+                //Pathological safety valve only: a source running persistently faster than real time.
+                //Drop the oldest frame to bound memory/latency. Should never occur at ~real-time rates.
+                call.queue.pollFirst();
+                if(!call.capWarned)
+                {
+                    call.capWarned = true;
+                    mLog.warn("PCM pace buffer hit hard cap ({} frames) for call {}; dropping oldest frame(s)",
+                            HARD_CAP, callId);
+                }
+            }
+            call.queue.addLast(json);
+            call.lastActivityMs = System.currentTimeMillis();
+        }
     }
 
     /**
      * Broadcasts a call_end message.
+     *
+     * If audio for this call is still buffered, the call_end is deferred until the buffer has fully
+     * drained so no frames are truncated; otherwise it is emitted immediately.
      *
      * @param callId     unique identifier for this call
      * @param system     system name
@@ -213,7 +288,23 @@ public class PcmStreamManager
                 ",\"site\":\"" + escape(site) + "\"" +
                 ",\"talkgroup\":\"" + escape(talkgroup) + "\"" +
                 ",\"frames\":" + frameCount + "}";
-        broadcast(json);
+
+        PacedCall call = mPacedCalls.get(callId);
+        if(call != null)
+        {
+            //Audio may still be draining — hand call_end to the drain loop to emit after the last frame.
+            synchronized(call)
+            {
+                call.endJson = json;
+                call.ended = true;
+                call.lastActivityMs = System.currentTimeMillis();
+            }
+        }
+        else
+        {
+            //No audio was buffered for this call (e.g. a call with no decoded frames) — emit immediately.
+            broadcast(json);
+        }
     }
 
     /**
@@ -234,6 +325,7 @@ public class PcmStreamManager
                 ",\"talkgroup\":\"" + escape(talkgroup) + "\"" +
                 ",\"from\":\"" + escape(from) + "\"" +
                 ",\"timestamp\":\"" + escape(timestamp) + "\"}";
+        //Metadata is not paced — emit promptly.
         broadcast(json);
     }
 
@@ -242,6 +334,116 @@ public class PcmStreamManager
         if (s == null) return "";
         return s.replace("\\", "\\\\").replace("\"", "\\\"")
                 .replace("\n", " ").replace("\r", "");
+    }
+
+    /**
+     * Starts the single drain thread that releases buffered pcm frames at a steady cadence. The loop
+     * uses a monotonic-clock schedule with drift compensation so the cadence stays even regardless of
+     * per-tick work, and resynchronizes if it ever falls behind (it never bursts to "make up" time).
+     */
+    private void startDrainLoop()
+    {
+        if(mDrainStarted)
+        {
+            return;
+        }
+        mDrainStarted = true;
+
+        Thread.ofVirtual().name("pcm-pace-drain").start(() ->
+        {
+            long next = System.nanoTime();
+            while(true)
+            {
+                next += FRAME_INTERVAL_NANOS;
+
+                try
+                {
+                    drainOnce();
+                }
+                catch(Throwable t)
+                {
+                    //Never let the pacing thread die.
+                    mLog.warn("PCM pace drain error: {}", t.getMessage());
+                }
+
+                long sleep = next - System.nanoTime();
+                if(sleep > 0)
+                {
+                    LockSupport.parkNanos(sleep);
+                }
+                else
+                {
+                    //Fell behind (GC, scheduling). Resync to now so we never deliver a catch-up burst.
+                    next = System.nanoTime();
+                }
+            }
+        });
+    }
+
+    /**
+     * One drain tick: for every active call, release up to one frame (or {@link #CATCHUP_RATE} while the
+     * backlog exceeds {@link #CATCHUP_HIGH_WATER}); when a call's buffer empties and call_end has arrived,
+     * emit call_end and retire the call. Frames are collected under the per-call lock and broadcast outside
+     * it to keep the lock hold minimal.
+     */
+    private void drainOnce()
+    {
+        long now = System.currentTimeMillis();
+
+        Iterator<Map.Entry<String, PacedCall>> it = mPacedCalls.entrySet().iterator();
+        while(it.hasNext())
+        {
+            Map.Entry<String, PacedCall> entry = it.next();
+            PacedCall call = entry.getValue();
+
+            List<String> toSend = null;
+            String endToSend = null;
+            boolean retire = false;
+
+            synchronized(call)
+            {
+                int drain = call.queue.size() > CATCHUP_HIGH_WATER ? CATCHUP_RATE : 1;
+                for(int i = 0; i < drain && !call.queue.isEmpty(); i++)
+                {
+                    if(toSend == null)
+                    {
+                        toSend = new ArrayList<>(drain);
+                    }
+                    toSend.add(call.queue.pollFirst());
+                }
+
+                if(call.queue.isEmpty())
+                {
+                    if(call.ended)
+                    {
+                        endToSend = call.endJson;   //may be null in theory; guarded below
+                        retire = true;
+                    }
+                    else if(now - call.lastActivityMs > STALE_CALL_MS)
+                    {
+                        //Safety net: call_end never arrived and nothing new is coming. Drop the dead entry.
+                        retire = true;
+                    }
+                }
+            }
+
+            if(toSend != null)
+            {
+                for(String line : toSend)
+                {
+                    broadcast(line);
+                }
+            }
+            if(endToSend != null)
+            {
+                broadcast(endToSend);
+            }
+            if(retire)
+            {
+                //Remove only if the mapping is still this exact instance (avoids racing a recreated call).
+                mPacedCalls.remove(entry.getKey(), call);
+            }
+        }
     }
 
     private void startAcceptLoop(int port)
@@ -290,6 +492,24 @@ public class PcmStreamManager
                 mLog.error("Failed to start PCM stream TCP server on port {}: {}", port, e.getMessage());
             }
         });
+    }
+
+    /**
+     * Per-call egress pace buffer. A FIFO of pre-serialized pcm NDJSON lines plus the deferred call_end
+     * state. Guarded by synchronizing on the instance.
+     */
+    private static final class PacedCall
+    {
+        private final ArrayDeque<String> queue = new ArrayDeque<>();
+        private volatile boolean ended = false;
+        private String endJson = null;
+        private long lastActivityMs = System.currentTimeMillis();
+        private boolean capWarned = false;
+
+        private PacedCall(String callId)
+        {
+            //callId retained implicitly via the map key; constructor kept for computeIfAbsent ergonomics.
+        }
     }
 
     /**
