@@ -403,32 +403,10 @@ public class PcmStreamManager
             List<String> toSend = null;
             String endToSend = null;
             boolean retire = false;
-            boolean logCatchup = false;
-            int catchupBacklog = 0;
-
             synchronized(call)
             {
-                int qsize = call.queue.size();
-                int drain;
-                if(qsize > CATCHUP_HIGH_WATER)
-                {
-                    //Backlog exceeded the high-water mark — accelerate to catch the buffer down (never drop).
-                    drain = CATCHUP_RATE;
-                    if(!call.catchupActive)
-                    {
-                        call.catchupActive = true;   //log once per engagement, not every tick
-                        logCatchup = true;
-                        catchupBacklog = qsize;
-                    }
-                }
-                else
-                {
-                    drain = 1;
-                    if(call.catchupActive && qsize <= CATCHUP_HIGH_WATER / 2)
-                    {
-                        call.catchupActive = false;  //cleared — next engagement will log again
-                    }
-                }
+                //Above the high-water mark, accelerate to catch the buffer down (never drop); else one frame/tick.
+                int drain = call.queue.size() > CATCHUP_HIGH_WATER ? CATCHUP_RATE : 1;
                 for(int i = 0; i < drain && !call.queue.isEmpty(); i++)
                 {
                     if(toSend == null)
@@ -458,12 +436,6 @@ public class PcmStreamManager
                         retire = true;
                     }
                 }
-            }
-
-            if(logCatchup)
-            {
-                mLog.info("PCM pace catch-up engaged for call {} (backlog {} frames, ~{}ms); draining {}x/frame until it clears",
-                        entry.getKey(), catchupBacklog, catchupBacklog * 20, CATCHUP_RATE);
             }
 
             if(toSend != null)
@@ -544,7 +516,6 @@ public class PcmStreamManager
         private String endJson = null;
         private long lastActivityMs = System.currentTimeMillis();
         private boolean capWarned = false;
-        private boolean catchupActive = false;
         //Last-seen metadata, retained so a synthetic call_end can be built if this call is reaped.
         private String system = "";
         private String site = "";
