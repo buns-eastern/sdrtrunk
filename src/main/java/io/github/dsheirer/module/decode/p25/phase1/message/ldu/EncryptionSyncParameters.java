@@ -135,8 +135,12 @@ public class EncryptionSyncParameters implements IEncryptionSyncParameters
             int algorithm = getMessage().getInt(ALGORITHM_ID);
             int key = getMessage().getInt(KEY_ID);
 
-            //Detect when algorithm, key and MI are all zeros and override algorithm to set as unencrypted.
-            if(algorithm == 0 && key == 0 && getMessageIndicator().contains(EMPTY_MESSAGE_INDICATOR))
+            //ACCORDION (0x00) is an obsolete Type-1 cipher effectively never deployed, so a 0x00 algorithm ID on
+            //the air is virtually always a bad/empty encryption sync -- notably Harris dispatch consoles sending
+            //CLEAR audio. Reading it as encrypted mutes the audio decoder ("static"). Override to UNENCRYPTED.
+            //This generalizes the prior all-zeros guard (which required a perfectly zero message indicator and so
+            //was defeated by a single bit error in the MI); key==0 is retained as a sanity anchor.
+            if(algorithm == 0 && key == 0)
             {
                 algorithm = Encryption.UNENCRYPTED.getValue(); //0x80
             }
