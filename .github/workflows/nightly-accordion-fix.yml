@@ -220,30 +220,10 @@ jobs:
           name: Nightly Build (accordion-fix)
           prerelease: true
           body: |
-            Nightly build of the **accordion-fix** branch — buns-eastern fork of sdrtrunk.
+            Nightly test build of the **accordion-fix** branch (buns-eastern fork of sdrtrunk).
 
-            A copy of the **master** build plus one targeted change.
-
-            ## ACCORDION false-encryption fix (Harris dispatch consoles)
-
-            Harris dispatch consoles can send CLEAR audio with an empty/zeroed encryption sync whose algorithm
-            ID reads as `0x00` (ACCORDION). Unencrypted is `0x80` and ACCORDION is `0x00` — a one-bit difference,
-            so a single bit error flips clear audio to "encrypted", and SDRTrunk mutes it — the brief
-            "helicopter chop then static" heard only on Harris console transmissions.
-
-            The upstream fix only overrides this to UNENCRYPTED when the message indicator is perfectly zero,
-            which a second bit error in the MI defeats. This branch generalizes the guard: any `0x00` algorithm
-            with a zero key is treated as a bad/empty sync and decoded as clear. Real ciphers announce non-zero
-            algorithm IDs (DES `0x81`, AES-256 `0x84`, ADP/RC4 `0xAA`) — two or more bits away from `0x00` — so
-            they are unaffected.
-
-            A diagnostic log line (`ACCORDIONFIX ...`) is emitted each time the override fires, so the fix can
-            be confirmed live. Otherwise identical to the master build.
-
-            ## Credits
-
-            - **Dennis Sheirer** — sdrtrunk itself and the original ACCORDION bad-sync fix this builds on: https://github.com/DSheirer/sdrtrunk
-            - **Benjamin Vernoux** (@bvernoux) — native JNI bridge to libhydrasdr / HydraSDR support.
+            Master plus one change: the ACCORDION false-encryption fix for Harris dispatch consoles
+            (clear console audio was mis-read as encrypted and muted). Otherwise identical to master.
           files: |
             build/image/*.zip
             build/image/build_info.txt
