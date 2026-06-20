@@ -818,6 +818,29 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
      * @param eki for encryption settings.
      * @param timestamp for the update
      */
+    /**
+     * Returns the granted source (FROM) identifier currently tracked for the call on the specified frequency, or
+     * null if none. Used by a traffic-channel decoder state to recover the talker ID from the control-channel grant
+     * when the voice channel has not supplied one -- e.g. very short PTTs, including console continuations that key
+     * up on an already-allocated traffic channel and therefore bypass the start-time preload.
+     * @param frequency of the traffic channel
+     * @return granted FROM identifier, or null
+     */
+    public Identifier getGrantedFromIdentifier(long frequency)
+    {
+        mLock.lock();
+
+        try
+        {
+            P25TrafficChannelEventTracker tracker = getTracker(frequency, P25P1Message.TIMESLOT_1);
+            return tracker != null ? tracker.getEvent().getIdentifierCollection().getFromIdentifier() : null;
+        }
+        finally
+        {
+            mLock.unlock();
+        }
+    }
+
     public void processP1TrafficCallStart(long frequency, Identifier<?> talkgroup, Identifier<?> radio,
                                           EncryptionKeyIdentifier eki, ServiceOptions serviceOptions,
                                           IChannelDescriptor channelDescriptor, long timestamp)

@@ -516,6 +516,25 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
             mPendingSourceExtension = esm;
         }
 
+        //Fallback: if neither the start-time grant preload nor the voice channel has supplied a usable source --
+        //e.g. a short console continuation that keyed up on an already-running traffic channel and so bypassed the
+        //preload -- recover the talker ID from the granted source the control channel recorded for this frequency.
+        //Only an empty/invalid FROM is filled; a real voice-channel source always takes priority and is never
+        //overridden (and an invalid/zero grant, like Harris/ISSI FM:0, is ignored, leaving voice-channel resolution
+        //untouched).
+        if(mTrafficChannelManager != null)
+        {
+            Identifier currentFrom = getIdentifierCollection().getFromIdentifier();
+            if(currentFrom == null || !currentFrom.isValid())
+            {
+                Identifier grantedFrom = mTrafficChannelManager.getGrantedFromIdentifier(getCurrentFrequency());
+                if(grantedFrom != null && grantedFrom.isValid())
+                {
+                    getIdentifierCollection().update(grantedFrom);
+                }
+            }
+        }
+
         DecodeEventType decodeEventType = getLCDecodeEventType(lcw);
 
         ServiceOptions serviceOptions = null;
