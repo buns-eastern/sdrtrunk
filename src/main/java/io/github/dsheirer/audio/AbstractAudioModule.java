@@ -325,6 +325,18 @@ public abstract class AbstractAudioModule extends Module implements IAudioSegmen
             List<PcmCall> calls = mPcmCalls;
             if(pcmMgr != null && pcmMgr.isRunning() && !calls.isEmpty())
             {
+                //Backstop: if FROM was unknown when call_start cached it (a short call where the source landed after
+                //the first audio frame), pick it up from the live identifier collection now so the talker ID still
+                //reaches the stream once it resolves, rather than staying blank for the whole call.
+                if(mPcmCachedFrom == null || mPcmCachedFrom.isEmpty())
+                {
+                    Identifier from = mIdentifierCollection.getFromIdentifier();
+                    if(from != null)
+                    {
+                        mPcmCachedFrom = pcmEscape(from.toString());
+                    }
+                }
+
                 for(PcmCall call : calls)
                 {
                     pcmMgr.broadcastPcm(call.callId, mPcmCachedSystem, mPcmCachedSite,
