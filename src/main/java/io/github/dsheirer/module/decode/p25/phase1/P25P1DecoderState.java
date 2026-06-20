@@ -288,6 +288,23 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                 mPatchGroupManager.addPatchGroup(patchGroupIdentifier, preLoadDataContent.getTimestamp());
             }
         }
+
+        //Seed the source (FROM) radio from the channel grant so the talker ID is present from the first audio
+        //frame -- even on very short PTTs that end before the voice-channel link control supplies it. The grant
+        //already carries the source (it's what allocated this traffic channel), but it was only loaded into the
+        //channel metadata, not this decode identifier collection that feeds the recording and PCM stream. Seeding
+        //it here makes the correct FROM available to both, instead of an empty/zero value on quick calls. The
+        //voice channel overrides it for any subsequent talkers as usual.
+        for(Identifier identifier: preLoadDataContent.getData().getIdentifiers(Role.FROM))
+        {
+            //Only seed a REAL source. Some grants (notably Harris consoles) carry FM:0 -- those resolve their ID
+            //on the voice channel, so don't seed a zero placeholder and don't disturb that path. RadioIdentifier
+            //.isValid() is value > 0; the voice channel still overrides this seed for any/all talkers regardless.
+            if(identifier.isValid())
+            {
+                getIdentifierCollection().update(identifier);
+            }
+        }
     }
 
     /**
