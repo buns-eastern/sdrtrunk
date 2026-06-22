@@ -263,7 +263,14 @@ public class P25P1MessageProcessor implements Listener<IMessage>
             return;
         }
 
-        processForFrequencyBands(message);
+        //Guard the frequency-band table against bad-but-CRC/FEC-passing decodes (DSheirer/sdrtrunk#2298):
+        //only a valid message may store or be injected with frequency-band data. Invalid messages are
+        //still forwarded to the listener below for logging/display -- they just can't mutate the band
+        //table, so a single bad decode can no longer poison frequencies for the rest of the session.
+        if(message.isValid())
+        {
+            processForFrequencyBands(message);
+        }
 
         //Also process the link control messages for frequency bands.
         if(message instanceof LDU1Message ldu1 && ldu1.getLinkControlWord() instanceof LinkControlWord lcw && lcw.isValid())
