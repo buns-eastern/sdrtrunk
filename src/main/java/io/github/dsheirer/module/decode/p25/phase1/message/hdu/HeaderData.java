@@ -130,16 +130,36 @@ public class HeaderData
     {
         if(mEncryptionKey == null)
         {
-            mEncryptionKey = EncryptionKeyIdentifier.create(APCO25EncryptionKey.create(getMessage().getInt(ALGORITHM_ID),
+            mEncryptionKey = EncryptionKeyIdentifier.create(APCO25EncryptionKey.create(effectiveAlgorithm(),
                 getMessage().getInt(KEY_ID)));
         }
 
         return mEncryptionKey;
     }
 
+    /**
+     * Effective encryption algorithm with the ACCORDION (0x00) override applied: a 0x00 algorithm id with key 0 is a
+     * bogus/empty encryption sync (e.g. Harris dispatch consoles sending CLEAR audio over a P25 HDU), not real
+     * encryption. Reading it as encrypted mutes the audio decoder. Report it as UNENCRYPTED (0x80). Mirrors the same
+     * override in EncryptionSyncParameters (LDU2) so a bogus HDU - which the audio module checks first and locks in -
+     * can no longer mute a clear call before the LDU2 fix runs.
+     */
+    private int effectiveAlgorithm()
+    {
+        int algorithm = getMessage().getInt(ALGORITHM_ID);
+        int key = getMessage().getInt(KEY_ID);
+
+        if(algorithm == 0 && key == 0)
+        {
+            return Encryption.UNENCRYPTED.getValue(); //0x80
+        }
+
+        return algorithm;
+    }
+
     public Encryption getEncryption()
     {
-        return Encryption.fromValue(getMessage().getInt(ALGORITHM_ID));
+        return Encryption.fromValue(effectiveAlgorithm());
     }
 
     public boolean isEncryptedAudio()
