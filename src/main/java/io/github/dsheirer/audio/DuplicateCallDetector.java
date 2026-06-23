@@ -302,6 +302,27 @@ public class DuplicateCallDetector implements Listener<AudioSegment>
         }
 
         /**
+         * Indicates whether the playlist keeps this call - i.e. its alias list flags it to be recorded and/or streamed.
+         * Only kept calls take part in duplicate detection; a call that is neither recorded nor streamed cannot create
+         * a duplicate output, so it is excluded from comparison and can never suppress a kept call.
+         */
+        private boolean isWanted(AudioSegment audioSegment)
+        {
+            return audioSegment.recordAudioProperty().get() || audioSegment.hasBroadcastChannels();
+        }
+
+        /**
+         * Compact description of a call for duplicate-suppression troubleshooting.
+         */
+        private String describe(AudioSegment audioSegment)
+        {
+            Identifier system = audioSegment.getIdentifierCollection()
+                .getIdentifier(IdentifierClass.CONFIGURATION, Form.SYSTEM, Role.ANY);
+            Identifier to = audioSegment.getIdentifierCollection().getToIdentifier();
+            return "system=" + (system != null ? system : "?") + " talkgroup=" + (to != null ? to : "?");
+        }
+
+        /**
          * Processes audio segments to detect duplicates
          */
         private void process()
@@ -348,7 +369,12 @@ public class DuplicateCallDetector implements Listener<AudioSegment>
                     {
                         AudioSegment current = mAudioSegments.get(currentIndex);
 
-                        if(current.hasAudio() && !current.isDuplicate())
+                        //Filter-first: only calls the playlist actually keeps (record and/or stream) take part in
+                        //duplicate detection. A call that is neither recorded nor streamed cannot produce a duplicate
+                        //recording/stream, so it is excluded from the comparison entirely and can never suppress a
+                        //call you keep. This removes the collision instead of refereeing it after the fact - an ignored
+                        //copy of a talkgroup shared across systems can no longer knock out the copy another system keeps.
+                        if(current.hasAudio() && !current.isDuplicate() && isWanted(current))
                         {
                             int checkIndex = currentIndex + 1;
 
@@ -356,13 +382,23 @@ public class DuplicateCallDetector implements Listener<AudioSegment>
                             {
                                 AudioSegment toCheck = mAudioSegments.get(checkIndex);
 
-                                if(!toCheck.isDuplicate())
+                                if(!toCheck.isDuplicate() && isWanted(toCheck))
                                 {
                                     if(isDuplicate(current, toCheck))
                                     {
                                         toCheck.setDuplicate(true);
                                         toCheck.decrementConsumerCount();
                                         duplicates.add(toCheck);
+
+                                        //Both calls here are ones the playlist keeps, so this is a genuine duplicate
+                                        //(e.g. the same talkgroup heard on two sites of one system). Logged at DEBUG so
+                                        //that if a suppression is ever questioned, the two real kept calls that collided
+                                        //are visible - with no ignored copies possible in the mix.
+                                        if(mLog.isDebugEnabled())
+                                        {
+                                            mLog.debug("Duplicate suppressed among kept calls - kept [{}] suppressed [{}]",
+                                                describe(current), describe(toCheck));
+                                        }
 
                                         //Notify optional listener that we flagged the call as duplicate.
                                         if(mDuplicateCallDetectionListener != null)
