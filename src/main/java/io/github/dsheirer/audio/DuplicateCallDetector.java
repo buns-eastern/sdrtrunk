@@ -312,17 +312,6 @@ public class DuplicateCallDetector implements Listener<AudioSegment>
         }
 
         /**
-         * Compact description of a call for duplicate-suppression troubleshooting.
-         */
-        private String describe(AudioSegment audioSegment)
-        {
-            Identifier system = audioSegment.getIdentifierCollection()
-                .getIdentifier(IdentifierClass.CONFIGURATION, Form.SYSTEM, Role.ANY);
-            Identifier to = audioSegment.getIdentifierCollection().getToIdentifier();
-            return "system=" + (system != null ? system : "?") + " talkgroup=" + (to != null ? to : "?");
-        }
-
-        /**
          * Processes audio segments to detect duplicates
          */
         private void process()
@@ -389,16 +378,6 @@ public class DuplicateCallDetector implements Listener<AudioSegment>
                                         toCheck.setDuplicate(true);
                                         toCheck.decrementConsumerCount();
                                         duplicates.add(toCheck);
-
-                                        //Both calls here are ones the playlist keeps, so this is a genuine duplicate
-                                        //(e.g. the same talkgroup heard on two sites of one system). Logged at DEBUG so
-                                        //that if a suppression is ever questioned, the two real kept calls that collided
-                                        //are visible - with no ignored copies possible in the mix.
-                                        if(mLog.isDebugEnabled())
-                                        {
-                                            mLog.debug("Duplicate suppressed among kept calls - kept [{}] suppressed [{}]",
-                                                describe(current), describe(toCheck));
-                                        }
 
                                         //Notify optional listener that we flagged the call as duplicate.
                                         if(mDuplicateCallDetectionListener != null)
