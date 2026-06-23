@@ -81,6 +81,20 @@ public class P25P1AudioModule extends ImbeAudioModule
     {
         if(hasAudioCodec())
         {
+            //A valid HDU opens a (new) transmission and carries that transmission's own encryption status. Honor it
+            //even mid-squelch-session and re-evaluate, rather than only on the first determination. On a conventional
+            //channel where several transmissions share one squelch session, a clear PTT following an encrypted (or
+            //mis-flagged) one would otherwise stay muted - the encryption state was locked by the first transmission
+            //and only resets when squelch closes. Re-evaluating per HDU also correctly mutes a real encrypted PTT that
+            //follows a clear one in the same session, instead of decoding it as garbage.
+            if(message instanceof HDUMessage hdu && hdu.isValid())
+            {
+                mEncryptedCallStateEstablished = true;
+                mEncryptedCall = hdu.getHeaderData().isEncryptedAudio();
+                mCachedLDUMessages.clear();
+                return;
+            }
+
             if(mEncryptedCallStateEstablished)
             {
                 if(message instanceof LDUMessage ldu)
@@ -90,12 +104,7 @@ public class P25P1AudioModule extends ImbeAudioModule
             }
             else
             {
-                if(message instanceof HDUMessage hdu && hdu.isValid())
-                {
-                    mEncryptedCallStateEstablished = true;
-                    mEncryptedCall = hdu.getHeaderData().isEncryptedAudio();
-                }
-                else if(message instanceof LDU1Message ldu1)
+                if(message instanceof LDU1Message ldu1)
                 {
                     //When we receive an LDU1 message without first receiving the HDU message, cache the LDU1 Message
                     //until we can determine the encrypted call state from the next LDU2 message
