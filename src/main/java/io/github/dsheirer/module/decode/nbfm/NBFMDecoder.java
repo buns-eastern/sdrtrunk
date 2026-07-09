@@ -46,9 +46,7 @@ import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.sample.complex.ComplexSamples;
 import io.github.dsheirer.sample.complex.IComplexSamplesListener;
 import io.github.dsheirer.sample.real.IRealBufferProvider;
-import io.github.dsheirer.module.carrier.CarrierOffsetProcessor;
 import io.github.dsheirer.source.ISourceEventListener;
-import io.github.dsheirer.source.ISourceEventProvider;
 import io.github.dsheirer.source.SourceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,15 +72,11 @@ import java.util.Set;
  * When squelch tail removal is enabled, a SquelchTailRemover buffers audio and discards
  * the trailing noise burst that occurs when a transmitter drops carrier.
  */
-public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventProvider, ISourceEventListener, IComplexSamplesListener,
+public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventListener, IComplexSamplesListener,
         Listener<ComplexSamples>, IRealBufferProvider, IDecoderStateEventProvider, INoiseSquelchController
 {
     private final static Logger mLog = LoggerFactory.getLogger(NBFMDecoder.class);
 
-    //Estimates the analog FM carrier offset from channel center for the tuner's auto-PPM monitor and the
-    //channel spectral display.  Same protocol-agnostic spectral estimator the DMR decoder uses.
-    private final CarrierOffsetProcessor mCarrierOffsetProcessor = new CarrierOffsetProcessor();
-    private Listener<SourceEvent> mSourceEventBroadcastListener;
     private NBFMDecoderState mDecoderState;
     private static final double DEMODULATED_AUDIO_SAMPLE_RATE = 8000.0;
     private final IDemodulator mDemodulator = FmDemodulatorFactory.getFmDemodulator();
@@ -557,37 +551,6 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventPr
 
         mNoiseSquelch.process(demodulated);
 
-        //Estimate carrier offset and broadcast at each update.  The tuner's PPM error monitor (when auto-PPM
-        //is enabled) uses this to adjust the tuner PPM, and the channel spectral display shows the offset.
-        //Same mechanism the DMR decoder uses, applied to the analog FM carrier.  The processor's internal
-        //SNR gate (>15 dB across consecutive buffers) prevents measurements when no carrier is present.
-        if(mCarrierOffsetProcessor.process(samples))
-        {
-            long carrierOffset = mCarrierOffsetProcessor.getEstimatedOffset();
-
-            //Negate the value to indicate channel error from tuner's PPM that's causing the offset
-            broadcastSourceEvent(SourceEvent.frequencyErrorMeasurement(-carrierOffset));
-
-            if(mCarrierOffsetProcessor.hasCarrier())
-            {
-                broadcastSourceEvent(SourceEvent.carrierOffsetMeasurement(carrierOffset));
-
-                //Auto-PPM port for the redesigned tuner/channel frequency error management (DSheirer PR #2431).
-                //Analog NBFM has no demodulator PLL, so the FFT-based carrier-offset measurement above is our
-                //error source. Feed it into the new per-channel corrector (ChannelFrequencyErrorManager) via the
-                //same REQUEST_FREQUENCY_CORRECTION path the digital decoders drive through
-                //FeedbackDecoder.processPLLError(). The manager averages and clamps corrections (<=10 Hz/500ms),
-                //so requesting the full measured offset each update converges gently and also feeds tuner Auto-PPM.
-                //NOTE: sign mirrors the pre-merge measurement convention (negated offset). Verify convergence in
-                //the field - if the channel correction / PPM diverges instead of settling, flip the sign here.
-                broadcastSourceEvent(SourceEvent.frequencyCorrectionRequest(-carrierOffset));
-            }
-            else
-            {
-                broadcastSourceEvent(SourceEvent.carrierOffsetMeasurement(0));
-            }
-        }
-
         //Once we process the sample buffer, if the ending state is squelch closed, update the decoder state that we
         // are idle.
         if(mNoiseSquelch.isSquelched())
@@ -661,39 +624,8 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventPr
      * Updates the decoder to process complex sample buffers at the specified sample rate.
      * @param sampleRate of the incoming complex sample buffer stream.
      */
-    /**
-     * Registers the listener to receive source events from this decoder (eg measured carrier offset and
-     * frequency error used by the tuner's auto-PPM monitor).
-     */
-    @Override
-    public void setSourceEventListener(Listener<SourceEvent> listener)
-    {
-        mSourceEventBroadcastListener = listener;
-    }
-
-    /**
-     * Deregisters the source event listener.
-     */
-    @Override
-    public void removeSourceEventListener()
-    {
-        mSourceEventBroadcastListener = null;
-    }
-
-    /**
-     * Broadcasts the source event to an optional registered listener.
-     */
-    private void broadcastSourceEvent(SourceEvent event)
-    {
-        if(mSourceEventBroadcastListener != null)
-        {
-            mSourceEventBroadcastListener.receive(event);
-        }
-    }
-
     private void setSampleRate(double sampleRate)
     {
-        mCarrierOffsetProcessor.setSampleRate(sampleRate);
         int decimationRate = 0;
         double decimatedSampleRate = sampleRate;
 
