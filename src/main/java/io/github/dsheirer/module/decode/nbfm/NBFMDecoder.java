@@ -563,12 +563,24 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventPr
         //SNR gate (>15 dB across consecutive buffers) prevents measurements when no carrier is present.
         if(mCarrierOffsetProcessor.process(samples))
         {
+            long carrierOffset = mCarrierOffsetProcessor.getEstimatedOffset();
+
             //Negate the value to indicate channel error from tuner's PPM that's causing the offset
-            broadcastSourceEvent(SourceEvent.frequencyErrorMeasurement(-mCarrierOffsetProcessor.getEstimatedOffset()));
+            broadcastSourceEvent(SourceEvent.frequencyErrorMeasurement(-carrierOffset));
 
             if(mCarrierOffsetProcessor.hasCarrier())
             {
-                broadcastSourceEvent(SourceEvent.carrierOffsetMeasurement(mCarrierOffsetProcessor.getEstimatedOffset()));
+                broadcastSourceEvent(SourceEvent.carrierOffsetMeasurement(carrierOffset));
+
+                //Auto-PPM port for the redesigned tuner/channel frequency error management (DSheirer PR #2431).
+                //Analog NBFM has no demodulator PLL, so the FFT-based carrier-offset measurement above is our
+                //error source. Feed it into the new per-channel corrector (ChannelFrequencyErrorManager) via the
+                //same REQUEST_FREQUENCY_CORRECTION path the digital decoders drive through
+                //FeedbackDecoder.processPLLError(). The manager averages and clamps corrections (<=10 Hz/500ms),
+                //so requesting the full measured offset each update converges gently and also feeds tuner Auto-PPM.
+                //NOTE: sign mirrors the pre-merge measurement convention (negated offset). Verify convergence in
+                //the field - if the channel correction / PPM diverges instead of settling, flip the sign here.
+                broadcastSourceEvent(SourceEvent.frequencyCorrectionRequest(-carrierOffset));
             }
             else
             {
