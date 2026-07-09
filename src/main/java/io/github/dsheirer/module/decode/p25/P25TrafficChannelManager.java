@@ -832,7 +832,7 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
 
         try
         {
-            P25TrafficChannelEventTracker tracker = getTracker(frequency, P25P1Message.TIMESLOT_1);
+            P25ChannelEventTracker tracker = getTracker(frequency, P25P1Message.TIMESLOT_1);
             return tracker != null ? tracker.getEvent().getIdentifierCollection().getFromIdentifier() : null;
         }
         finally
