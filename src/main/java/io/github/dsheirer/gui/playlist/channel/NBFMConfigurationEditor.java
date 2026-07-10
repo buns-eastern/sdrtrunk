@@ -553,7 +553,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         GridPane.setConstraints(gainLabel, 0, 0);
         controlsPane.getChildren().add(gainLabel);
 
-        mInputGainSlider = new Slider(0.1, 5.0, 2.0);
+        mInputGainSlider = new Slider(0.1, 10.0, 2.0);
         mInputGainSlider.setMajorTickUnit(1.0);
         mInputGainSlider.setMinorTickCount(4);
         mInputGainSlider.setShowTickMarks(true);
