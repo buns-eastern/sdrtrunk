@@ -348,8 +348,6 @@ public class CTCSSDetector
                         float diffDB = (float)(10.0 * Math.log10((maxPower / (powers[belowIdx] + 1e-10f)) + 1e-10));
                         if(diffDB < 2.0f)
                         {
-                            LOGGER.trace("{}CTCSS preferring target {} over winner {} (diff={} dB)",
-                                    mChannelLabel, mTargetCodeArray[belowIdx], detected, String.format("%.1f", diffDB));
                             detected = mTargetCodeArray[belowIdx];
                             maxIndex = belowIdx;
                             maxPower = powers[belowIdx];
@@ -361,8 +359,6 @@ public class CTCSSDetector
                         float diffDB = (float)(10.0 * Math.log10((maxPower / (powers[aboveIdx] + 1e-10f)) + 1e-10));
                         if(diffDB < 2.0f)
                         {
-                            LOGGER.trace("{}CTCSS preferring target {} over winner {} (diff={} dB)",
-                                    mChannelLabel, mTargetCodeArray[aboveIdx], detected, String.format("%.1f", diffDB));
                             detected = mTargetCodeArray[aboveIdx];
                             maxIndex = aboveIdx;
                             maxPower = powers[aboveIdx];
@@ -370,25 +366,6 @@ public class CTCSSDetector
                         }
                     }
                 }
-            }
-
-            // Log at DEBUG only on confirmation transitions; TRACE for every block
-            if(mConfirmationCounter < CONFIRMATION_COUNT ||
-               (mDetectedCode != detected))
-            {
-                LOGGER.debug("{}CTCSS tone {} ({} Hz) detected: SNR={} dB confirm={}/{} target={}",
-                        mChannelLabel, detected, String.format("%.1f", mTargetFrequencies[maxIndex]),
-                        String.format("%.1f", snrDB),
-                        mConfirmationCounter, CONFIRMATION_COUNT,
-                        mTargetCodes.contains(detected) ? "YES" : "NO");
-            }
-            else
-            {
-                LOGGER.trace("{}CTCSS tone {} ({} Hz) detected: SNR={} dB confirm={}/{} target={}",
-                        mChannelLabel, detected, String.format("%.1f", mTargetFrequencies[maxIndex]),
-                        String.format("%.1f", snrDB),
-                        mConfirmationCounter, CONFIRMATION_COUNT,
-                        mTargetCodes.contains(detected) ? "YES" : "NO");
             }
 
             handleDetection(detected);
