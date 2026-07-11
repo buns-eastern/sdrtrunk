@@ -68,6 +68,14 @@ public class CTCSSDetector
      */
     private static final int LOSS_COUNT = 4;
 
+    /**
+     * Peak-to-floor margin (dB) the strongest CTCSS bin must exceed over the median power of the
+     * sub-audible band to count as a tone present.  A genuine PL tone is a sharp spike far above
+     * this floor; broadband / co-channel noise is flat and never clears it.  Combined with the
+     * 3-block confirmation (same tone required), this rejects noise while passing real tones.
+     */
+    private static final float DETECT_MARGIN_DB = 10.0f;
+
     private final Set<CTCSSCode> mTargetCodes;
     private final float[] mTargetFrequencies;
     private final CTCSSCode[] mTargetCodeArray;
@@ -240,24 +248,9 @@ public class CTCSSDetector
      */
     private void analyzeBlock()
     {
-        // Compute total energy (noise floor estimate)
-        float totalEnergy = 0;
-        for(int i = 0; i < mBlockSize; i++)
-        {
-            totalEnergy += mSampleBuffer[i] * mSampleBuffer[i];
-        }
-        totalEnergy /= mBlockSize;
-
-        // Avoid division by zero
-        if(totalEnergy < 1e-10f)
-        {
-            handleNoDetection();
-            return;
-        }
-
-        // Run Goertzel for each target frequency and store all power values
+        // Goertzel power at every standard CTCSS frequency.
         float[] powers = new float[mTargetFrequencies.length];
-        float maxPower = 0;
+        float maxPower = 0f;
         int maxIndex = -1;
 
         for(int i = 0; i < mTargetFrequencies.length; i++)
@@ -271,109 +264,45 @@ public class CTCSSDetector
             }
         }
 
-        // Normalize power relative to total energy
-        float normalizedPower = maxPower / (totalEnergy * mBlockSize);
-
-        // Convert to dB
-        float snrDB = (float)(10.0 * Math.log10(normalizedPower + 1e-10));
-
-        // Periodic tone survey: log top 3 tones regardless of threshold
-        mSurveyBlockCounter++;
-        if(mSurveyBlockCounter >= SURVEY_INTERVAL_BLOCKS)
+        if(maxIndex < 0 || maxPower < 1e-10f)
         {
-            mSurveyBlockCounter = 0;
-
-            // Find top 3 bins
-            int[] topIdx = {-1, -1, -1};
-            float[] topPow = {0, 0, 0};
-            for(int i = 0; i < powers.length; i++)
-            {
-                if(powers[i] > topPow[0])
-                {
-                    topPow[2] = topPow[1]; topIdx[2] = topIdx[1];
-                    topPow[1] = topPow[0]; topIdx[1] = topIdx[0];
-                    topPow[0] = powers[i]; topIdx[0] = i;
-                }
-                else if(powers[i] > topPow[1])
-                {
-                    topPow[2] = topPow[1]; topIdx[2] = topIdx[1];
-                    topPow[1] = powers[i]; topIdx[1] = i;
-                }
-                else if(powers[i] > topPow[2])
-                {
-                    topPow[2] = powers[i]; topIdx[2] = i;
-                }
-            }
-
-            StringBuilder sb = new StringBuilder(mChannelLabel).append("CTCSS survey: ");
-            for(int rank = 0; rank < 3; rank++)
-            {
-                if(topIdx[rank] >= 0)
-                {
-                    float np = topPow[rank] / (totalEnergy * mBlockSize);
-                    float db = (float)(10.0 * Math.log10(np + 1e-10));
-                    if(rank > 0) sb.append(", ");
-                    sb.append(String.format("#%d %s (%.1f Hz) %.1f dB", rank + 1,
-                            mTargetCodeArray[topIdx[rank]], mTargetFrequencies[topIdx[rank]], db));
-                }
-            }
-            // Include active bin count in survey for diagnostics
-            int surveyActiveBins = 0;
-            for(int i = 0; i < powers.length; i++)
-            {
-                float np2 = powers[i] / (totalEnergy * mBlockSize);
-                float db2 = (float)(10.0 * Math.log10(np2 + 1e-10));
-                if(db2 > DETECTION_THRESHOLD_DB) surveyActiveBins++;
-            }
-            sb.append(String.format(" [activeBins=%d]", surveyActiveBins));
-            LOGGER.debug(sb.toString());
+            handleNoDetection();
+            return;
         }
 
-        if(maxIndex >= 0 && snrDB > DETECTION_THRESHOLD_DB)
+        // Radio-style PL decode: a real CTCSS tone is a single sharp spike standing well above the
+        // noise floor of the sub-audible band itself.  Estimate that floor as the median power across
+        // all CTCSS bins (robust: one real tone barely moves the median of 50 bins), then require the
+        // strongest bin to clear it by a fixed margin.  Broadband / co-channel mush has a flat
+        // spectrum (peak barely above the median) and is rejected outright.  Because this is a ratio
+        // of two in-band powers, voice energy no longer suppresses the tone the way total-energy did.
+        float floor = medianPower(powers);
+        float peakToFloorDb = (float)(10.0 * Math.log10((maxPower / (floor + 1e-12f)) + 1e-12f));
+
+        if(peakToFloorDb >= DETECT_MARGIN_DB)
         {
-            CTCSSCode detected = mTargetCodeArray[maxIndex];
-
-            // For low-frequency tones, spectral leakage can cause a neighboring non-target bin
-            // to narrowly beat the actual target bin. If a target tone is within 2 bins of the
-            // winner and within 2 dB, prefer the target tone — it's almost certainly the real tone.
-            if(!mTargetCodes.contains(detected) && mTargetFrequencies[maxIndex] <= LOW_FREQ_NARROWBAND_CUTOFF)
-            {
-                for(int offset = 1; offset <= 2; offset++)
-                {
-                    int belowIdx = maxIndex - offset;
-                    int aboveIdx = maxIndex + offset;
-
-                    if(belowIdx >= 0 && mTargetCodes.contains(mTargetCodeArray[belowIdx]))
-                    {
-                        float diffDB = (float)(10.0 * Math.log10((maxPower / (powers[belowIdx] + 1e-10f)) + 1e-10));
-                        if(diffDB < 2.0f)
-                        {
-                            detected = mTargetCodeArray[belowIdx];
-                            maxIndex = belowIdx;
-                            maxPower = powers[belowIdx];
-                            break;
-                        }
-                    }
-                    if(aboveIdx < mTargetCodeArray.length && mTargetCodes.contains(mTargetCodeArray[aboveIdx]))
-                    {
-                        float diffDB = (float)(10.0 * Math.log10((maxPower / (powers[aboveIdx] + 1e-10f)) + 1e-10));
-                        if(diffDB < 2.0f)
-                        {
-                            detected = mTargetCodeArray[aboveIdx];
-                            maxIndex = aboveIdx;
-                            maxPower = powers[aboveIdx];
-                            break;
-                        }
-                    }
-                }
-            }
-
-            handleDetection(detected);
+            // A clear, dominant tone is present.  handleDetection() unmutes only if it is one of the
+            // programmed tones; any other dominant tone is a non-target and the channel stays muted.
+            handleDetection(mTargetCodeArray[maxIndex]);
         }
         else
         {
             handleNoDetection();
         }
+    }
+
+    /**
+     * Median of the per-bin Goertzel powers — a robust estimate of the sub-audible band noise floor
+     * used by the peak-to-floor tone-presence test.
+     * @param powers per-bin Goertzel power values
+     * @return median power
+     */
+    private static float medianPower(float[] powers)
+    {
+        float[] sorted = powers.clone();
+        java.util.Arrays.sort(sorted);
+        int n = sorted.length;
+        return (n % 2 == 0) ? (sorted[n / 2 - 1] + sorted[n / 2]) / 2f : sorted[n / 2];
     }
 
     /**
