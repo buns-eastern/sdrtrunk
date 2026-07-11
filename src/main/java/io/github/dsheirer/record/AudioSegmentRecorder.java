@@ -24,7 +24,9 @@ import io.github.dsheirer.audio.AudioSegment;
 import io.github.dsheirer.audio.convert.InputAudioFormat;
 import io.github.dsheirer.audio.convert.MP3AudioConverter;
 import io.github.dsheirer.audio.convert.MP3Setting;
+import io.github.dsheirer.identifier.Identifier;
 import io.github.dsheirer.identifier.IdentifierCollection;
+import io.github.dsheirer.protocol.Protocol;
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.record.wave.AudioMetadata;
 import io.github.dsheirer.record.wave.AudioMetadataUtils;
@@ -88,6 +90,28 @@ public class AudioSegmentRecorder
     }
 
     /**
+     * Indicates if the identifier collection was produced by the NBFM (analog) protocol.  Used to bypass
+     * MP3 peak-normalization for NBFM audio so the channel's configured output gain is preserved.
+     * @param identifierCollection to inspect (may be null)
+     * @return true if any identifier reports Protocol.NBFM
+     */
+    private static boolean isNBFM(IdentifierCollection identifierCollection)
+    {
+        if(identifierCollection != null)
+        {
+            for(Identifier identifier: identifierCollection.getIdentifiers())
+            {
+                if(identifier.getProtocol() == Protocol.NBFM)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Records the audio segment as an MP3 file to the specified path.
      * @param audioSegment to record
      * @param path for the recording
@@ -114,6 +138,14 @@ public class AudioSegmentRecorder
             MP3Setting mp3Setting = userPreferences.getMP3Preference().getMP3Setting();
 
             boolean normalizeAudio = userPreferences.getMP3Preference().isNormalizeAudioBeforeEncode();
+
+            //Skip peak-normalization for NBFM (analog) audio so the channel's configured output gain is
+            //preserved in the MP3.  Normalization resets every clip to a fixed peak, which would discard
+            //NBFM gain staging.  Digital protocols are unaffected and still normalize.
+            if(normalizeAudio && (isNBFM(identifierCollection) || isNBFM(audioSegment.getIdentifierCollection())))
+            {
+                normalizeAudio = false;
+            }
 
             MP3AudioConverter converter = new MP3AudioConverter(inputAudioFormat, mp3Setting, normalizeAudio);
             List<byte[]> mp3Frames = converter.convert(audioSegment.getAudioBuffers());
