@@ -248,10 +248,6 @@ public class DCSDetector
 
         mSamplesSinceLastDetection = 0;
 
-        float bandRatio = (mWideBandEnergy > 1e-10f) ? (mLowBandEnergy / mWideBandEnergy) : 0;
-        LOGGER.trace("{}DCS code {} detected (ratio={} confirm={}/{} target={})",
-                mChannelLabel, code, String.format("%.3f", bandRatio), mConfirmationCounter, CONFIRMATION_COUNT,
-                mTargetCodes.contains(code) ? "YES" : "NO");
 
         // Check if this code is in our allowed set
         if(!mTargetCodes.contains(code))
