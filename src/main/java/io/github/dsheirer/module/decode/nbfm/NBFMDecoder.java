@@ -465,23 +465,6 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
             return;
         }
 
-        // Diagnostic: log when audio passes through with mToneMatch=true but the CTCSS detector
-        // doesn't have the target tone actively confirmed. This indicates holdover-carried audio,
-        // which could be legitimate (brief squelch flutter) or a noise leak.
-        if(mToneFilterEnabled && mCTCSSDetector != null)
-        {
-            CTCSSCode confirmed = mCTCSSDetector.getDetectedCode();
-            if(confirmed == null)
-            {
-                // Audio passing via holdover or stale match — not actively confirmed
-                CTCSSCode raw = mCTCSSDetector.getRawDetectedCode();
-                int lossCount = mCTCSSDetector.getLossCounter();
-                long holdoverAge = System.currentTimeMillis() - mLastToneMatchTime;
-                mLog.debug("[{}] CTCSS gate OPEN via holdover: confirmed=null raw={} lossCounter={} holdoverAge={}ms",
-                        mChannelLabel, raw != null ? raw.getDisplayString() : "none", lossCount, holdoverAge);
-            }
-        }
-
         // Step 3: Apply VoxSend audio filter chain (low-pass, de-emphasis, bass boost,
         //         voice enhancement, noise gate) — processes samples in-place
         if(mAudioFilters != null)

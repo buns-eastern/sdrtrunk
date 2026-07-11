@@ -395,13 +395,6 @@ public class CTCSSDetector
         }
         else
         {
-            // Log near-misses at TRACE to avoid flooding overnight logs
-            if(maxIndex >= 0 && snrDB > (DETECTION_THRESHOLD_DB - 3.0f))
-            {
-                LOGGER.trace("{}CTCSS tone {} ({} Hz) below threshold: SNR={} dB (need {} dB)",
-                        mChannelLabel, mTargetCodeArray[maxIndex], String.format("%.1f", mTargetFrequencies[maxIndex]),
-                        String.format("%.1f", snrDB), DETECTION_THRESHOLD_DB);
-            }
             handleNoDetection();
         }
     }
