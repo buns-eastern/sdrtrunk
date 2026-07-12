@@ -572,13 +572,37 @@ public class DecoderFactory
             {
                 NXDNTrafficChannelManager primaryTCM = new NXDNTrafficChannelManager(channel);
                 modules.add(primaryTCM);
-                modules.add(new NXDNDecoderState(channel, primaryTCM));
+                NXDNDecoderState nxdnDecoderState = new NXDNDecoderState(channel, primaryTCM);
+                modules.add(nxdnDecoderState);
+
+                //Custom network streams: NXDN decode events (9500) + raw control-channel messages (9501)
+                String nxdnSystem = channel.getSystem();
+                if(nxdnSystem == null || nxdnSystem.trim().isEmpty()) { nxdnSystem = channel.getName(); }
+                String safeNxdnSystem = StringUtils.replaceIllegalCharacters(nxdnSystem.trim());
+                NetworkStreamManager nxdnStreamManager = loadNetworkStreamManager(userPreferences);
+                if(nxdnStreamManager != null)
+                {
+                    modules.add(new NetworkEventBroadcastModule(safeNxdnSystem, nxdnStreamManager));
+                    final NetworkStreamManager nxdnMgr = nxdnStreamManager;
+                    final String nxdnSys = safeNxdnSystem;
+                    nxdnDecoderState.setRawStreamListener(msg -> nxdnMgr.broadcastRaw(formatRawMessage(nxdnSys, msg)));
+                }
             }
             else if(trafficChannelManager instanceof NXDNTrafficChannelManager parentTCM)
             {
                 NXDNDecoderState decoderState = new NXDNDecoderState(channel, parentTCM);
                 decoderState.setCurrentChannel(channelDescriptor);
                 modules.add(decoderState);
+
+                //Custom network stream: NXDN decode events (9500)
+                String nxdnTrafficSystem = channel.getSystem();
+                if(nxdnTrafficSystem == null || nxdnTrafficSystem.trim().isEmpty()) { nxdnTrafficSystem = channel.getName(); }
+                String safeNxdnTrafficSystem = StringUtils.replaceIllegalCharacters(nxdnTrafficSystem.trim());
+                NetworkStreamManager nxdnTrafficStreamManager = loadNetworkStreamManager(userPreferences);
+                if(nxdnTrafficStreamManager != null)
+                {
+                    modules.add(new NetworkEventBroadcastModule(safeNxdnTrafficSystem, nxdnTrafficStreamManager));
+                }
             }
             else
             {
