@@ -140,6 +140,10 @@ public class NoiseSquelchView extends ChannelView implements Listener<NoiseSquel
     private static final double NBFM_QUALITY_BAR_HEIGHT = 10.0;
     private final Label mSignalQualityLabel = new Label("Signal Quality:  --");
     private final Rectangle mSignalQualityMarker = new Rectangle(2, 16);
+    //Exponential smoothing so the quality marker glides instead of strobing with per-buffer noise jitter.
+    //At ~20 updates/sec, alpha 0.1 gives roughly a half-second time constant.
+    private static final double QUALITY_SMOOTHING_ALPHA = 0.1;
+    private double mSmoothedQuality = -1.0;
     private Button mResetButton;
 
     private boolean mControlsUpdated = true;
@@ -887,11 +891,23 @@ public class NoiseSquelchView extends ChannelView implements Listener<NoiseSquel
             mSignalQualityLabel.setText("Signal Quality:  --");
             mSignalQualityLabel.setStyle(null);
             mSignalQualityMarker.setVisible(false);
+            mSmoothedQuality = -1.0;
             return;
         }
 
         float openThreshold = Math.max(latest.noiseOpenThreshold(), 1e-6f);
         double quality = Math.max(0.0, Math.min(100.0, 100.0 * (1.0 - (latest.noise() / openThreshold))));
+
+        //Smooth the reading so the marker tracks instead of flickering with raw noise jitter.
+        if(mSmoothedQuality < 0.0)
+        {
+            mSmoothedQuality = quality;
+        }
+        else
+        {
+            mSmoothedQuality = QUALITY_SMOOTHING_ALPHA * quality + (1.0 - QUALITY_SMOOTHING_ALPHA) * mSmoothedQuality;
+        }
+        quality = mSmoothedQuality;
 
         String rating;
         String color;
