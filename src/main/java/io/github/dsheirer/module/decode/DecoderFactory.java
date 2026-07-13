@@ -587,6 +587,12 @@ public class DecoderFactory
                     final String nxdnSys = safeNxdnSystem;
                     nxdnDecoderState.setRawStreamListener(msg -> nxdnMgr.broadcastRaw(formatRawMessage(nxdnSys, msg)));
                 }
+
+                //Talker alias CSV logger (per-system OTA alias capture, same as P25/DMR)
+                Path nxdnEventLogDir = userPreferences.getDirectoryPreference().getDirectoryEventLog();
+                TalkerAliasLogger nxdnAliasLogger = new TalkerAliasLogger(nxdnEventLogDir, safeNxdnSystem);
+                primaryTCM.getTalkerAliasManager().setChangeListener(nxdnAliasLogger::onAliasUpdate);
+                nxdnAliasLogger.bootstrap(primaryTCM.getTalkerAliasManager());
             }
             else if(trafficChannelManager instanceof NXDNTrafficChannelManager parentTCM)
             {
@@ -732,6 +738,15 @@ public class DecoderFactory
                     dmrMgr.broadcastRaw(formatDmrRawMessage(safeDmrSystem, DMRMessage.TIMESLOT_1, msg)));
             state2.setRawStreamListener(msg ->
                     dmrMgr.broadcastRaw(formatDmrRawMessage(safeDmrSystem, DMRMessage.TIMESLOT_2, msg)));
+        }
+
+        //Talker alias CSV logger (per-system OTA alias capture, same as P25/NXDN)
+        if(dmrTrafficChannelManager != null)
+        {
+            Path dmrEventLogDir = userPreferences.getDirectoryPreference().getDirectoryEventLog();
+            TalkerAliasLogger dmrAliasLogger = new TalkerAliasLogger(dmrEventLogDir, safeDmrSystem);
+            dmrTrafficChannelManager.getTalkerAliasManager().setChangeListener(dmrAliasLogger::onAliasUpdate);
+            dmrAliasLogger.bootstrap(dmrTrafficChannelManager.getTalkerAliasManager());
         }
     }
 
