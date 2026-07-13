@@ -47,9 +47,11 @@ import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.javafx.IconNode;
 import org.slf4j.Logger;
@@ -128,6 +130,16 @@ public class NoiseSquelchView extends ChannelView implements Listener<NoiseSquel
     private Label mSquelchStateLabel;
     private Label mNoiseValueLabel;
     private Label mHysteresisValueLabel;
+
+    //Relative NBFM signal-quality bar (analog counterpart to the digital symbol-quality bar): derived from the
+    //FM-quieting noise metric - lower in-band noise = cleaner signal = higher quality.
+    private static final String NBFM_COLOR_GOOD = "#639922";
+    private static final String NBFM_COLOR_FAIR = "#EF9F27";
+    private static final String NBFM_COLOR_POOR = "#E24B4A";
+    private static final double NBFM_QUALITY_BAR_WIDTH = 220.0;
+    private static final double NBFM_QUALITY_BAR_HEIGHT = 10.0;
+    private final Label mSignalQualityLabel = new Label("Signal Quality:  --");
+    private final Rectangle mSignalQualityMarker = new Rectangle(2, 16);
     private Button mResetButton;
 
     private boolean mControlsUpdated = true;
@@ -228,7 +240,7 @@ public class NoiseSquelchView extends ChannelView implements Listener<NoiseSquel
 
         VBox.setVgrow(gridPane, Priority.NEVER);
         VBox.setVgrow(getActivityChart(), Priority.ALWAYS);
-        getChildren().addAll(gridPane, getActivityChart());
+        getChildren().addAll(gridPane, createSignalQualityBox(), getActivityChart());
     }
 
     /**
@@ -479,6 +491,7 @@ public class NoiseSquelchView extends ChannelView implements Listener<NoiseSquel
                 getSquelchStateLabel().setText(finalSquelchOverride ? "Override" : finalSquelch ? "Closed" : "Open");
                 updateLabelNoise(noiseCurrentFinal);
                 updateLabelHysteresis(hysteresisCurrentFinal);
+                updateSignalQuality();
             }
             catch(Exception e)
             {
@@ -828,6 +841,70 @@ public class NoiseSquelchView extends ChannelView implements Listener<NoiseSquel
      * @param noiseValue from the controller
      * @return value for display
      */
+    /**
+     * Builds the relative signal-quality bar (poor/fair/good zones + live marker), styled like the digital
+     * symbol-quality bar.  Shown in the NBFM channel tab.
+     * @return the quality bar container
+     */
+    private VBox createSignalQualityBox()
+    {
+        Rectangle poorZone = new Rectangle(0, 3, NBFM_QUALITY_BAR_WIDTH * 0.50, NBFM_QUALITY_BAR_HEIGHT);
+        poorZone.setFill(Color.web(NBFM_COLOR_POOR));
+        Rectangle fairZone = new Rectangle(NBFM_QUALITY_BAR_WIDTH * 0.50, 3, NBFM_QUALITY_BAR_WIDTH * 0.25, NBFM_QUALITY_BAR_HEIGHT);
+        fairZone.setFill(Color.web(NBFM_COLOR_FAIR));
+        Rectangle goodZone = new Rectangle(NBFM_QUALITY_BAR_WIDTH * 0.75, 3, NBFM_QUALITY_BAR_WIDTH * 0.25, NBFM_QUALITY_BAR_HEIGHT);
+        goodZone.setFill(Color.web(NBFM_COLOR_GOOD));
+        mSignalQualityMarker.setFill(Color.web("#333333"));
+        mSignalQualityMarker.setVisible(false);
+
+        Pane barPane = new Pane(poorZone, fairZone, goodZone, mSignalQualityMarker);
+        barPane.setMinSize(NBFM_QUALITY_BAR_WIDTH, 16);
+        barPane.setPrefSize(NBFM_QUALITY_BAR_WIDTH, 16);
+        barPane.setMaxSize(NBFM_QUALITY_BAR_WIDTH, 16);
+
+        VBox box = new VBox(2, mSignalQualityLabel, barPane);
+        box.setPadding(new Insets(2, 3, 2, 3));
+        return box;
+    }
+
+    /**
+     * Updates the relative signal-quality bar from the most recent noise-squelch state.  Only rated while audio
+     * is passing (squelch open or overridden); shows "--" when muted.  Quality is the FM-quieting noise scaled
+     * against the (user-configured) open threshold: 0 noise = 100%, noise at the open threshold = 0%.
+     */
+    private void updateSignalQuality()
+    {
+        NoiseSquelchState latest;
+        synchronized(mSquelchStateHistory)
+        {
+            latest = mSquelchStateHistory.isEmpty() ? null : mSquelchStateHistory.getLast();
+        }
+
+        boolean audioPassing = latest != null && (latest.squelchOverride() || !latest.squelch());
+
+        if(!audioPassing)
+        {
+            mSignalQualityLabel.setText("Signal Quality:  --");
+            mSignalQualityLabel.setStyle(null);
+            mSignalQualityMarker.setVisible(false);
+            return;
+        }
+
+        float openThreshold = Math.max(latest.noiseOpenThreshold(), 1e-6f);
+        double quality = Math.max(0.0, Math.min(100.0, 100.0 * (1.0 - (latest.noise() / openThreshold))));
+
+        String rating;
+        String color;
+        if(quality >= 75.0) { rating = "GOOD"; color = NBFM_COLOR_GOOD; }
+        else if(quality >= 50.0) { rating = "FAIR"; color = NBFM_COLOR_FAIR; }
+        else { rating = "POOR"; color = NBFM_COLOR_POOR; }
+
+        mSignalQualityLabel.setText(String.format("Signal Quality: %3.0f%%   %s", quality, rating));
+        mSignalQualityLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        mSignalQualityMarker.setX(Math.min(NBFM_QUALITY_BAR_WIDTH - 2.0, NBFM_QUALITY_BAR_WIDTH * quality / 100.0));
+        mSignalQualityMarker.setVisible(true);
+    }
+
     private static float toDisplayNoise(float noiseValue)
     {
         return NOISE_INVERSION_BASE - (noiseValue * NOISE_DISPLAY_SCALOR);
