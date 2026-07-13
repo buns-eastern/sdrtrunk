@@ -896,7 +896,9 @@ public class NoiseSquelchView extends ChannelView implements Listener<NoiseSquel
         }
 
         float openThreshold = Math.max(latest.noiseOpenThreshold(), 1e-6f);
-        double quality = Math.max(0.0, Math.min(100.0, 100.0 * (1.0 - (latest.noise() / openThreshold))));
+        //Square the quieting ratio so noisy-but-audible signals read POOR and only well-quieted signals reach GOOD.
+        double quieting = Math.max(0.0, 1.0 - (latest.noise() / openThreshold));
+        double quality = 100.0 * quieting * quieting;
 
         //Smooth the reading so the marker tracks instead of flickering with raw noise jitter.
         if(mSmoothedQuality < 0.0)
