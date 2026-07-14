@@ -149,6 +149,30 @@ public abstract class TunerConfiguration
     }
 
     /**
+     * Free-form user notes for this tuner. Stored locally and tied to the tuner's unique ID (serial number).
+     */
+    private String mNotes = "";
+
+    /**
+     * User notes for this tuner.
+     * @return notes text (never null).
+     */
+    @JacksonXmlProperty(localName = "notes")
+    public String getNotes()
+    {
+        return mNotes;
+    }
+
+    /**
+     * Sets the user notes for this tuner.
+     * @param notes text, may be null (treated as empty).
+     */
+    public void setNotes(String notes)
+    {
+        mNotes = (notes != null) ? notes : "";
+    }
+
+    /**
      * Minimum tunable frequency.
      * @return minimum frequency
      */

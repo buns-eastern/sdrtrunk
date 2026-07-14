@@ -52,7 +52,9 @@ import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
+import javax.swing.JTextArea;
 import javax.swing.JToggleButton;
 import javax.swing.SpinnerModel;
 import javax.swing.SpinnerNumberModel;
@@ -88,6 +90,7 @@ public abstract class TunerEditor<T extends Tuner,C extends TunerConfiguration> 
     private FrequencyPanel mFrequencyPanel;
     private JLabel mTunerIdLabel;
     private JCheckBox mAutoPPMCheckBox;
+    private JTextArea mNotesTextArea;
     private JLabel mMeasuredPPMLabel;
     private JLabel mRecordingStatusLabel;
     private JLabel mTunerStatusLabel;
@@ -254,6 +257,41 @@ public abstract class TunerEditor<T extends Tuner,C extends TunerConfiguration> 
         }
 
         return mAutoPPMCheckBox;
+    }
+
+    /**
+     * Free-form notes text area for this tuner. Notes are persisted per-tuner (keyed by serial number) in the
+     * tuner configuration and reloaded whenever the tuner is selected. Text only - has no effect on tuning.
+     * @return the notes text area
+     */
+    protected JTextArea getNotesTextArea()
+    {
+        if(mNotesTextArea == null)
+        {
+            mNotesTextArea = new JTextArea(3, 20);
+            mNotesTextArea.setLineWrap(true);
+            mNotesTextArea.setWrapStyleWord(true);
+            mNotesTextArea.setToolTipText("Free-form notes for this tuner. Saved locally and tied to the tuner serial number.");
+            mNotesTextArea.addFocusListener(new FocusListener()
+            {
+                @Override
+                public void focusGained(FocusEvent e)
+                {
+                }
+
+                @Override
+                public void focusLost(FocusEvent e)
+                {
+                    if(!isLoading() && hasConfiguration())
+                    {
+                        getConfiguration().setNotes(getNotesTextArea().getText());
+                        saveConfiguration();
+                    }
+                }
+            });
+        }
+
+        return mNotesTextArea;
     }
 
     /**
@@ -891,6 +929,8 @@ public abstract class TunerEditor<T extends Tuner,C extends TunerConfiguration> 
             add(minMaxPanel, "span");
 
             add(getTunerLockedStatusLabel(), "span");
+            add(new JLabel("Notes:"), "span");
+            add(new JScrollPane(getNotesTextArea()), "span, growx, height 60!");
         }
 
         /**
@@ -929,6 +969,9 @@ public abstract class TunerEditor<T extends Tuner,C extends TunerConfiguration> 
                 getAutoPPMCheckBox().setSelected(false);
                 getMeasuredPPMLabel().setText("");
             }
+
+            getNotesTextArea().setText(hasConfiguration() ? getConfiguration().getNotes() : "");
+            getNotesTextArea().setEnabled(hasConfiguration());
         }
 
         /**
