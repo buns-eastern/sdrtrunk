@@ -970,7 +970,20 @@ public abstract class TunerEditor<T extends Tuner,C extends TunerConfiguration> 
                 getMeasuredPPMLabel().setText("");
             }
 
-            getNotesTextArea().setText(hasConfiguration() ? getConfiguration().getNotes() : "");
+            //Refresh the notes non-destructively: never overwrite while the user is editing (has focus),
+            //and only call setText() when the stored value actually differs from what is displayed.  This
+            //prevents periodic updateControls() calls (e.g. auto-PPM corrections while decoding) from
+            //erasing in-progress typing and jumping the caret back to the start.
+            if(!getNotesTextArea().isFocusOwner())
+            {
+                String notes = hasConfiguration() ? getConfiguration().getNotes() : "";
+
+                if(!notes.equals(getNotesTextArea().getText()))
+                {
+                    getNotesTextArea().setText(notes);
+                }
+            }
+
             getNotesTextArea().setEnabled(hasConfiguration());
         }
 
