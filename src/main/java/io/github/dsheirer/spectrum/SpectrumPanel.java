@@ -308,6 +308,13 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
         Color gridColor = new Color(mColorSpectrumLine.getRed(), mColorSpectrumLine.getGreen(),
             mColorSpectrumLine.getBlue(), 64);
 
+        //High-contrast label color so the dBFS numbers stay legible: near-white on a dark spectrum
+        //background, near-black on a light one.
+        double bgLuminance = (0.299 * mColorSpectrumBackground.getRed())
+            + (0.587 * mColorSpectrumBackground.getGreen())
+            + (0.114 * mColorSpectrumBackground.getBlue());
+        Color labelColor = (bgLuminance < 128) ? new Color(235, 235, 235) : new Color(20, 20, 20);
+
         for(int db = interval; db < mDBScale; db += interval)
         {
             float y = db * pixelsPerDb;
@@ -317,7 +324,7 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
             graphics.draw(new Line2D.Float(0, y, size.width, y));
 
             //dBFS label near the left edge
-            graphics.setColor(mColorSpectrumLine);
+            graphics.setColor(labelColor);
             graphics.drawString("-" + db, 2, y - 1);
         }
     }
