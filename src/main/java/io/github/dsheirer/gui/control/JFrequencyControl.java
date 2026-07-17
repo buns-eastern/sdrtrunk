@@ -73,7 +73,7 @@ public class JFrequencyControl extends JPanel implements ISourceEventProcessor
     {
         setLayout(new MigLayout("insets 0 0 0 0", "[]0[]", ""));
 
-        Font font = new Font(Font.MONOSPACED, Font.BOLD, 30);
+        Font font = new Font(Font.MONOSPACED, Font.BOLD, 24);
 
         for(int x = 9; x >= 0; x--)
         {
@@ -252,7 +252,7 @@ public class JFrequencyControl extends JPanel implements ISourceEventProcessor
         public java.awt.Dimension getPreferredSize()
         {
             java.awt.FontMetrics fm = getFontMetrics(getFont());
-            return new java.awt.Dimension(fm.charWidth('0') + 4, fm.getHeight() + 2);
+            return new java.awt.Dimension(fm.charWidth('0') + 4, fm.getHeight() + 4);
         }
 
         @Override
