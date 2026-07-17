@@ -24,6 +24,10 @@ import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.preference.swing.JTableColumnWidthMonitor;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.ImageIcon;
@@ -120,9 +124,12 @@ public class BroadcastStatusPanel extends JPanel
      */
     public class StatusCellRenderer extends DefaultTableCellRenderer
     {
+        private Color mCellBackground = Color.BLACK;
+        private Color mPillColor = null;
+
         public StatusCellRenderer()
         {
-            setOpaque(true);
+            setOpaque(false);
             setHorizontalAlignment(SwingConstants.CENTER);
         }
 
@@ -130,54 +137,61 @@ public class BroadcastStatusPanel extends JPanel
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
                                                        boolean hasFocus, int row, int column)
         {
-            JLabel component = (JLabel)super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
-            if(isSelected)
+            mCellBackground = isSelected ? table.getSelectionBackground() : table.getBackground();
+            mPillColor = null;
+            setForeground(isSelected ? table.getSelectionForeground() : table.getForeground());
+
+            if(!isSelected && value instanceof BroadcastState)
             {
-                setBackground(table.getSelectionBackground());
-                setForeground(table.getSelectionForeground());
-            }
-            else
-            {
-                if(value instanceof BroadcastState)
+                BroadcastState state = (BroadcastState)value;
+
+                if(state == BroadcastState.CONNECTED)
                 {
-                    BroadcastState state = (BroadcastState)value;
-
-                    if(state == BroadcastState.CONNECTED)
-                    {
-                        setBackground(new Color(46, 125, 50));
-                        setForeground(Color.WHITE);
-                    }
-                    else if(state == BroadcastState.DISABLED)
-                    {
-                        setBackground(table.getBackground());
-                        setForeground(Color.GRAY);
-                    }
-                    else if(state == BroadcastState.INVALID_SETTINGS ||
-                            state == BroadcastState.NETWORK_UNAVAILABLE)
-                    {
-                        setBackground(new Color(240, 190, 40));
-                        setForeground(Color.BLACK);
-                    }
-                    else if(state.isErrorState())
-                    {
-                        setBackground(new Color(190, 55, 55));
-                        setForeground(Color.WHITE);
-                    }
-                    else
-                    {
-                        setBackground(table.getBackground());
-                        setForeground(table.getForeground());
-                    }
+                    mPillColor = new Color(46, 125, 50);
+                    setForeground(Color.WHITE);
                 }
-                else
+                else if(state == BroadcastState.INVALID_SETTINGS || state == BroadcastState.NETWORK_UNAVAILABLE)
                 {
-                    setForeground(table.getForeground());
-                    setBackground(table.getBackground());
+                    mPillColor = new Color(240, 190, 40);
+                    setForeground(Color.BLACK);
+                }
+                else if(state.isErrorState())
+                {
+                    mPillColor = new Color(190, 55, 55);
+                    setForeground(Color.WHITE);
+                }
+                else if(state == BroadcastState.DISABLED)
+                {
+                    setForeground(Color.GRAY);
                 }
             }
 
             return this;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g)
+        {
+            Graphics2D g2 = (Graphics2D)g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(mCellBackground);
+            g2.fillRect(0, 0, getWidth(), getHeight());
+
+            if(mPillColor != null)
+            {
+                FontMetrics fm = g2.getFontMetrics(getFont());
+                int pillWidth = Math.min(fm.stringWidth(getText()) + 20, getWidth() - 4);
+                int pillHeight = Math.min(fm.getHeight() + 5, getHeight() - 4);
+                int x = (getWidth() - pillWidth) / 2;
+                int y = (getHeight() - pillHeight) / 2;
+                g2.setColor(mPillColor);
+                g2.fillRoundRect(x, y, pillWidth, pillHeight, pillHeight, pillHeight);
+            }
+
+            g2.dispose();
+            super.paintComponent(g);
         }
     }
 }
