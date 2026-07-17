@@ -31,6 +31,7 @@ import io.github.dsheirer.settings.ColorSetting.ColorSettingName;
 import io.github.dsheirer.settings.SettingsManager;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Insets;
 import java.awt.Font;
 import javax.swing.ButtonGroup;
 import javax.swing.JMenu;
@@ -63,6 +64,12 @@ public class ThemeManager
     public static final String THEME_DEFAULT = THEME_ARC_DARK;
 
     public static final String FONT_DEFAULT = "default";
+
+    public static final String DENSITY_KEY = "application.appearance.density";
+    public static final String DENSITY_COMPACT = "compact";
+    public static final String DENSITY_NORMAL = "normal";
+    public static final String DENSITY_COMFORTABLE = "comfortable";
+    public static final String DENSITY_DEFAULT = DENSITY_NORMAL;
 
     //Theme key and display label, in menu order.
     private static final String[][] THEMES = {
@@ -106,6 +113,25 @@ public class ThemeManager
     private static int fontSize()
     {
         return sPreferences.getSwingPreference().getInt(FONT_SIZE_KEY, 0);
+    }
+
+    private static String density()
+    {
+        return sPreferences.getSwingPreference().getString(DENSITY_KEY, DENSITY_DEFAULT);
+    }
+
+    private static int densityPadding()
+    {
+        switch(density())
+        {
+            case DENSITY_COMPACT:
+                return 6;
+            case DENSITY_COMFORTABLE:
+                return 16;
+            case DENSITY_NORMAL:
+            default:
+                return 10;
+        }
     }
 
     /**
@@ -203,6 +229,18 @@ public class ThemeManager
             UIManager.put("Table.showVerticalLines", Boolean.TRUE);
             UIManager.put("Table.intercellSpacing", new Dimension(1, 1));
 
+            //Micro-polish: gently rounded corners and slim, rounded scrollbars.
+            UIManager.put("Button.arc", 8);
+            UIManager.put("Component.arc", 8);
+            UIManager.put("TextComponent.arc", 6);
+            UIManager.put("ProgressBar.arc", 8);
+            UIManager.put("ScrollBar.width", 11);
+            UIManager.put("ScrollBar.thumbArc", 999);
+            UIManager.put("ScrollBar.trackArc", 999);
+            UIManager.put("ScrollBar.showButtons", Boolean.FALSE);
+            UIManager.put("ScrollBar.trackInsets", new Insets(2, 2, 2, 2));
+            UIManager.put("ScrollBar.thumbInsets", new Insets(2, 2, 2, 2));
+
             //FlatLaf's JIDE tab UI colors tab text from these keys (not the component foreground). Point them
             //at the themed tab foreground so tab labels are readable in every theme, live-switch included.
             Color tabText = UIManager.getColor("TabbedPane.foreground");
@@ -237,6 +275,13 @@ public class ThemeManager
                 int resolvedSize = (size > 0) ? size : base.getSize();
                 UIManager.put("defaultFont", new Font(resolvedFamily, Font.PLAIN, resolvedSize));
             }
+
+            //Density: scale table/tree row height from the current font so it never clips.
+            Font densityFont = UIManager.getFont("defaultFont");
+            int densityFontSize = (densityFont != null) ? densityFont.getSize() : 12;
+            int rowHeight = densityFontSize + densityPadding();
+            UIManager.put("Table.rowHeight", rowHeight);
+            UIManager.put("Tree.rowHeight", rowHeight);
         }
         catch(Throwable t)
         {
@@ -332,6 +377,12 @@ public class ThemeManager
         applyLive();
     }
 
+    public static void setDensity(String density)
+    {
+        sPreferences.getSwingPreference().setString(DENSITY_KEY, density);
+        applyLive();
+    }
+
     /**
      * Builds the Appearance submenu (theme, font, font size) for the View menu.
      */
@@ -376,6 +427,14 @@ public class ThemeManager
         }
 
         menu.add(sizeMenu);
+
+        JMenu densityMenu = new JMenu("Density");
+        ButtonGroup densityGroup = new ButtonGroup();
+        String currentDensity = density();
+        addRadio(densityMenu, densityGroup, "Compact", DENSITY_COMPACT.equalsIgnoreCase(currentDensity), () -> setDensity(DENSITY_COMPACT));
+        addRadio(densityMenu, densityGroup, "Normal", DENSITY_NORMAL.equalsIgnoreCase(currentDensity), () -> setDensity(DENSITY_NORMAL));
+        addRadio(densityMenu, densityGroup, "Comfortable", DENSITY_COMFORTABLE.equalsIgnoreCase(currentDensity), () -> setDensity(DENSITY_COMFORTABLE));
+        menu.add(densityMenu);
 
         return menu;
     }
