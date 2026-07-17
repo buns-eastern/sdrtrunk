@@ -72,7 +72,7 @@ public class StandaloneStreamPreferenceEditor extends HBox
             "configured interval while it runs, and a channel_down when it stops.  Demultiplex by the " +
             "\"channel\" field.");
         subtitle.setWrapText(true);
-        subtitle.setStyle("-fx-text-fill: #555555;");
+        subtitle.setStyle("-fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.mutedTextColor() + ";");
 
         root.getChildren().addAll(title, subtitle, new Separator());
 
@@ -123,7 +123,7 @@ public class StandaloneStreamPreferenceEditor extends HBox
 
         // Message format
         Label fmtHeader = new Label("MESSAGE FORMAT  ·  Newline-delimited JSON (NDJSON)");
-        fmtHeader.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #1a5276;");
+        fmtHeader.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.headingTextColor() + ";");
         root.getChildren().add(fmtHeader);
 
         String formatExample =

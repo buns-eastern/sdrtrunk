@@ -77,7 +77,7 @@ public class PcmStreamPreferenceEditor extends HBox
             "This bypasses SDRTrunk's MP3 recording pipeline entirely, so audio is available " +
             "within ~20 ms of the radio transmitting — before any file is written to disk.");
         subtitle.setWrapText(true);
-        subtitle.setStyle("-fx-text-fill: #555555;");
+        subtitle.setStyle("-fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.mutedTextColor() + ";");
 
         root.getChildren().addAll(title, subtitle, new Separator());
 
@@ -202,7 +202,7 @@ public class PcmStreamPreferenceEditor extends HBox
     private Label sectionHeader(String text)
     {
         Label l = new Label(text);
-        l.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #1a5276;");
+        l.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.headingTextColor() + ";");
         return l;
     }
 

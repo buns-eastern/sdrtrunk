@@ -67,7 +67,7 @@ public class NetworkStreamPreferenceEditor extends HBox
             "Multiple clients can connect simultaneously.  This feature is independent of " +
             "CSV logging — both can be enabled together, or used on their own.");
         subtitle.setWrapText(true);
-        subtitle.setStyle("-fx-text-fill: #555555;");
+        subtitle.setStyle("-fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.mutedTextColor() + ";");
 
         root.getChildren().addAll(title, subtitle, new Separator());
 
@@ -193,7 +193,7 @@ public class NetworkStreamPreferenceEditor extends HBox
     private Label sectionHeader(String text)
     {
         Label l = new Label(text);
-        l.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #1a5276;");
+        l.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.headingTextColor() + ";");
         return l;
     }
 

@@ -102,7 +102,7 @@ public class HeartbeatPreferenceEditor extends HBox
             "Continuously verify that your P25 trunking control channels are alive and actively " +
             "decoding — not just tuned but actually receiving valid messages from the tower.");
         subtitle.setWrapText(true);
-        subtitle.setStyle("-fx-text-fill: #555555;");
+        subtitle.setStyle("-fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.mutedTextColor() + ";");
 
         box.getChildren().addAll(title, subtitle, new Separator());
         box.getChildren().add(sectionHeader("HOW IT WORKS"));
@@ -160,7 +160,7 @@ public class HeartbeatPreferenceEditor extends HBox
 
         Label header = sectionHeader("HEARTBEAT ENTRIES");
         Label hint = new Label("Each entry monitors one P25 site. Entries can be disabled without deleting them.");
-        hint.setStyle("-fx-text-fill: #555555; -fx-font-size: 11px;");
+        hint.setStyle("-fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.mutedTextColor() + "; -fx-font-size: 11px;");
 
         VBox.setVgrow(buildTable(), Priority.ALWAYS);
 
@@ -405,7 +405,7 @@ public class HeartbeatPreferenceEditor extends HBox
     private Label sectionHeader(String text)
     {
         Label l = new Label(text);
-        l.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #1a5276;");
+        l.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.headingTextColor() + ";");
         return l;
     }
 
@@ -420,7 +420,7 @@ public class HeartbeatPreferenceEditor extends HBox
     private Label smallHint(String text)
     {
         Label l = new Label(text);
-        l.setStyle("-fx-text-fill: #777777; -fx-font-size: 10.5px;");
+        l.setStyle("-fx-text-fill: " + io.github.dsheirer.gui.theme.ThemeManager.mutedTextColor() + "; -fx-font-size: 10.5px;");
         l.setWrapText(true);
         return l;
     }
