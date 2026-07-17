@@ -71,7 +71,7 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
 
     //Current DFT output bins in dB
     private float[] mDisplayFFTBins = new float[1];
-    private volatile float mPeakDbFS = 0.0f;
+    private volatile float mPeakDbFS = Float.NaN;
     private static final DecimalFormat PEAK_FORMAT = new DecimalFormat("0.0");
 
     //Averaging across multiple DFT result sets
@@ -192,7 +192,7 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
      */
     private void drawPeakReadout(Graphics2D graphics, Dimension size)
     {
-        String text = (Float.isFinite(mPeakDbFS) && mPeakDbFS < 0.0f)
+        String text = Float.isFinite(mPeakDbFS)
             ? "Peak: " + PEAK_FORMAT.format(mPeakDbFS) + " dBFS"
             : "Peak: --- dBFS";
 
@@ -463,6 +463,7 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
     public void clearSpectrum()
     {
         Arrays.fill(mDisplayFFTBins, 0.0f);
+        mPeakDbFS = Float.NaN;
         repaint();
     }
 
