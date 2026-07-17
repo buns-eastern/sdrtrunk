@@ -209,6 +209,7 @@ public class JavaFxWindowManager extends Application
             Scene scene = new Scene(getRecordingViewer(), 1100, 800);
             mRecordingViewerStage = new Stage();
             mRecordingViewerStage.setTitle("sdrtrunk - Message Recording Viewer (.bits)");
+            applyTheme(scene);
             mRecordingViewerStage.setScene(scene);
             mUserPreferences.getJavaFxPreferences().monitor(mRecordingViewerStage, STAGE_MONITOR_KEY_RECORDING_VIEWER);
         }
@@ -234,6 +235,7 @@ public class JavaFxWindowManager extends Application
             Scene scene = new Scene(getIconManager(), 500, 500);
             mIconManagerStage = new Stage();
             mIconManagerStage.setTitle("sdrtrunk - Icon Manager");
+            applyTheme(scene);
             mIconManagerStage.setScene(scene);
             mUserPreferences.getJavaFxPreferences().monitor(mIconManagerStage, STAGE_MONITOR_KEY_ICON_MANAGER_EDITOR);
         }
@@ -282,6 +284,7 @@ public class JavaFxWindowManager extends Application
             Scene scene = new Scene(getJmbeEditor(), 650, 650);
             mJmbeEditorStage = new Stage();
             mJmbeEditorStage.setTitle("sdrtrunk - JMBE Library Updater");
+            applyTheme(scene);
             mJmbeEditorStage.setScene(scene);
             mUserPreferences.getJavaFxPreferences().monitor(mJmbeEditorStage, STAGE_MONITOR_KEY_JMBE_EDITOR);
         }
@@ -315,6 +318,30 @@ public class JavaFxWindowManager extends Application
     /**
      * Access the playlist stage.
      */
+    /**
+     * Applies the current app theme (dark or light) to a JavaFX scene so the JavaFX windows match the rest of
+     * the app instead of staying on default light Modena styling.
+     */
+    private void applyTheme(Scene scene)
+    {
+        try
+        {
+            boolean dark = io.github.dsheirer.gui.theme.ThemeManager.isDarkTheme();
+            java.net.URL css = getClass().getResource(dark ? "/sdrtrunk_style.css" : "/channel_light.css");
+
+            if(css != null)
+            {
+                scene.getStylesheets().add(css.toExternalForm());
+            }
+
+            scene.setFill(javafx.scene.paint.Color.web(dark ? "#1e1f22" : "#fbfbfb"));
+        }
+        catch(Throwable t)
+        {
+            mLog.error("Error applying theme to JavaFX scene", t);
+        }
+    }
+
     private Stage getPlaylistStage()
     {
         if(mPlaylistStage == null)
@@ -323,6 +350,7 @@ public class JavaFxWindowManager extends Application
             Scene scene = new Scene(getPlaylistEditor(), 1000, 750);
             mPlaylistStage = new Stage();
             mPlaylistStage.setTitle("sdrtrunk - Playlist Editor");
+            applyTheme(scene);
             mPlaylistStage.setScene(scene);
             mUserPreferences.getJavaFxPreferences().monitor(mPlaylistStage, STAGE_MONITOR_KEY_PLAYLIST_EDITOR);
         }
@@ -373,6 +401,7 @@ public class JavaFxWindowManager extends Application
             Scene scene = new Scene(getUserPreferencesEditor(), 900, 500);
             mUserPreferencesStage = new Stage();
             mUserPreferencesStage.setTitle("sdrtrunk - User Preferences");
+            applyTheme(scene);
             mUserPreferencesStage.setScene(scene);
             mUserPreferences.getJavaFxPreferences().monitor(mUserPreferencesStage, STAGE_MONITOR_KEY_USER_PREFERENCES_EDITOR);
         }
@@ -416,6 +445,7 @@ public class JavaFxWindowManager extends Application
             Scene scene = new Scene(getChannelMapEditor(), 500, 500);
             mChannelMapStage = new Stage();
             mChannelMapStage.setTitle("sdrtrunk - Channel Map Editor");
+            applyTheme(scene);
             mChannelMapStage.setScene(scene);
             mUserPreferences.getJavaFxPreferences().monitor(mChannelMapStage, STAGE_MONITOR_KEY_CHANNEL_MAP_EDITOR);
         }
