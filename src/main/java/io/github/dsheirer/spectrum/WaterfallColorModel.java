@@ -1,94 +1,168 @@
 /*******************************************************************************
- *     SDR Trunk 
- *     Copyright (C) 2014 Dennis Sheirer
- * 
+ *     SDR Trunk
+ *     Copyright (C) 2014-2026 Dennis Sheirer
+ *
  *     This program is free software: you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
  *     the Free Software Foundation, either version 3 of the License, or
  *     (at your option) any later version.
- * 
+ *
  *     This program is distributed in the hope that it will be useful,
  *     but WITHOUT ANY WARRANTY; without even the implied warranty of
  *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *     GNU General Public License for more details.
- * 
+ *
  *     You should have received a copy of the GNU General Public License
  *     along with this program.  If not, see <http://www.gnu.org/licenses/>
  ******************************************************************************/
 package io.github.dsheirer.spectrum;
 
+import java.awt.image.ColorModel;
 import java.awt.image.IndexColorModel;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.prefs.Preferences;
 
-
+/**
+ * Provides selectable 256-entry color palettes for the waterfall/spectrogram display. Palettes are generated
+ * by interpolating between a small set of color stops. The current selection is persisted and applied live to
+ * any registered waterfall panels.
+ */
 public class WaterfallColorModel
 {
-	public static IndexColorModel getDefaultColorModel()
-	{
-		int bitDepth = 8;
-		int indexSize = 256;
-		
-		byte[] red = new byte[ indexSize ];
-		byte[] green = new byte[ indexSize ];
-		byte[] blue = new byte[ indexSize ];
+    /**
+     * Available waterfall palettes.
+     */
+    public enum Palette
+    {
+        INFERNO("Inferno"),
+        VIRIDIS("Viridis"),
+        ICE("Ice"),
+        CLASSIC("Classic (green/yellow)"),
+        GRAYSCALE("Grayscale");
 
-		//Background noise
-		for( int x = 0; x < 16; x++ ) //Blue
-		{
-			red[ x ] = (byte)0;
+        private final String mLabel;
 
-			green[ x ] = (byte)0;
+        Palette(String label)
+        {
+            mLabel = label;
+        }
 
-			blue[ x ] = (byte)127;
-		}
+        public String getLabel()
+        {
+            return mLabel;
+        }
+    }
 
-		for( int x = 16; x < 32; x++ ) //Blue
-		{
-			red[ x ] = (byte)0;
+    private static final String PREF_KEY = "waterfall.palette";
+    private static final Preferences PREFERENCES = Preferences.userNodeForPackage(WaterfallColorModel.class);
+    private static final List<WaterfallPanel> PANELS = new CopyOnWriteArrayList<>();
+    private static Palette sPalette = load();
 
-			green[ x ] = (byte)0;
+    /**
+     * The color model for the currently selected palette. Retained method name for backward compatibility.
+     */
+    public static IndexColorModel getDefaultColorModel()
+    {
+        return build(sPalette);
+    }
 
-			blue[ x ] = (byte)191;
-		}
+    /**
+     * Currently selected palette.
+     */
+    public static Palette getPalette()
+    {
+        return sPalette;
+    }
 
-		int r = 0;
-		int g = 0;
-		int b = 191;
+    /**
+     * Selects a palette, persists it, and applies it live to all registered waterfall panels.
+     */
+    public static void setPalette(Palette palette)
+    {
+        if(palette == null)
+        {
+            return;
+        }
 
-		for( int x = 32; x < 60; x++ )
-		{
-			red[ x ] = (byte)r;
-			r += 9;
+        sPalette = palette;
+        PREFERENCES.put(PREF_KEY, palette.name());
 
-			green[ x ] = (byte)g;
-			g += 9;
+        ColorModel colorModel = build(palette);
 
-			blue[ x ] = (byte)b;
-			b -= 6;
-		}
+        for(WaterfallPanel panel : PANELS)
+        {
+            panel.setColorModel(colorModel);
+        }
+    }
 
-		r = 255;
-		g = 255;
-		b = 0;
-		
-		for( int x = 60; x < 188; x++ ) //Yellow
-		{
-			red[ x ] = (byte)r;
+    static void register(WaterfallPanel panel)
+    {
+        PANELS.add(panel);
+    }
 
-			green[ x ] = (byte)g;
-			g -= 2;
+    static void unregister(WaterfallPanel panel)
+    {
+        PANELS.remove(panel);
+    }
 
-			blue[ x ] = (byte)b;
-		}
+    private static Palette load()
+    {
+        try
+        {
+            return Palette.valueOf(PREFERENCES.get(PREF_KEY, Palette.INFERNO.name()));
+        }
+        catch(Exception e)
+        {
+            return Palette.INFERNO;
+        }
+    }
 
-		for( int x = 188; x < 256; x++ ) //Red
-		{
-			red[ x ] = (byte)255;
+    /**
+     * Builds the 256-entry IndexColorModel for a palette by interpolating between its color stops.
+     */
+    private static IndexColorModel build(Palette palette)
+    {
+        int[][] stops;
 
-			green[ x ] = (byte)0;
+        switch(palette)
+        {
+            case VIRIDIS:
+                stops = new int[][]{{0, 68, 1, 84}, {64, 59, 82, 139}, {128, 33, 145, 140}, {192, 94, 201, 98}, {255, 253, 231, 37}};
+                break;
+            case ICE:
+                stops = new int[][]{{0, 0, 0, 8}, {70, 0, 40, 120}, {140, 0, 130, 200}, {200, 90, 190, 230}, {255, 224, 244, 255}};
+                break;
+            case CLASSIC:
+                stops = new int[][]{{0, 0, 0, 127}, {31, 0, 0, 191}, {59, 243, 243, 29}, {90, 255, 255, 0}, {187, 255, 40, 0}, {255, 255, 0, 0}};
+                break;
+            case GRAYSCALE:
+                stops = new int[][]{{0, 0, 0, 0}, {255, 255, 255, 255}};
+                break;
+            case INFERNO:
+            default:
+                stops = new int[][]{{0, 0, 0, 4}, {48, 40, 11, 84}, {96, 101, 21, 110}, {144, 159, 42, 99}, {192, 212, 72, 66}, {224, 245, 125, 21}, {255, 252, 255, 164}};
+                break;
+        }
 
-			blue[ x ] = (byte)0;
-		}
-		
-		return new IndexColorModel( bitDepth, indexSize, red, green, blue );
-	}
+        byte[] red = new byte[256];
+        byte[] green = new byte[256];
+        byte[] blue = new byte[256];
+
+        for(int s = 0; s < stops.length - 1; s++)
+        {
+            int i0 = stops[s][0];
+            int i1 = stops[s + 1][0];
+
+            for(int x = i0; x <= i1 && x < 256; x++)
+            {
+                double t = (i1 == i0) ? 0.0 : (double)(x - i0) / (double)(i1 - i0);
+                red[x] = (byte)Math.round(stops[s][1] + t * (stops[s + 1][1] - stops[s][1]));
+                green[x] = (byte)Math.round(stops[s][2] + t * (stops[s + 1][2] - stops[s][2]));
+                blue[x] = (byte)Math.round(stops[s][3] + t * (stops[s + 1][3] - stops[s][3]));
+            }
+        }
+
+        return new IndexColorModel(8, 256, red, green, blue);
+    }
 }
