@@ -88,14 +88,15 @@ public class SignalPowerView extends JPanel
         valuePanel.add(mSquelchValueLabel, "wrap");
 
         IconFontSwing.register(FontAwesome.getIconFont());
-        Icon iconUp = IconFontSwing.buildIcon(FontAwesome.ANGLE_UP, 12);
+        java.awt.Color arrowColor = javax.swing.UIManager.getColor("Label.foreground");
+        Icon iconUp = IconFontSwing.buildIcon(FontAwesome.ANGLE_UP, 12, arrowColor != null ? arrowColor : java.awt.Color.GRAY);
         mSquelchUpButton = new JButton(iconUp);
         mSquelchUpButton.setToolTipText("Increases the squelch threshold value");
         mSquelchUpButton.setEnabled(false);
         mSquelchUpButton.addActionListener(e -> broadcast(SourceEvent.requestSquelchThreshold(null, mSquelchThreshold + 1)));
         valuePanel.add(mSquelchUpButton);
 
-        Icon iconDown = IconFontSwing.buildIcon(FontAwesome.ANGLE_DOWN, 12);
+        Icon iconDown = IconFontSwing.buildIcon(FontAwesome.ANGLE_DOWN, 12, arrowColor != null ? arrowColor : java.awt.Color.GRAY);
         mSquelchDownButton = new JButton(iconDown);
         mSquelchDownButton.setToolTipText("Decreases the squelch threshold value.");
         mSquelchDownButton.setEnabled(false);
