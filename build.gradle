@@ -101,7 +101,7 @@ dependencies {
     implementation 'com.github.wendykierp:JTransforms:3.1'
     implementation 'com.google.code.gson:gson:2.13.2'
     implementation 'com.google.guava:guava:33.5.0-jre'
-    implementation 'com.jidesoft:jide-oss:3.6.18'
+    implementation 'com.formdev:jide-oss:3.7.14' //FormDev fork of jide-oss: FlatLaf-compatible, fixes non-Windows WindowsLookAndFeel crash
     implementation 'com.miglayout:miglayout-swing:11.4.2'
     implementation 'com.mpatric:mp3agic:0.9.1'
     implementation 'commons-io:commons-io:2.21.0'
