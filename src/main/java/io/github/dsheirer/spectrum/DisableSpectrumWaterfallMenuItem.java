@@ -38,7 +38,8 @@ public class DisableSpectrumWaterfallMenuItem extends JMenuItem
     public DisableSpectrumWaterfallMenuItem(SpectralDisplayPanel spectralDisplayPanel)
     {
         super("Disable Spectrum & Waterfall");
-        setIcon(IconFontSwing.buildIcon(FontAwesome.EYE_SLASH, 12));
+        java.awt.Color iconColor = javax.swing.UIManager.getColor("MenuItem.foreground");
+        setIcon(IconFontSwing.buildIcon(FontAwesome.EYE_SLASH, 12, iconColor != null ? iconColor : java.awt.Color.GRAY));
 
         mSpectralDisplayPanel = spectralDisplayPanel;
 

@@ -577,13 +577,18 @@ public class JFrequencyControl extends JPanel implements ISourceEventProcessor
             public void mouseEntered(MouseEvent e)
             {
                 Digit.this.setBackground(mHighlightColor);
+                Digit.this.setForeground(Color.BLACK);
                 repaint();
             }
 
             @Override
             public void mouseExited(MouseEvent e)
             {
-                Digit.this.setBackground(Color.WHITE);
+                //Restore the themed text field colors instead of leaving the digit white after hover.
+                java.awt.Color bg = javax.swing.UIManager.getColor("TextField.background");
+                java.awt.Color fg = javax.swing.UIManager.getColor("TextField.foreground");
+                Digit.this.setBackground(bg != null ? bg : Color.WHITE);
+                Digit.this.setForeground(fg != null ? fg : Color.BLACK);
                 repaint();
             }
 
