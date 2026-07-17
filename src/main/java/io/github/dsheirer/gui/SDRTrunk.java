@@ -223,6 +223,7 @@ public class SDRTrunk implements Listener<TunerEvent>
         mTunerManager.start();
 
         mSettingsManager = new SettingsManager();
+        ThemeManager.setSettingsManager(mSettingsManager);
 
         AliasModel aliasModel = new AliasModel();
         EventLogManager eventLogManager = new EventLogManager(aliasModel, mUserPreferences);
