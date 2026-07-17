@@ -86,6 +86,7 @@ public class WaterfallPanel extends JPanel implements DFTResultsListener,
         mSettingsManager.addListener(this);
         mColorSpectrumCursor = getColor(ColorSettingName.SPECTRUM_CURSOR);
         reset();
+        WaterfallColorModel.register(this);
     }
 
     /**
@@ -93,6 +94,8 @@ public class WaterfallPanel extends JPanel implements DFTResultsListener,
      */
     public void dispose()
     {
+        WaterfallColorModel.unregister(this);
+
         if(mSettingsManager != null)
         {
             mSettingsManager.removeListener(this);
@@ -122,6 +125,22 @@ public class WaterfallPanel extends JPanel implements DFTResultsListener,
         mWaterfallImage = createImage(mMemoryImageSource);
 
         repaint();
+    }
+
+    /**
+     * Applies a new waterfall color palette live, preserving the existing waterfall history.
+     */
+    public void setColorModel(ColorModel colorModel)
+    {
+        mColorModel = colorModel;
+
+        if(mMemoryImageSource != null && mPixels != null)
+        {
+            mMemoryImageSource = new MemoryImageSource(mDFTSize, mImageHeight, mColorModel, mPixels, 0, mDFTSize);
+            mMemoryImageSource.setAnimated(true);
+            mWaterfallImage = createImage(mMemoryImageSource);
+            repaint();
+        }
     }
 
     /**

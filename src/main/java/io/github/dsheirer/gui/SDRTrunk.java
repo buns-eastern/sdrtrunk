@@ -27,6 +27,7 @@ import io.github.dsheirer.audio.broadcast.BroadcastFormat;
 import io.github.dsheirer.audio.broadcast.BroadcastStatusPanel;
 import io.github.dsheirer.gui.theme.ThemeManager;
 import io.github.dsheirer.preference.swing.SplitPaneDividerMonitor;
+import io.github.dsheirer.spectrum.WaterfallColorModel;
 import io.github.dsheirer.audio.playback.AudioPlaybackManager;
 import io.github.dsheirer.controller.ControllerPanel;
 import io.github.dsheirer.controller.channel.Channel;
@@ -632,6 +633,7 @@ public class SDRTrunk implements Listener<TunerEvent>
         viewMenu.add(new ResourceStatusVisibleMenuItem());
         viewMenu.add(new JSeparator());
         viewMenu.add(ThemeManager.buildAppearanceMenu());
+        viewMenu.add(buildWaterfallPaletteMenu());
 
         menuBar.add(viewMenu);
 
@@ -703,6 +705,26 @@ public class SDRTrunk implements Listener<TunerEvent>
     /**
      * Lazy constructor for broadcast status panel
      */
+    /**
+     * Builds the View menu submenu for selecting the waterfall color palette.
+     */
+    private JMenu buildWaterfallPaletteMenu()
+    {
+        JMenu menu = new JMenu("Waterfall Palette");
+        javax.swing.ButtonGroup group = new javax.swing.ButtonGroup();
+
+        for(WaterfallColorModel.Palette palette : WaterfallColorModel.Palette.values())
+        {
+            javax.swing.JRadioButtonMenuItem item =
+                new javax.swing.JRadioButtonMenuItem(palette.getLabel(), palette == WaterfallColorModel.getPalette());
+            item.addActionListener(e -> WaterfallColorModel.setPalette(palette));
+            group.add(item);
+            menu.add(item);
+        }
+
+        return menu;
+    }
+
     /**
      * Themed foreground color for menu icons so they remain visible on dark themes.
      */
