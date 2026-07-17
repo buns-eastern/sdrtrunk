@@ -102,7 +102,6 @@ public class NowPlayingPanel extends JPanel
             mTabbedPane.addTab("Messages", mMessageActivityPanel);
             mTabbedPane.addTab("Channel", mChannelSpectrumSquelchPanel);
             mTabbedPane.setFont(this.getFont());
-            mTabbedPane.setForeground(Color.BLACK);
             //Register state change listener to toggle visibility state for channel tab to turn-on/off FFT processing
             mTabbedPane.addChangeListener(e -> mChannelSpectrumSquelchPanel.setPanelVisible(getTabbedPane().getSelectedIndex() == getTabbedPane()
                     .indexOfComponent(mChannelSpectrumSquelchPanel)));
