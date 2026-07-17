@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,64 @@
  * ****************************************************************************
  */
 
+/* Dark theme for the JavaFX channel views (squelch + symbol constellation) so they match the always-dark
+   spectrum scope beside them. Overriding Modena's base colors makes all controls derive dark automatically. */
+.root {
+    -fx-base: #3c3f43;
+    -fx-background: #1e1f22;
+    -fx-control-inner-background: #2b2d31;
+    -fx-control-inner-background-alt: #303338;
+    -fx-accent: #4a90d9;
+    -fx-default-button: #4a90d9;
+    -fx-focus-color: #4a90d9;
+    -fx-faint-focus-color: #4a90d922;
+    -fx-text-fill: #d6d6d6;
+}
+
+.label {
+    -fx-text-fill: #d6d6d6;
+}
+
+/* Charts */
+.chart {
+    -fx-background-color: transparent;
+}
+
+.chart-plot-background {
+    -fx-background-color: #101114;
+}
+
+.chart-legend {
+    -fx-background-color: transparent;
+}
+
+.chart-legend-item {
+    -fx-text-fill: #cfcfcf;
+}
+
+.chart-title {
+    -fx-text-fill: #e0e0e0;
+}
+
+.axis {
+    -fx-tick-label-fill: #a8adb5;
+}
+
+.axis-label {
+    -fx-text-fill: #cfcfcf;
+}
+
+.chart-vertical-grid-lines {
+    -fx-stroke: #2c2f34;
+}
+
+.chart-horizontal-grid-lines {
+    -fx-stroke: #2c2f34;
+}
+
+/* Symbol constellation dots: light on the dark plot background */
 .chart-symbol {
-    -fx-background-color: #000000FF;
+    -fx-background-color: #d0d0d0;
     -fx-background-radius: 2px;
     -fx-padding: 1px;
 }

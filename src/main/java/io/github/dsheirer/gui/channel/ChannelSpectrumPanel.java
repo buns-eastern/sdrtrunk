@@ -227,13 +227,17 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
 
         //Spin noise squelch panel construction off onto the JavafX UI thread.
         Platform.runLater(() -> {
-            Scene scene = new Scene(mNoiseSquelchView);
-            mNoiseSquelchPanel.setScene(scene);
-            Scene scene2 = new Scene(mSymbolView);
             URL resource = getClass().getResource("/sdrtrunk_style.css");
+            javafx.scene.paint.Color darkFill = javafx.scene.paint.Color.web("#1e1f22");
+
+            Scene scene = new Scene(mNoiseSquelchView);
+            scene.setFill(darkFill);
+            Scene scene2 = new Scene(mSymbolView);
+            scene2.setFill(darkFill);
 
             if(resource != null)
             {
+                scene.getStylesheets().add(resource.toExternalForm());
                 scene2.getStylesheets().add(resource.toExternalForm());
             }
             else
@@ -241,6 +245,7 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
                 LOGGER.warn("Can't find stylesheet resource for sdrtrunk");
             }
 
+            mNoiseSquelchPanel.setScene(scene);
             mSymbolPanel.setScene(scene2);
         });
 

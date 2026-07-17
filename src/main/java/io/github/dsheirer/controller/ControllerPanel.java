@@ -100,7 +100,6 @@ public class ControllerPanel extends JPanel
             }
         };
         mTabbedPane.setFont(this.getFont());
-        mTabbedPane.setForeground(javax.swing.UIManager.getColor("TabbedPane.foreground"));
         mTabbedPane.addTab("Now Playing", mNowPlayingPanel);
         mTabbedPane.addTab("Map", mMapPanel);
         mTabbedPane.addTab("Tuners", mTunerManagerPanel);
