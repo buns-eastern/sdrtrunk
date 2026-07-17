@@ -78,7 +78,7 @@ public class AudioChannelPanel extends JPanel implements Listener<AudioEvent>, S
     private List<Alias> mAliases = Collections.EMPTY_LIST;
     private final Lock mLock = new ReentrantLock();
 
-    private final Font mFont = new Font(Font.MONOSPACED, Font.PLAIN, 16);
+    private final Font mFont = new Font(Font.SANS_SERIF, Font.BOLD, 16);
     private final Color mBackgroundColor;
     private final Color mLabelColor;
     private final Color mMutedColor;
