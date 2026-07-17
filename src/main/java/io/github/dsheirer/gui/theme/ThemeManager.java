@@ -164,6 +164,22 @@ public class ThemeManager
     /**
      * Indicates whether the current theme is a dark theme (used to theme the JavaFX channel views).
      */
+    /**
+     * Muted/secondary text color hex for inline JavaFX styles, brightened on dark themes.
+     */
+    public static String mutedTextColor()
+    {
+        return isDarkTheme() ? "#9aa1ab" : "#555555";
+    }
+
+    /**
+     * Section-heading text color hex for inline JavaFX styles, brightened on dark themes.
+     */
+    public static String headingTextColor()
+    {
+        return isDarkTheme() ? "#6ca8dc" : "#1a5276";
+    }
+
     public static boolean isDarkTheme()
     {
         if(sPreferences == null)

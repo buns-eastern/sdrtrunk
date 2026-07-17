@@ -461,7 +461,7 @@ public class AliasConfigurationEditor extends SplitPane implements IAliasListRef
 
             TableColumn<Alias, Boolean> streamColumn = new TableColumn("Stream");
             streamColumn.setCellValueFactory(new PropertyValueFactory<>("streamable"));
-            streamColumn.setCellFactory(new IconCell(FontAwesome.VOLUME_UP, Color.DARKBLUE));
+            streamColumn.setCellFactory(new IconCell(FontAwesome.VOLUME_UP, io.github.dsheirer.gui.theme.ThemeManager.isDarkTheme() ? Color.web("#5a9fe0") : Color.DARKBLUE));
 
             TableColumn<Alias, Integer> idsColumn = new TableColumn("IDs");
             idsColumn.setCellValueFactory(new IdentifierCountCell());
