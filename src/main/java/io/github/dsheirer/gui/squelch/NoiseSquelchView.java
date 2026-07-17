@@ -850,7 +850,8 @@ public class NoiseSquelchView extends ChannelView implements Listener<NoiseSquel
             mActivityChart.setCreateSymbols(false); //Turn off data point markers
             mActivityChart.setMaxHeight(Double.MAX_VALUE);
             mActivityChart.setMaxWidth(Double.MAX_VALUE);
-            mActivityChart.lookup(".chart-plot-background").setStyle("-fx-background-color: black;");
+            String plotBackground = io.github.dsheirer.gui.theme.ThemeManager.isDarkTheme() ? "#101114" : "white";
+            mActivityChart.lookup(".chart-plot-background").setStyle("-fx-background-color: " + plotBackground + ";");
 
             for(int x = 0; x < HISTORY_BUFFER_SIZE; x++)
             {
