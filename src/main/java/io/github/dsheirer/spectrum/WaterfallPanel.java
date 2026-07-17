@@ -59,6 +59,9 @@ public class WaterfallPanel extends JPanel implements DFTResultsListener,
     private int mImageHeight = 700;
     private MemoryImageSource mMemoryImageSource;
     private ColorModel mColorModel = WaterfallColorModel.getDefaultColorModel();
+
+    //Intensity curve (gamma < 1) that lifts weak signals out of the dark low end so they stay visible.
+    private static final byte[] INTENSITY_CURVE = buildIntensityCurve(0.55);
     private Color mColorSpectrumCursor;
     private Image mWaterfallImage;
 
@@ -103,6 +106,23 @@ public class WaterfallPanel extends JPanel implements DFTResultsListener,
 
         mSettingsManager = null;
         mMemoryImageSource = null;
+    }
+
+    /**
+     * Builds a 256-entry intensity lookup table applying a gamma curve so weak signals (low indices) are
+     * brightened relative to the noise floor without washing out strong signals.
+     */
+    private static byte[] buildIntensityCurve(double gamma)
+    {
+        byte[] curve = new byte[256];
+
+        for(int i = 0; i < 256; i++)
+        {
+            int v = (int)Math.round(255.0 * Math.pow(i / 255.0, gamma));
+            curve[i] = (byte)Math.max(0, Math.min(255, v));
+        }
+
+        return curve;
     }
 
     /**
@@ -393,19 +413,8 @@ public class WaterfallPanel extends JPanel implements DFTResultsListener,
         for(int x = 0; x < update.length - 1; x++)
         {
             float value = (average - update[x]) * scale;
-
-            if(value < 0)
-            {
-                newPixels[x] = 0;
-            }
-            else if(value > 255)
-            {
-                newPixels[x] = (byte)255;
-            }
-            else
-            {
-                newPixels[x] = (byte)value;
-            }
+            int index = (value < 0) ? 0 : (value > 255 ? 255 : (int)value);
+            newPixels[x] = INTENSITY_CURVE[index];
         }
 
         //Task the swing event thread to add the new pixels to the pixel array and update the display
