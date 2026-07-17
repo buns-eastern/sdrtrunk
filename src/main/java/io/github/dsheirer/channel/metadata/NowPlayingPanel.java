@@ -27,6 +27,7 @@ import io.github.dsheirer.module.decode.event.DecodeEventPanel;
 import io.github.dsheirer.module.decode.event.MessageActivityPanel;
 import io.github.dsheirer.playlist.PlaylistManager;
 import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.preference.swing.SplitPaneDividerMonitor;
 import io.github.dsheirer.settings.SettingsManager;
 import java.awt.Color;
 import net.miginfocom.swing.MigLayout;
@@ -46,6 +47,8 @@ public class NowPlayingPanel extends JPanel
     private JideTabbedPane mTabbedPane;
     private JideSplitPane mSplitPane;
     private boolean mDetailTabsVisible;
+    private final UserPreferences mUserPreferences;
+    private static final String SPLIT_PANE_KEY = "now.playing.split";
 
     /**
      * GUI panel that combines the currently decoding channels metadata table and viewers for channel details,
@@ -60,6 +63,7 @@ public class NowPlayingPanel extends JPanel
         mChannelMetadataPanel = new ChannelMetadataPanel(playlistManager, iconModel, userPreferences);
         mChannelSpectrumSquelchPanel = new ChannelSpectrumPanel(playlistManager, settingsManager);
         mDetailTabsVisible = detailTabsVisible;
+        mUserPreferences = userPreferences;
 
         init();
     }
@@ -110,6 +114,22 @@ public class NowPlayingPanel extends JPanel
     /**
      * Split pane for channels table and channel details tabs.
      */
+    /**
+     * Stores the current divider location(s) of the Now Playing split pane.  Call at application shutdown.
+     */
+    public void storeDividerLocations()
+    {
+        SplitPaneDividerMonitor.store(mUserPreferences, getSplitPane(), SPLIT_PANE_KEY);
+    }
+
+    /**
+     * Restores previously stored divider location(s).  Call after the frame is displayed on screen.
+     */
+    public void restoreDividerLocations()
+    {
+        SplitPaneDividerMonitor.restore(mUserPreferences, getSplitPane(), SPLIT_PANE_KEY);
+    }
+
     private JideSplitPane getSplitPane()
     {
         if(mSplitPane == null)
