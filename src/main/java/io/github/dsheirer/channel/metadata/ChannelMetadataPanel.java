@@ -134,21 +134,23 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
      */
     private void setColors()
     {
-        mBackgroundColors.put(State.ACTIVE, Color.CYAN);
-        mForegroundColors.put(State.ACTIVE, Color.BLUE);
-        mBackgroundColors.put(State.CALL, Color.BLUE);
-        mForegroundColors.put(State.CALL, Color.YELLOW);
-        mBackgroundColors.put(State.CONTROL, Color.ORANGE);
-        mForegroundColors.put(State.CONTROL, Color.BLUE);
-        mBackgroundColors.put(State.DATA, Color.GREEN);
-        mForegroundColors.put(State.DATA, Color.BLUE);
-        mBackgroundColors.put(State.ENCRYPTED, Color.MAGENTA);
+        //Fixed background/foreground pairs so they read the same in light and dark themes. Hues preserved:
+        //ACTIVE=light blue, CALL=dark blue, CONTROL=yellow (control-channel lock), DATA=green, ENCRYPTED=purple.
+        mBackgroundColors.put(State.ACTIVE, new Color(120, 195, 230));
+        mForegroundColors.put(State.ACTIVE, Color.BLACK);
+        mBackgroundColors.put(State.CALL, new Color(40, 90, 190));
+        mForegroundColors.put(State.CALL, Color.WHITE);
+        mBackgroundColors.put(State.CONTROL, new Color(235, 200, 50));
+        mForegroundColors.put(State.CONTROL, Color.BLACK);
+        mBackgroundColors.put(State.DATA, new Color(120, 195, 120));
+        mForegroundColors.put(State.DATA, Color.BLACK);
+        mBackgroundColors.put(State.ENCRYPTED, new Color(165, 70, 175));
         mForegroundColors.put(State.ENCRYPTED, Color.WHITE);
-        mBackgroundColors.put(State.FADE, Color.LIGHT_GRAY);
-        mForegroundColors.put(State.FADE, Color.DARK_GRAY);
-        mBackgroundColors.put(State.RESET, Color.PINK);
-        mForegroundColors.put(State.RESET, Color.YELLOW);
-        mBackgroundColors.put(State.TEARDOWN, Color.DARK_GRAY);
+        mBackgroundColors.put(State.FADE, new Color(130, 130, 130));
+        mForegroundColors.put(State.FADE, Color.WHITE);
+        mBackgroundColors.put(State.RESET, new Color(225, 140, 165));
+        mForegroundColors.put(State.RESET, Color.BLACK);
+        mBackgroundColors.put(State.TEARDOWN, new Color(80, 80, 80));
         mForegroundColors.put(State.TEARDOWN, Color.WHITE);
     }
 
