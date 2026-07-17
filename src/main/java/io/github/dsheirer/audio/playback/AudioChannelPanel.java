@@ -113,10 +113,10 @@ public class AudioChannelPanel extends JPanel implements Listener<AudioEvent>, S
             mAudioChannel.setIdentifierCollectionListener(new AudioMetadataProcessor());
         }
 
-        mBackgroundColor = SystemProperties.getInstance().get(PROPERTY_COLOR_BACKGROUND, Color.BLACK);
-        mLabelColor = SystemProperties.getInstance().get(PROPERTY_COLOR_LABEL, Color.LIGHT_GRAY);
+        mBackgroundColor = SystemProperties.getInstance().get(PROPERTY_COLOR_BACKGROUND, themeColor("Panel.background", Color.BLACK));
+        mLabelColor = SystemProperties.getInstance().get(PROPERTY_COLOR_LABEL, themeColor("Label.foreground", Color.LIGHT_GRAY));
         mMutedColor = SystemProperties.getInstance().get(PROPERTY_COLOR_MUTED, Color.RED);
-        mValueColor = SystemProperties.getInstance().get(PROPERTY_COLOR_VALUE, Color.GREEN);
+        mValueColor = SystemProperties.getInstance().get(PROPERTY_COLOR_VALUE, themeColor("Component.accentColor", new Color(60, 170, 180)));
 
         init();
     }
@@ -172,6 +172,15 @@ public class AudioChannelPanel extends JPanel implements Listener<AudioEvent>, S
         mIdentifierLabel.setFont(mFont);
         mIdentifierLabel.setForeground(mValueColor);
         add(mIdentifierLabel, "wmin 10lp");
+    }
+
+    /**
+     * Theme-derived color for the audio bar, falling back to the supplied color if the theme key is unset.
+     */
+    private static Color themeColor(String key, Color fallback)
+    {
+        Color color = javax.swing.UIManager.getColor(key);
+        return (color != null) ? color : fallback;
     }
 
     @Override
