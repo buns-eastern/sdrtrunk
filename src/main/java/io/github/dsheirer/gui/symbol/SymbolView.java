@@ -112,7 +112,7 @@ public class SymbolView extends ChannelView implements Listener<Float>
         fairZone.setFill(Color.web(COLOR_FAIR));
         Rectangle goodZone = new Rectangle(QUALITY_BAR_WIDTH * 0.75, 3, QUALITY_BAR_WIDTH * 0.25, QUALITY_BAR_HEIGHT);
         goodZone.setFill(Color.web(COLOR_GOOD));
-        mQualityMarker.setFill(Color.web("#333333"));
+        mQualityMarker.setFill(Color.web(io.github.dsheirer.gui.theme.ThemeManager.isDarkTheme() ? "#f5f5f5" : "#222222"));
         mQualityMarker.setVisible(false);
 
         Pane barPane = new Pane(poorZone, fairZone, goodZone, mQualityMarker);
