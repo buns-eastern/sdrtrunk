@@ -364,15 +364,14 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
             interval = 5;
         }
 
-        //Bright, semi-transparent white grid lines so they are easy to trace across the black spectrum.
-        Color gridColor = new Color(255, 255, 255, 105);
-
-        //High-contrast label color so the dBFS numbers stay legible: near-white on a dark spectrum
-        //background, near-black on a light one.
+        //Grid lines and dBFS labels adapt to the spectrum background luminance so they stay easy to read and
+        //traceable across to the signal on both dark and light spectrum palettes.
         double bgLuminance = (0.299 * mColorSpectrumBackground.getRed())
             + (0.587 * mColorSpectrumBackground.getGreen())
             + (0.114 * mColorSpectrumBackground.getBlue());
-        Color labelColor = (bgLuminance < 128) ? new Color(235, 235, 235) : new Color(20, 20, 20);
+        boolean darkBackground = bgLuminance < 128;
+        Color gridColor = darkBackground ? new Color(255, 255, 255, 110) : new Color(35, 35, 35, 120);
+        Color labelColor = darkBackground ? new Color(235, 235, 235) : new Color(20, 20, 20);
 
         for(int db = interval; db < mDBScale; db += interval)
         {

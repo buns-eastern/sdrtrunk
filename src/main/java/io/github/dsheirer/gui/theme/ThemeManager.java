@@ -27,6 +27,8 @@ import com.formdev.flatlaf.intellijthemes.FlatDraculaIJTheme;
 import com.formdev.flatlaf.intellijthemes.FlatNordIJTheme;
 import com.formdev.flatlaf.intellijthemes.FlatOneDarkIJTheme;
 import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.settings.ColorSetting.ColorSettingName;
+import io.github.dsheirer.settings.SettingsManager;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -75,6 +77,7 @@ public class ThemeManager
     private static final int[] FONT_SIZES = {11, 12, 13, 14, 16, 18};
 
     private static UserPreferences sPreferences;
+    private static SettingsManager sSettingsManager;
 
     private ThemeManager()
     {
@@ -223,6 +226,65 @@ public class ThemeManager
     {
         apply();
         FlatLaf.updateUI();
+        applySpectrumColors();
+    }
+
+    /**
+     * Registers the settings manager and applies the current theme's spectrum palette. Called after the
+     * settings manager is created at startup.
+     */
+    public static void setSettingsManager(SettingsManager settingsManager)
+    {
+        sSettingsManager = settingsManager;
+        applySpectrumColors();
+    }
+
+    /**
+     * Drives the FFT spectrum background, gradient, line and cursor colors from the active theme so the scope
+     * matches. Translucency is applied per-setting by the ColorSetting, so only RGB is provided here.
+     */
+    private static void applySpectrumColors()
+    {
+        if(sSettingsManager == null)
+        {
+            return;
+        }
+
+        Color[] p = spectrumPalette(theme());
+        sSettingsManager.setColorSetting(ColorSettingName.SPECTRUM_BACKGROUND, p[0]);
+        sSettingsManager.setColorSetting(ColorSettingName.SPECTRUM_GRADIENT_TOP, p[1]);
+        sSettingsManager.setColorSetting(ColorSettingName.SPECTRUM_GRADIENT_BOTTOM, p[2]);
+        sSettingsManager.setColorSetting(ColorSettingName.SPECTRUM_LINE, p[3]);
+        sSettingsManager.setColorSetting(ColorSettingName.SPECTRUM_CURSOR, p[4]);
+    }
+
+    //Per-theme spectrum palette: {background, gradientTop, gradientBottom, line, cursor}
+    private static Color[] spectrumPalette(String key)
+    {
+        if(key == null)
+        {
+            key = THEME_DEFAULT;
+        }
+
+        switch(key)
+        {
+            case THEME_ONE_DARK:
+                return new Color[]{new Color(34, 37, 43), new Color(200, 220, 226), new Color(86, 182, 194),
+                    new Color(150, 158, 170), new Color(229, 192, 123)};
+            case THEME_DRACULA:
+                return new Color[]{new Color(25, 26, 36), new Color(248, 248, 242), new Color(125, 95, 209),
+                    new Color(162, 166, 198), new Color(255, 184, 108)};
+            case THEME_NORD:
+                return new Color[]{new Color(34, 39, 49), new Color(230, 237, 244), new Color(94, 145, 168),
+                    new Color(150, 161, 182), new Color(235, 203, 139)};
+            case THEME_LIGHT:
+                return new Color[]{new Color(251, 251, 251), new Color(20, 90, 170), new Color(70, 140, 210),
+                    new Color(70, 70, 70), new Color(208, 96, 0)};
+            case THEME_ARC_DARK:
+            default:
+                return new Color[]{new Color(21, 23, 28), new Color(207, 234, 241), new Color(47, 159, 179),
+                    new Color(150, 158, 170), new Color(229, 192, 123)};
+        }
     }
 
     public static void setTheme(String theme)
