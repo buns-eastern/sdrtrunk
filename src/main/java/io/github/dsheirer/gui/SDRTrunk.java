@@ -25,6 +25,7 @@ import io.github.dsheirer.audio.DuplicateCallDetector;
 import io.github.dsheirer.audio.broadcast.AudioStreamingManager;
 import io.github.dsheirer.audio.broadcast.BroadcastFormat;
 import io.github.dsheirer.audio.broadcast.BroadcastStatusPanel;
+import io.github.dsheirer.gui.theme.ThemeManager;
 import io.github.dsheirer.preference.swing.SplitPaneDividerMonitor;
 import io.github.dsheirer.audio.playback.AudioPlaybackManager;
 import io.github.dsheirer.controller.ControllerPanel;
@@ -204,20 +205,8 @@ public class SDRTrunk implements Listener<TunerEvent>
 
         mResourceMonitor = new ResourceMonitor(mUserPreferences);
 
-        String operatingSystem = System.getProperty("os.name", "generic").toLowerCase(Locale.ENGLISH);
-
-        if(operatingSystem.contains("mac") || operatingSystem.contains("nux"))
-        {
-            try
-            {
-                UIManager.setLookAndFeel(MetalLookAndFeel.class.getName());
-                LookAndFeelFactory.installJideExtension();
-            }
-            catch(Exception e)
-            {
-                mLog.error("Error trying to set Metal look and feel for OS [" + operatingSystem + "]");
-            }
-        }
+        //Apply the FlatLaf look and feel plus the user's theme/font preferences (all platforms)
+        ThemeManager.initialize(mUserPreferences);
 
         ThreadPool.logSettings();
 
@@ -640,6 +629,8 @@ public class SDRTrunk implements Listener<TunerEvent>
         viewMenu.add(new NowPlayingChannelDetailsVisibleMenuItem());
         viewMenu.add(new BroadcastStatusVisibleMenuItem());
         viewMenu.add(new ResourceStatusVisibleMenuItem());
+        viewMenu.add(new JSeparator());
+        viewMenu.add(ThemeManager.buildAppearanceMenu());
 
         menuBar.add(viewMenu);
 

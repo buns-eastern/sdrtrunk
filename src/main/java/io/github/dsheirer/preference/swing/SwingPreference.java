@@ -69,6 +69,22 @@ public class SwingPreference
     }
 
     /**
+     * Retrieves a stored string preference.
+     */
+    public String getString(String key, String defaultValue)
+    {
+        return mPreferences.get(key, defaultValue);
+    }
+
+    /**
+     * Stores a string preference.
+     */
+    public void setString(String key, String value)
+    {
+        mPreferences.put(key, value);
+    }
+
+    /**
      * Returns the persisted window location for the specified preference key.
      * @param key identifying the window
      * @return location or null
