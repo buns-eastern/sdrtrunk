@@ -124,6 +124,8 @@ public class BroadcastStatusPanel extends JPanel
      */
     public class StatusCellRenderer extends DefaultTableCellRenderer
     {
+        private static final String[] PILL_REFERENCE_LABELS =
+            {"Connected", "Connecting", "Disconnected", "Disabled", "No Server", "Ready", "Error"};
         private Color mCellBackground = Color.BLACK;
         private Color mPillColor = null;
 
@@ -182,7 +184,15 @@ public class BroadcastStatusPanel extends JPanel
             if(mPillColor != null)
             {
                 FontMetrics fm = g2.getFontMetrics(getFont());
-                int pillWidth = Math.min(fm.stringWidth(getText()) + 20, getWidth() - 4);
+
+                //Uniform pill width sized to the common short statuses; a rare long status expands to fit.
+                int uniform = 0;
+                for(String reference : PILL_REFERENCE_LABELS)
+                {
+                    uniform = Math.max(uniform, fm.stringWidth(reference));
+                }
+
+                int pillWidth = Math.min(Math.max(uniform, fm.stringWidth(getText())) + 20, getWidth() - 4);
                 int pillHeight = Math.min(fm.getHeight() + 5, getHeight() - 4);
                 int x = (getWidth() - pillWidth) / 2;
                 int y = (getHeight() - pillHeight) / 2;
