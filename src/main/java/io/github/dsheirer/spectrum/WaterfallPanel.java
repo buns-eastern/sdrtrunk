@@ -61,7 +61,7 @@ public class WaterfallPanel extends JPanel implements DFTResultsListener,
     private ColorModel mColorModel = WaterfallColorModel.getDefaultColorModel();
 
     //Intensity curve (gamma < 1) that lifts weak signals out of the dark low end so they stay visible.
-    private static final byte[] INTENSITY_CURVE = buildIntensityCurve(0.55);
+    private static final byte[] INTENSITY_CURVE = buildIntensityCurve(0.48);
     private Color mColorSpectrumCursor;
     private Image mWaterfallImage;
 
