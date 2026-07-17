@@ -20,25 +20,29 @@
 
 package io.github.dsheirer.gui.theme;
 
-import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.intellijthemes.FlatArcDarkIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatDraculaIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatNordIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatOneDarkIJTheme;
 import io.github.dsheirer.preference.UserPreferences;
 import java.awt.Dimension;
 import java.awt.Font;
 import javax.swing.ButtonGroup;
 import javax.swing.JMenu;
 import javax.swing.JRadioButtonMenuItem;
+import javax.swing.LookAndFeel;
 import javax.swing.UIManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Manages the application look and feel (FlatLaf light/dark theme) and the base UI font (family and size),
- * persisting the user's choices to preferences and applying them at startup or live from the View menu.
+ * Manages the application look and feel (FlatLaf themes) and the base UI font (family and size), persisting the
+ * user's choices to preferences and applying them at startup or live from the View menu.
  *
- * Note: this is an experimental appearance layer.  The custom-painted spectrum/symbol displays draw their own
- * colors via the SettingsManager and are unaffected.
+ * Note: the custom-painted spectrum/symbol displays draw their own colors via the SettingsManager and are
+ * unaffected by these themes.
  */
 public class ThemeManager
 {
@@ -48,9 +52,23 @@ public class ThemeManager
     public static final String FONT_FAMILY_KEY = "application.appearance.font.family";
     public static final String FONT_SIZE_KEY = "application.appearance.font.size";
 
+    public static final String THEME_ARC_DARK = "arc-dark";
+    public static final String THEME_ONE_DARK = "one-dark";
+    public static final String THEME_DRACULA = "dracula";
+    public static final String THEME_NORD = "nord";
     public static final String THEME_LIGHT = "light";
-    public static final String THEME_DARK = "dark";
+    public static final String THEME_DEFAULT = THEME_ARC_DARK;
+
     public static final String FONT_DEFAULT = "default";
+
+    //Theme key and display label, in menu order.
+    private static final String[][] THEMES = {
+        {THEME_ARC_DARK, "Arc Dark"},
+        {THEME_ONE_DARK, "One Dark"},
+        {THEME_DRACULA, "Dracula"},
+        {THEME_NORD, "Nord"},
+        {THEME_LIGHT, "Light"}
+    };
 
     private static final String[] FONT_FAMILIES = {"SansSerif", "Serif", "Monospaced", "Dialog"};
     private static final int[] FONT_SIZES = {11, 12, 13, 14, 16, 18};
@@ -73,7 +91,7 @@ public class ThemeManager
 
     private static String theme()
     {
-        return sPreferences.getSwingPreference().getString(THEME_KEY, THEME_LIGHT);
+        return sPreferences.getSwingPreference().getString(THEME_KEY, THEME_DEFAULT);
     }
 
     private static String fontFamily()
@@ -87,20 +105,39 @@ public class ThemeManager
     }
 
     /**
-     * Applies the stored look and feel, base font and JIDE component styling.
+     * Creates the look and feel instance for the specified theme key, defaulting to Arc Dark.
+     */
+    private static LookAndFeel createLookAndFeel(String key)
+    {
+        if(key == null)
+        {
+            key = THEME_DEFAULT;
+        }
+
+        switch(key)
+        {
+            case THEME_ONE_DARK:
+                return new FlatOneDarkIJTheme();
+            case THEME_DRACULA:
+                return new FlatDraculaIJTheme();
+            case THEME_NORD:
+                return new FlatNordIJTheme();
+            case THEME_LIGHT:
+                return new FlatLightLaf();
+            case THEME_ARC_DARK:
+            default:
+                return new FlatArcDarkIJTheme();
+        }
+    }
+
+    /**
+     * Applies the stored look and feel, table styling and base font.
      */
     public static void apply()
     {
         try
         {
-            if(THEME_DARK.equalsIgnoreCase(theme()))
-            {
-                UIManager.setLookAndFeel(new FlatDarkLaf());
-            }
-            else
-            {
-                UIManager.setLookAndFeel(new FlatLightLaf());
-            }
+            UIManager.setLookAndFeel(createLookAndFeel(theme()));
 
             //Restore spreadsheet-style table grid lines (FlatLaf hides them by default)
             UIManager.put("Table.showHorizontalLines", Boolean.TRUE);
@@ -123,7 +160,6 @@ public class ThemeManager
                 int resolvedSize = (size > 0) ? size : base.getSize();
                 UIManager.put("defaultFont", new Font(resolvedFamily, Font.PLAIN, resolvedSize));
             }
-
         }
         catch(Throwable t)
         {
@@ -169,8 +205,14 @@ public class ThemeManager
 
         JMenu themeMenu = new JMenu("Theme");
         ButtonGroup themeGroup = new ButtonGroup();
-        addRadio(themeMenu, themeGroup, "Light", THEME_LIGHT.equalsIgnoreCase(theme()), () -> setTheme(THEME_LIGHT));
-        addRadio(themeMenu, themeGroup, "Dark", THEME_DARK.equalsIgnoreCase(theme()), () -> setTheme(THEME_DARK));
+        String currentTheme = theme();
+
+        for(String[] entry : THEMES)
+        {
+            final String key = entry[0];
+            addRadio(themeMenu, themeGroup, entry[1], key.equalsIgnoreCase(currentTheme), () -> setTheme(key));
+        }
+
         menu.add(themeMenu);
 
         JMenu familyMenu = new JMenu("Font");
