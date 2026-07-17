@@ -145,24 +145,24 @@ public class BroadcastStatusPanel extends JPanel
 
                     if(state == BroadcastState.CONNECTED)
                     {
-                        setBackground(Color.GREEN);
-                        setForeground(table.getForeground());
+                        setBackground(new Color(46, 125, 50));
+                        setForeground(Color.WHITE);
                     }
                     else if(state == BroadcastState.DISABLED)
                     {
                         setBackground(table.getBackground());
-                        setForeground(Color.LIGHT_GRAY);
+                        setForeground(Color.GRAY);
                     }
                     else if(state == BroadcastState.INVALID_SETTINGS ||
                             state == BroadcastState.NETWORK_UNAVAILABLE)
                     {
-                        setBackground(Color.YELLOW);
-                        setForeground(table.getForeground());
+                        setBackground(new Color(240, 190, 40));
+                        setForeground(Color.BLACK);
                     }
                     else if(state.isErrorState())
                     {
-                        setBackground(Color.RED);
-                        setForeground(table.getForeground());
+                        setBackground(new Color(190, 55, 55));
+                        setForeground(Color.WHITE);
                     }
                     else
                     {
