@@ -27,6 +27,7 @@ import com.formdev.flatlaf.intellijthemes.FlatDraculaIJTheme;
 import com.formdev.flatlaf.intellijthemes.FlatNordIJTheme;
 import com.formdev.flatlaf.intellijthemes.FlatOneDarkIJTheme;
 import io.github.dsheirer.preference.UserPreferences;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import javax.swing.ButtonGroup;
@@ -143,6 +144,17 @@ public class ThemeManager
             UIManager.put("Table.showHorizontalLines", Boolean.TRUE);
             UIManager.put("Table.showVerticalLines", Boolean.TRUE);
             UIManager.put("Table.intercellSpacing", new Dimension(1, 1));
+
+            //FlatLaf's JIDE tab UI colors tab text from these keys (not the component foreground). Point them
+            //at the themed tab foreground so tab labels are readable in every theme, live-switch included.
+            Color tabText = UIManager.getColor("TabbedPane.foreground");
+            if(tabText != null)
+            {
+                UIManager.put("JideTabbedPane.foreground", tabText);
+                UIManager.put("JideTabbedPane.selectedTabTextForeground", tabText);
+                UIManager.put("JideTabbedPane.unselectedTabTextForeground", tabText);
+                UIManager.put("JideTabbedPane.activeTabTextForeground", tabText);
+            }
 
             String family = fontFamily();
             int size = fontSize();

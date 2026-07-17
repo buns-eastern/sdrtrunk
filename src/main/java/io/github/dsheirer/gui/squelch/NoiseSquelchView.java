@@ -544,7 +544,7 @@ public class NoiseSquelchView extends ChannelView implements Listener<NoiseSquel
             mResetButton.setTooltip(new Tooltip("Reset noise and hysteresis to default values"));
             IconNode iconNode = new IconNode(FontAwesome.UNDO);
             iconNode.setIconSize(10);
-            iconNode.setFill(Color.BLACK);
+            iconNode.setFill(Color.web("#c8c8c8"));
             mResetButton.setGraphic(iconNode);
             mResetButton.setOnAction(event -> {
                 setNoiseSliderValues(NoiseSquelch.DEFAULT_NOISE_OPEN_THRESHOLD, NoiseSquelch.DEFAULT_NOISE_CLOSE_THRESHOLD);
