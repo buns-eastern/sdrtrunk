@@ -239,11 +239,32 @@ public class JFrequencyControl extends JPanel implements ISourceEventProcessor
 
             mPower = position;
             setToolTipText(getTooltip(mPower));
+            //Keep each digit tight - FlatLaf text fields otherwise add large padding/min-width that blows up the display
+            setMargin(new java.awt.Insets(0, 0, 0, 0));
             Listener listener = new Listener();
 
             this.addKeyListener(listener);
             this.addMouseListener(listener);
             this.addMouseWheelListener(listener);
+        }
+
+        @Override
+        public java.awt.Dimension getPreferredSize()
+        {
+            java.awt.FontMetrics fm = getFontMetrics(getFont());
+            return new java.awt.Dimension(fm.charWidth('0') + 4, fm.getHeight() + 2);
+        }
+
+        @Override
+        public java.awt.Dimension getMinimumSize()
+        {
+            return getPreferredSize();
+        }
+
+        @Override
+        public java.awt.Dimension getMaximumSize()
+        {
+            return getPreferredSize();
         }
 
         /**

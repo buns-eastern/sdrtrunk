@@ -24,6 +24,7 @@ import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import io.github.dsheirer.preference.UserPreferences;
+import java.awt.Dimension;
 import java.awt.Font;
 import javax.swing.ButtonGroup;
 import javax.swing.JMenu;
@@ -100,6 +101,11 @@ public class ThemeManager
             {
                 UIManager.setLookAndFeel(new FlatLightLaf());
             }
+
+            //Restore spreadsheet-style table grid lines (FlatLaf hides them by default)
+            UIManager.put("Table.showHorizontalLines", Boolean.TRUE);
+            UIManager.put("Table.showVerticalLines", Boolean.TRUE);
+            UIManager.put("Table.intercellSpacing", new Dimension(1, 1));
 
             String family = fontFamily();
             int size = fontSize();
