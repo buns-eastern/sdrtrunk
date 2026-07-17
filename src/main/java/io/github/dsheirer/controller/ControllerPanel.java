@@ -100,11 +100,13 @@ public class ControllerPanel extends JPanel
             }
         };
         mTabbedPane.setFont(this.getFont());
+        mTabbedPane.setForeground(javax.swing.UIManager.getColor("TabbedPane.foreground"));
         mTabbedPane.addTab("Now Playing", mNowPlayingPanel);
         mTabbedPane.addTab("Map", mMapPanel);
         mTabbedPane.addTab("Tuners", mTunerManagerPanel);
 
-        Icon playIcon = IconFontSwing.buildIcon(FontAwesome.PLAY_CIRCLE_O, 20, Color.DARK_GRAY);
+        java.awt.Color tabIconColor = javax.swing.UIManager.getColor("TabbedPane.foreground");
+        Icon playIcon = IconFontSwing.buildIcon(FontAwesome.PLAY_CIRCLE_O, 20, tabIconColor != null ? tabIconColor : Color.GRAY);
         mTabbedPane.addTab("Playlist Editor", playIcon, new JLabel("Show Playlist Manager"));
         mSettingsTabIndex = mTabbedPane.getTabCount() - 1;
 

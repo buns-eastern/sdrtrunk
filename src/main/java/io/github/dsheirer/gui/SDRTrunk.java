@@ -519,14 +519,14 @@ public class SDRTrunk implements Listener<TunerEvent>
         JMenu viewMenu = new JMenu("View");
 
         JMenuItem viewPlaylistItem = new JMenuItem("Playlist Editor");
-        viewPlaylistItem.setIcon(IconFontSwing.buildIcon(FontAwesome.PLAY_CIRCLE_O, 12));
+        viewPlaylistItem.setIcon(IconFontSwing.buildIcon(FontAwesome.PLAY_CIRCLE_O, 12, menuIconColor()));
         viewPlaylistItem.addActionListener(e -> MyEventBus.getGlobalEventBus().post(new ViewPlaylistRequest()));
         viewMenu.add(viewPlaylistItem);
 
         viewMenu.add(new JSeparator());
 
         JMenuItem viewApplicationLogsMenu = new JMenuItem("Application Log Files");
-        viewApplicationLogsMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.FOLDER_OPEN_O, 12));
+        viewApplicationLogsMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.FOLDER_OPEN_O, 12, menuIconColor()));
         viewApplicationLogsMenu.addActionListener(arg0 -> {
             File logsDirectory = mUserPreferences.getDirectoryPreference().getDirectoryApplicationLog().toFile();
             try
@@ -546,7 +546,7 @@ public class SDRTrunk implements Listener<TunerEvent>
         viewMenu.add(viewApplicationLogsMenu);
 
         JMenuItem viewRecordingsMenuItem = new JMenuItem("Audio Recordings");
-        viewRecordingsMenuItem.setIcon(IconFontSwing.buildIcon(FontAwesome.FOLDER_OPEN_O, 12));
+        viewRecordingsMenuItem.setIcon(IconFontSwing.buildIcon(FontAwesome.FOLDER_OPEN_O, 12, menuIconColor()));
         viewRecordingsMenuItem.addActionListener(arg0 -> {
             File recordingsDirectory = mUserPreferences.getDirectoryPreference().getDirectoryRecording().toFile();
 
@@ -568,7 +568,7 @@ public class SDRTrunk implements Listener<TunerEvent>
         viewMenu.add(viewRecordingsMenuItem);
 
         JMenuItem viewEventLogsMenu = new JMenuItem("Channel Event Log Files");
-        viewEventLogsMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.FOLDER_OPEN_O, 12));
+        viewEventLogsMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.FOLDER_OPEN_O, 12, menuIconColor()));
         viewEventLogsMenu.addActionListener(arg0 -> {
             File eventLogsDirectory = mUserPreferences.getDirectoryPreference().getDirectoryEventLog().toFile();
             try
@@ -588,17 +588,17 @@ public class SDRTrunk implements Listener<TunerEvent>
         viewMenu.add(viewEventLogsMenu);
 
         JMenuItem iconManagerMenu = new JMenuItem("Icon Manager");
-        iconManagerMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.PICTURE_O, 12));
+        iconManagerMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.PICTURE_O, 12, menuIconColor()));
         iconManagerMenu.addActionListener(arg0 -> MyEventBus.getGlobalEventBus().post(new ViewIconManagerRequest()));
         viewMenu.add(iconManagerMenu);
 
         JMenuItem recordingViewerMenu = new JMenuItem("Message Recording Viewer (.bits)");
-        recordingViewerMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.BRAILLE, 12));
+        recordingViewerMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.BRAILLE, 12, menuIconColor()));
         recordingViewerMenu.addActionListener(e -> MyEventBus.getGlobalEventBus().post(new ViewRecordingViewerRequest()));
         viewMenu.add(recordingViewerMenu);
 
         JMenuItem viewScreenCapturesMenu = new JMenuItem("Screen Captures");
-        viewScreenCapturesMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.FOLDER_OPEN_O, 12));
+        viewScreenCapturesMenu.setIcon(IconFontSwing.buildIcon(FontAwesome.FOLDER_OPEN_O, 12, menuIconColor()));
         viewScreenCapturesMenu.addActionListener(arg0 -> {
             File screenCapturesDirectory = mUserPreferences.getDirectoryPreference().getDirectoryScreenCapture().toFile();
             try
@@ -618,7 +618,7 @@ public class SDRTrunk implements Listener<TunerEvent>
         viewMenu.add(viewScreenCapturesMenu);
 
         JMenuItem preferencesItem = new JMenuItem("User Preferences");
-        preferencesItem.setIcon(IconFontSwing.buildIcon(FontAwesome.COG, 12));
+        preferencesItem.setIcon(IconFontSwing.buildIcon(FontAwesome.COG, 12, menuIconColor()));
         preferencesItem.addActionListener(e -> MyEventBus.getGlobalEventBus().post(new ViewUserPreferenceEditorRequest()));
         viewMenu.add(preferencesItem);
 
@@ -635,7 +635,7 @@ public class SDRTrunk implements Listener<TunerEvent>
         menuBar.add(viewMenu);
 
         JMenuItem screenCaptureItem = new JMenuItem("Screen Capture");
-        screenCaptureItem.setIcon(IconFontSwing.buildIcon(FontAwesome.CAMERA, 12));
+        screenCaptureItem.setIcon(IconFontSwing.buildIcon(FontAwesome.CAMERA, 12, menuIconColor()));
         screenCaptureItem.setMnemonic(KeyEvent.VK_C);
         screenCaptureItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_C, ActionEvent.ALT_MASK));
         screenCaptureItem.setMaximumSize(screenCaptureItem.getPreferredSize());
@@ -702,6 +702,15 @@ public class SDRTrunk implements Listener<TunerEvent>
     /**
      * Lazy constructor for broadcast status panel
      */
+    /**
+     * Themed foreground color for menu icons so they remain visible on dark themes.
+     */
+    private static java.awt.Color menuIconColor()
+    {
+        java.awt.Color color = UIManager.getColor("MenuItem.foreground");
+        return (color != null) ? color : java.awt.Color.LIGHT_GRAY;
+    }
+
     private BroadcastStatusPanel getBroadcastStatusPanel()
     {
         if(mBroadcastStatusPanel == null)
