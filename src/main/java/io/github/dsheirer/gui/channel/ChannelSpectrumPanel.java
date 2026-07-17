@@ -41,7 +41,6 @@ import io.github.dsheirer.source.tuner.channel.TunerChannel;
 import io.github.dsheirer.source.tuner.channel.TunerChannelSource;
 import io.github.dsheirer.spectrum.ComplexDftProcessor;
 import io.github.dsheirer.spectrum.FrequencyOverlayPanel;
-import io.github.dsheirer.spectrum.DFTResultsListener;
 import io.github.dsheirer.spectrum.SpectrumPanel;
 import io.github.dsheirer.spectrum.converter.ComplexDecibelConverter;
 import io.github.dsheirer.spectrum.converter.DFTResultsConverter;
@@ -79,9 +78,6 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
     private static final DecimalFormat FREQUENCY_FORMAT = new DecimalFormat("0.00000");
     private static final DecimalFormat PPM_FORMAT = new DecimalFormat("0.00000");
     private static final String LABEL_PREFIX_PPM = "Tuner PPM: ";
-    private static final String LABEL_PREFIX_PEAK = "Peak: ";
-    private static final String PEAK_EMPTY = "--- dBFS";
-    private static final DecimalFormat PEAK_FORMAT = new DecimalFormat("0.0");
     private static final String LABEL_PREFIX_TUNER = "Tuner:";
     private static final String LABEL_PREFIX_CHANNEL = "Channel:";
     private static final String LABEL_PREFIX_DECODER = "Decoder:";
@@ -97,8 +93,6 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
     private final JLabel mTunerCorrectionLabel;
     private final JLabel mChannelCorrectionLabel;
     private final JLabel mDecoderCorrectionLabel;
-    private final JLabel mPeakLabel;
-    private long mLastPeakUpdate = 0;
     private final JLabel mDummyLabel = new JLabel(" ");
     private boolean mPanelVisible = false;
     private boolean mDftProcessing = false;
@@ -124,7 +118,7 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
         fftPanel.setLayout(new MigLayout("insets 0", "[grow,fill]", "[][grow,fill]"));
 
         JPanel labelPanel = new JPanel();
-        labelPanel.setLayout(new MigLayout("insets 2", "[grow,fill][][][][][grow,fill][][][]", ""));
+        labelPanel.setLayout(new MigLayout("insets 2", "[grow,fill][][][][][grow,fill][][]", ""));
 
         mTunerPPMLabel = new JLabel(LABEL_PREFIX_PPM);
         mTunerPPMLabel.setEnabled(false);
@@ -154,10 +148,6 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
         JSpinner noiseFloorSpinner = new JSpinner(mNoiseFloorSpinnerModel);
         labelPanel.add(new JLabel("Noise Floor:"));
         labelPanel.add(noiseFloorSpinner);
-
-        mPeakLabel = new JLabel(LABEL_PREFIX_PEAK + PEAK_EMPTY);
-        mPeakLabel.setToolTipText("Peak (maximum) signal amplitude in the channel spectrum, in relative dBFS. Watch it rise or fall as you adjust the tuner or antenna; compare against the dBFS grid to gauge the noise floor.");
-        labelPanel.add(mPeakLabel, "gapleft 12");
 
         JButton logIndexesButton = new JButton("Log Settings");
         logIndexesButton.addActionListener(e -> {
@@ -264,7 +254,6 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
         DFTResultsConverter DFTResultsConverter = new ComplexDecibelConverter();
         mComplexDftProcessor.addConverter(DFTResultsConverter);
         DFTResultsConverter.addListener(mSpectrumPanel);
-        DFTResultsConverter.addListener(new PeakLevelMonitor());
         mSpectrumPanel.clearSpectrum();
     }
 
@@ -362,7 +351,6 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
         mChannelCorrectionLabel.setEnabled(false);
         mDecoderCorrectionLabel.setText(LABEL_PREFIX_DECODER);
         mDecoderCorrectionLabel.setEnabled(false);
-        mPeakLabel.setText(LABEL_PREFIX_PEAK + PEAK_EMPTY);
         mFrequencyOverlayPanel.process(SourceEvent.frequencyChange(null, 0));
         mFrequencyOverlayPanel.process(SourceEvent.sampleRateChange(0));
         mFrequencyOverlayPanel.setEstimatedCarrierOffsetFrequency(0);
@@ -497,40 +485,6 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
 
 //TODO: is this still needed?
             mSignalPowerView.receive(sourceEvent);
-        }
-    }
-
-    /**
-     * Listens to the channel spectrum FFT results and reports the peak (maximum) bin amplitude in relative
-     * dBFS. Useful for judging whether a tuner/antenna adjustment raised or lowered the signal, and - read
-     * against the dBFS reference grid - roughly where the noise floor sits. Updates are throttled to ~10/sec.
-     */
-    private class PeakLevelMonitor implements DFTResultsListener
-    {
-        @Override
-        public void receive(float[] currentFFTBins)
-        {
-            //Throttle to ~10 updates/second so we do not flood the Swing event thread at FFT frame rate.
-            long now = System.currentTimeMillis();
-
-            if(now - mLastPeakUpdate < 100)
-            {
-                return;
-            }
-
-            mLastPeakUpdate = now;
-
-            //Read the peak from the spectrum panel (the smoothed/averaged bins that are actually drawn) so the
-            //readout lines up with the trace and the dBFS grid, rather than the raw instantaneous FFT.  The
-            //spectrum panel is registered as a listener before this one, so it has already processed this frame.
-            final float displayPeak = mSpectrumPanel.getPeakDbFS();
-
-            if(Float.isNaN(displayPeak) || Float.isInfinite(displayPeak))
-            {
-                return;
-            }
-
-            EventQueue.invokeLater(() -> mPeakLabel.setText(LABEL_PREFIX_PEAK + PEAK_FORMAT.format(displayPeak) + " dBFS"));
         }
     }
 

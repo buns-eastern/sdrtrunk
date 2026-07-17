@@ -30,6 +30,7 @@ import io.github.dsheirer.settings.Setting;
 import io.github.dsheirer.settings.SettingChangeListener;
 import io.github.dsheirer.settings.SettingsManager;
 import java.awt.Color;
+import java.text.DecimalFormat;
 import java.awt.Dimension;
 import java.awt.GradientPaint;
 import java.awt.Graphics;
@@ -71,6 +72,7 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
     //Current DFT output bins in dB
     private float[] mDisplayFFTBins = new float[1];
     private volatile float mPeakDbFS = 0.0f;
+    private static final DecimalFormat PEAK_FORMAT = new DecimalFormat("0.0");
 
     //Averaging across multiple DFT result sets
     private int mAveraging = 4;
@@ -184,6 +186,30 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
         return mPeakDbFS;
     }
 
+    /**
+     * Draws the peak (maximum) amplitude readout in the top-right corner of the spectrum, over a faint dark
+     * backing so it stays legible against the trace.  Value is relative dBFS and matches the drawn trace.
+     */
+    private void drawPeakReadout(Graphics2D graphics, Dimension size)
+    {
+        String text = (Float.isFinite(mPeakDbFS) && mPeakDbFS < 0.0f)
+            ? "Peak: " + PEAK_FORMAT.format(mPeakDbFS) + " dBFS"
+            : "Peak: --- dBFS";
+
+        java.awt.FontMetrics fm = graphics.getFontMetrics();
+        int textWidth = fm.stringWidth(text);
+        int ascent = fm.getAscent();
+        int pad = 4;
+        int x = size.width - textWidth - pad - 4;
+        int y = pad + ascent;
+
+        graphics.setColor(new Color(0, 0, 0, 120));
+        graphics.fillRect(x - pad, y - ascent - 1, textWidth + (pad * 2), ascent + 5);
+
+        graphics.setColor(new Color(93, 202, 165));
+        graphics.drawString(text, x, y + 1);
+    }
+
     @Override
     public void paintComponent(Graphics g)
     {
@@ -294,6 +320,7 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
         if(mShowDbReference)
         {
             drawDbReference(graphics, size);
+            drawPeakReadout(graphics, size);
         }
     }
 
@@ -330,8 +357,8 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
             interval = 5;
         }
 
-        Color gridColor = new Color(mColorSpectrumLine.getRed(), mColorSpectrumLine.getGreen(),
-            mColorSpectrumLine.getBlue(), 64);
+        //Bright, semi-transparent white grid lines so they are easy to trace across the black spectrum.
+        Color gridColor = new Color(255, 255, 255, 105);
 
         //High-contrast label color so the dBFS numbers stay legible: near-white on a dark spectrum
         //background, near-black on a light one.
