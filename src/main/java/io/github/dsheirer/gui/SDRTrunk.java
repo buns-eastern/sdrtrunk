@@ -25,6 +25,7 @@ import io.github.dsheirer.audio.DuplicateCallDetector;
 import io.github.dsheirer.audio.broadcast.AudioStreamingManager;
 import io.github.dsheirer.audio.broadcast.BroadcastFormat;
 import io.github.dsheirer.audio.broadcast.BroadcastStatusPanel;
+import io.github.dsheirer.preference.swing.SplitPaneDividerMonitor;
 import io.github.dsheirer.audio.playback.AudioPlaybackManager;
 import io.github.dsheirer.controller.ControllerPanel;
 import io.github.dsheirer.controller.channel.Channel;
@@ -123,6 +124,7 @@ public class SDRTrunk implements Listener<TunerEvent>
     private static final String CONTROLLER_PANEL_IDENTIFIER = BASE_WINDOW_NAME + ".control.panel";
     private static final String SPECTRAL_PANEL_IDENTIFIER = BASE_WINDOW_NAME + ".spectral.panel";
     private static final String WINDOW_FRAME_IDENTIFIER = BASE_WINDOW_NAME + ".frame";
+    private static final String MAIN_SPLIT_PANE_IDENTIFIER = BASE_WINDOW_NAME + ".mainsplit";
 
     private boolean mBroadcastStatusVisible;
     private boolean mResourceStatusVisible;
@@ -309,6 +311,12 @@ public class SDRTrunk implements Listener<TunerEvent>
                 if(!GraphicsEnvironment.isHeadless())
                 {
                     mMainGui.setVisible(true);
+
+                    //Restore split pane divider locations after the frame is displayed and laid out
+                    EventQueue.invokeLater(() -> {
+                        SplitPaneDividerMonitor.restore(mUserPreferences, mSplitPane, MAIN_SPLIT_PANE_IDENTIFIER);
+                        mControllerPanel.getNowPlayingPanel().restoreDividerLocations();
+                    });
                     Tuner tuner = tunerSpectralDisplayManager.showFirstTuner();
 
                     if(tuner != null)
@@ -684,6 +692,8 @@ public class SDRTrunk implements Listener<TunerEvent>
             (mMainGui.getExtendedState() & JFrame.MAXIMIZED_BOTH) == JFrame.MAXIMIZED_BOTH);
         mUserPreferences.getSwingPreference().setDimension(SPECTRAL_PANEL_IDENTIFIER, mSpectralPanel.getSize());
         mUserPreferences.getSwingPreference().setDimension(CONTROLLER_PANEL_IDENTIFIER, mControllerPanel.getSize());
+        SplitPaneDividerMonitor.store(mUserPreferences, mSplitPane, MAIN_SPLIT_PANE_IDENTIFIER);
+        mControllerPanel.getNowPlayingPanel().storeDividerLocations();
         mJavaFxWindowManager.shutdown();
         mLog.info("Stopping channels ...");
         mPlaylistManager.getChannelProcessingManager().shutdown();
