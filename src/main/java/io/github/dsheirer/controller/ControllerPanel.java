@@ -100,6 +100,7 @@ public class ControllerPanel extends JPanel
             }
         };
         mTabbedPane.setFont(this.getFont());
+        mTabbedPane.setBoldActiveTab(true);
         mTabbedPane.addTab("Now Playing", mNowPlayingPanel);
         mTabbedPane.addTab("Map", mMapPanel);
         mTabbedPane.addTab("Tuners", mTunerManagerPanel);
