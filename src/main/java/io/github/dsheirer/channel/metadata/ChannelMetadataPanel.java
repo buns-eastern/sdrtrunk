@@ -424,7 +424,16 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
             if(mPillColor != null)
             {
                 FontMetrics fm = g2.getFontMetrics(getFont());
-                int pillWidth = Math.min(fm.stringWidth(getText()) + 20, getWidth() - 4);
+
+                //Uniform pill width across the column: size to the widest state label so all pills match,
+                //letting the current text expand it only if somehow wider.
+                int uniform = 0;
+                for(State labelState : mBackgroundColors.keySet())
+                {
+                    uniform = Math.max(uniform, fm.stringWidth(labelState.getDisplayValue()));
+                }
+
+                int pillWidth = Math.min(Math.max(uniform, fm.stringWidth(getText())) + 20, getWidth() - 4);
                 int pillHeight = Math.min(fm.getHeight() + 5, getHeight() - 4);
                 int x = (getWidth() - pillWidth) / 2;
                 int y = (getHeight() - pillHeight) / 2;
