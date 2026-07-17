@@ -50,8 +50,8 @@ import javax.swing.SwingUtilities;
  */
 public class AudioPanel extends JPanel implements Listener<AudioEvent>
 {
-    private static final ImageIcon MUTED_ICON = IconModel.getScaledIcon("images/audio_muted.png", 20);
-    private static final ImageIcon UNMUTED_ICON = IconModel.getScaledIcon("images/audio_unmuted.png", 20);
+    private static final Icon MUTED_ICON = IconFontSwing.buildIcon(FontAwesome.VOLUME_OFF, 20, new java.awt.Color(212, 72, 72));
+    private static final Icon UNMUTED_ICON = IconFontSwing.buildIcon(FontAwesome.VOLUME_UP, 20, new java.awt.Color(80, 186, 104));
     private final AliasModel mAliasModel;
     private final AudioPlaybackManager mAudioPlaybackManager;
     private final IconModel mIconModel;
