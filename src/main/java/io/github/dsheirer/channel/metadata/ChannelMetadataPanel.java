@@ -40,6 +40,10 @@ import io.github.dsheirer.sample.Broadcaster;
 import io.github.dsheirer.sample.Listener;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.text.DecimalFormat;
@@ -367,33 +371,35 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
 
     public class ColoredStateCellRenderer extends DefaultTableCellRenderer
     {
+        private Color mCellBackground = Color.BLACK;
+        private Color mPillColor = null;
+
         public ColoredStateCellRenderer()
         {
             setHorizontalAlignment(SwingConstants.CENTER);
+            setOpaque(false);
         }
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,
                                                        int row, int column)
         {
-            JLabel label = (JLabel)super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
-            Color background = table.getBackground();
-            Color foreground = table.getForeground();
+            //The renderer paints its own background so the colored state can render as a rounded pill on the row.
+            mCellBackground = isSelected ? table.getSelectionBackground() : table.getBackground();
+            mPillColor = null;
+            setForeground(isSelected ? table.getSelectionForeground() : table.getForeground());
 
             if(value instanceof ChannelStateIdentifier)
             {
                 State state = ((ChannelStateIdentifier)value).getValue();
-                label.setText(state.getDisplayValue());
+                setText(state.getDisplayValue());
 
                 if(mBackgroundColors.containsKey(state))
                 {
-                    background = mBackgroundColors.get(state);
-                }
-
-                if(mForegroundColors.containsKey(state))
-                {
-                    foreground = mForegroundColors.get(state);
+                    mPillColor = mBackgroundColors.get(state);
+                    setForeground(mForegroundColors.getOrDefault(state, Color.WHITE));
                 }
             }
             else
@@ -401,10 +407,35 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
                 setText("----");
             }
 
-            setBackground(background);
-            setForeground(foreground);
+            return this;
+        }
 
-            return label;
+        @Override
+        protected void paintComponent(Graphics g)
+        {
+            Graphics2D g2 = (Graphics2D)g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            //Row/selection background (renderer is non-opaque)
+            g2.setColor(mCellBackground);
+            g2.fillRect(0, 0, getWidth(), getHeight());
+
+            //Colored states render as a centered rounded pill; idle/unknown just show plain text.
+            if(mPillColor != null)
+            {
+                FontMetrics fm = g2.getFontMetrics(getFont());
+                int pillWidth = Math.min(fm.stringWidth(getText()) + 20, getWidth() - 4);
+                int pillHeight = Math.min(fm.getHeight() + 5, getHeight() - 4);
+                int x = (getWidth() - pillWidth) / 2;
+                int y = (getHeight() - pillHeight) / 2;
+                g2.setColor(mPillColor);
+                g2.fillRoundRect(x, y, pillWidth, pillHeight, pillHeight, pillHeight);
+            }
+
+            g2.dispose();
+
+            //Draw the text (foreground already set) over the pill
+            super.paintComponent(g);
         }
     }
 
