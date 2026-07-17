@@ -132,24 +132,30 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
                     }
                 }
 
-                requestedChangeHz /= count;
-                mTunerController.setMeasuredFrequencyError((int)requestedChangeHz);
-
-                if(Math.abs(requestedChangeHz) > MINIMUM_CORRECTION_THRESHOLD_HZ)
+                //Only average and apply a correction when at least one channel reported an error this interval.
+                //With conventional-only channels (which do not report frequency error) count is zero; dividing
+                //by it would throw and permanently cancel this repeating scheduled task, silently disabling Auto-PPM.
+                if(count > 0)
                 {
-                    requestedChangeHz = Math.clamp(requestedChangeHz, -MAXIMUM_TUNER_ERROR_CORRECTION_PER_INTERVAL_HZ, MAXIMUM_TUNER_ERROR_CORRECTION_PER_INTERVAL_HZ);
+                    requestedChangeHz /= count;
+                    mTunerController.setMeasuredFrequencyError((int)requestedChangeHz);
 
-                    if(mEnabled)
+                    if(Math.abs(requestedChangeHz) > MINIMUM_CORRECTION_THRESHOLD_HZ)
                     {
-                        double adjustment = requestedChangeHz / (mTunerController.getFrequency() * PPM_DIVISOR);
+                        requestedChangeHz = Math.clamp(requestedChangeHz, -MAXIMUM_TUNER_ERROR_CORRECTION_PER_INTERVAL_HZ, MAXIMUM_TUNER_ERROR_CORRECTION_PER_INTERVAL_HZ);
 
-                        try
+                        if(mEnabled)
                         {
-                            mTunerController.setFrequencyCorrection(mTunerController.getFrequencyCorrection() + adjustment);
-                        }
-                        catch(SourceException e)
-                        {
-                            LOG.error("Error while adjusting PPM value", e);
+                            double adjustment = requestedChangeHz / (mTunerController.getFrequency() * PPM_DIVISOR);
+
+                            try
+                            {
+                                mTunerController.setFrequencyCorrection(mTunerController.getFrequencyCorrection() + adjustment);
+                            }
+                            catch(SourceException e)
+                            {
+                                LOG.error("Error while adjusting PPM value", e);
+                            }
                         }
                     }
                 }
@@ -158,6 +164,22 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
         finally
         {
             mTunerController.getLock().unlock();
+        }
+    }
+
+    /**
+     * Wraps the timer processing so that any unexpected error is logged rather than silently cancelling all
+     * future executions of this repeating scheduled task (which would disable Auto-PPM without warning).
+     */
+    private void processSafely()
+    {
+        try
+        {
+            process();
+        }
+        catch(Throwable t)
+        {
+            LOG.error("Error processing tuner frequency error correction - Auto-PPM continues", t);
         }
     }
 
@@ -263,7 +285,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
     {
         if(!mShutdown && mScheduledFuture == null)
         {
-            mScheduledFuture = ThreadPool.SCHEDULED.scheduleAtFixedRate(this::process, TIMER_INTERVAL_SECONDS,
+            mScheduledFuture = ThreadPool.SCHEDULED.scheduleAtFixedRate(this::processSafely, TIMER_INTERVAL_SECONDS,
                     TIMER_INTERVAL_SECONDS, TimeUnit.SECONDS);
         }
     }
