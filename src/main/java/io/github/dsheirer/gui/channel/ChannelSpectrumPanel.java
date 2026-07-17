@@ -510,22 +510,7 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
         @Override
         public void receive(float[] currentFFTBins)
         {
-            if(currentFFTBins == null || currentFFTBins.length == 0)
-            {
-                return;
-            }
-
-            float peak = currentFFTBins[0];
-
-            for(int x = 1; x < currentFFTBins.length; x++)
-            {
-                if(currentFFTBins[x] > peak)
-                {
-                    peak = currentFFTBins[x];
-                }
-            }
-
-            //Throttle to ~10 updates/second so we do not flood the Swing event thread at FFT frame rate
+            //Throttle to ~10 updates/second so we do not flood the Swing event thread at FFT frame rate.
             long now = System.currentTimeMillis();
 
             if(now - mLastPeakUpdate < 100)
@@ -534,7 +519,17 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
             }
 
             mLastPeakUpdate = now;
-            final float displayPeak = peak;
+
+            //Read the peak from the spectrum panel (the smoothed/averaged bins that are actually drawn) so the
+            //readout lines up with the trace and the dBFS grid, rather than the raw instantaneous FFT.  The
+            //spectrum panel is registered as a listener before this one, so it has already processed this frame.
+            final float displayPeak = mSpectrumPanel.getPeakDbFS();
+
+            if(Float.isNaN(displayPeak) || Float.isInfinite(displayPeak))
+            {
+                return;
+            }
+
             EventQueue.invokeLater(() -> mPeakLabel.setText(LABEL_PREFIX_PEAK + PEAK_FORMAT.format(displayPeak) + " dBFS"));
         }
     }

@@ -70,6 +70,7 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
 
     //Current DFT output bins in dB
     private float[] mDisplayFFTBins = new float[1];
+    private volatile float mPeakDbFS = 0.0f;
 
     //Averaging across multiple DFT result sets
     private int mAveraging = 4;
@@ -156,7 +157,31 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
             mDisplayFFTBins = smoothedBins;
         }
 
+        //Track the peak (maximum) amplitude of the displayed bins so the channel spectrum can show a peak
+        //dBFS readout that matches the smoothed/averaged trace that is drawn (and thus the dBFS grid).
+        float peak = -Float.MAX_VALUE;
+
+        for(int x = 0; x < mDisplayFFTBins.length; x++)
+        {
+            if(mDisplayFFTBins[x] > peak)
+            {
+                peak = mDisplayFFTBins[x];
+            }
+        }
+
+        mPeakDbFS = peak;
+
         repaint();
+    }
+
+    /**
+     * Peak (maximum) amplitude across the currently displayed spectrum bins, in relative dBFS.  This reflects
+     * the smoothed/averaged trace that is actually drawn, so it aligns with the dBFS reference grid.
+     * @return peak amplitude in dBFS.
+     */
+    public float getPeakDbFS()
+    {
+        return mPeakDbFS;
     }
 
     @Override
