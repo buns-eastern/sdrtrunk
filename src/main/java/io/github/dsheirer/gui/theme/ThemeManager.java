@@ -109,6 +109,33 @@ public class ThemeManager
     }
 
     /**
+     * Returns the supplied color if it has adequate contrast against the background, otherwise the fallback.
+     * Keeps user-set colors (e.g. a black alias color) readable across light and dark themes.
+     */
+    public static Color readableForeground(Color color, Color background, Color fallback)
+    {
+        if(color == null || background == null)
+        {
+            return fallback;
+        }
+
+        double bg = (0.299 * background.getRed()) + (0.587 * background.getGreen()) + (0.114 * background.getBlue());
+        double fg = (0.299 * color.getRed()) + (0.587 * color.getGreen()) + (0.114 * color.getBlue());
+
+        if(bg < 128 && fg < 70)
+        {
+            return fallback;
+        }
+
+        if(bg >= 128 && fg > 190)
+        {
+            return fallback;
+        }
+
+        return color;
+    }
+
+    /**
      * Indicates whether the current theme is a dark theme (used to theme the JavaFX channel views).
      */
     public static boolean isDarkTheme()
