@@ -23,7 +23,6 @@ package io.github.dsheirer.gui.theme;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
-import com.jidesoft.plaf.LookAndFeelFactory;
 import io.github.dsheirer.preference.UserPreferences;
 import java.awt.Font;
 import javax.swing.ButtonGroup;
@@ -119,12 +118,12 @@ public class ThemeManager
                 UIManager.put("defaultFont", new Font(resolvedFamily, Font.PLAIN, resolvedSize));
             }
 
-            //Re-apply the JIDE component styling on top of the current look and feel
-            LookAndFeelFactory.installJideExtension();
         }
-        catch(Exception e)
+        catch(Throwable t)
         {
-            LOG.error("Error applying application theme / look and feel", e);
+            //Catch Throwable (not just Exception) so an Error such as NoClassDefFoundError from look and feel
+            //setup can never prevent the application window from opening.
+            LOG.error("Error applying application theme / look and feel", t);
         }
     }
 
