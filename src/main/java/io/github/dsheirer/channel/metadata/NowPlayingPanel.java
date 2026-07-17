@@ -97,6 +97,7 @@ public class NowPlayingPanel extends JPanel
         if(mTabbedPane == null)
         {
             mTabbedPane = new JideTabbedPane();
+            mTabbedPane.setBoldActiveTab(true);
             mTabbedPane.addTab("Details", mChannelDetailPanel);
             mTabbedPane.addTab("Events", mDecodeEventPanel);
             mTabbedPane.addTab("Messages", mMessageActivityPanel);

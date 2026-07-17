@@ -244,12 +244,18 @@ public class ThemeManager
             //FlatLaf's JIDE tab UI colors tab text from these keys (not the component foreground). Point them
             //at the themed tab foreground so tab labels are readable in every theme, live-switch included.
             Color tabText = UIManager.getColor("TabbedPane.foreground");
+            Color tabAccent = UIManager.getColor("Component.accentColor");
+            if(tabAccent == null)
+            {
+                tabAccent = new Color(74, 144, 217);
+            }
             if(tabText != null)
             {
+                //Inactive tabs use the normal foreground; the active tab pops in the theme accent color.
                 UIManager.put("JideTabbedPane.foreground", tabText);
-                UIManager.put("JideTabbedPane.selectedTabTextForeground", tabText);
                 UIManager.put("JideTabbedPane.unselectedTabTextForeground", tabText);
-                UIManager.put("JideTabbedPane.activeTabTextForeground", tabText);
+                UIManager.put("JideTabbedPane.selectedTabTextForeground", tabAccent);
+                UIManager.put("JideTabbedPane.activeTabTextForeground", tabAccent);
             }
 
             //Subtle zebra striping on tables (derived from the themed table background)
