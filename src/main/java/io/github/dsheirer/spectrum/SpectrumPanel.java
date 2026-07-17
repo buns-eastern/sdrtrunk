@@ -196,18 +196,25 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
             ? "Peak: " + PEAK_FORMAT.format(mPeakDbFS) + " dBFS"
             : "Peak: --- dBFS";
 
+        //Bold and enlarged so the readout is easy to see; restored afterwards.
+        java.awt.Font originalFont = graphics.getFont();
+        java.awt.Font peakFont = originalFont.deriveFont(java.awt.Font.BOLD, originalFont.getSize2D() + 3.0f);
+        graphics.setFont(peakFont);
+
         java.awt.FontMetrics fm = graphics.getFontMetrics();
         int textWidth = fm.stringWidth(text);
         int ascent = fm.getAscent();
-        int pad = 4;
+        int pad = 5;
         int x = size.width - textWidth - pad - 4;
         int y = pad + ascent;
 
-        graphics.setColor(new Color(0, 0, 0, 120));
-        graphics.fillRect(x - pad, y - ascent - 1, textWidth + (pad * 2), ascent + 5);
+        graphics.setColor(new Color(0, 0, 0, 140));
+        graphics.fillRect(x - pad, y - ascent - 1, textWidth + (pad * 2), ascent + 6);
 
-        graphics.setColor(new Color(93, 202, 165));
+        graphics.setColor(new Color(255, 235, 59));
         graphics.drawString(text, x, y + 1);
+
+        graphics.setFont(originalFont);
     }
 
     @Override
