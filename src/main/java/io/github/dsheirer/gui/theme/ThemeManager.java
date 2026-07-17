@@ -106,6 +106,34 @@ public class ThemeManager
     }
 
     /**
+     * Indicates whether the current theme is a dark theme (used to theme the JavaFX channel views).
+     */
+    public static boolean isDarkTheme()
+    {
+        if(sPreferences == null)
+        {
+            return true;
+        }
+
+        return !THEME_LIGHT.equalsIgnoreCase(theme());
+    }
+
+    /**
+     * Derives a subtle alternate-row color by lightening a dark background or darkening a light one.
+     */
+    private static Color alternateRowColor(Color base)
+    {
+        double luminance = (0.299 * base.getRed()) + (0.587 * base.getGreen()) + (0.114 * base.getBlue());
+        int delta = (luminance < 128) ? 14 : -12;
+        return new Color(clamp(base.getRed() + delta), clamp(base.getGreen() + delta), clamp(base.getBlue() + delta));
+    }
+
+    private static int clamp(int value)
+    {
+        return Math.max(0, Math.min(255, value));
+    }
+
+    /**
      * Creates the look and feel instance for the specified theme key, defaulting to Arc Dark.
      */
     private static LookAndFeel createLookAndFeel(String key)
@@ -154,6 +182,13 @@ public class ThemeManager
                 UIManager.put("JideTabbedPane.selectedTabTextForeground", tabText);
                 UIManager.put("JideTabbedPane.unselectedTabTextForeground", tabText);
                 UIManager.put("JideTabbedPane.activeTabTextForeground", tabText);
+            }
+
+            //Subtle zebra striping on tables (derived from the themed table background)
+            Color tableBackground = UIManager.getColor("Table.background");
+            if(tableBackground != null)
+            {
+                UIManager.put("Table.alternateRowColor", alternateRowColor(tableBackground));
             }
 
             String family = fontFamily();

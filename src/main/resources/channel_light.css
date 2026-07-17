@@ -1,0 +1,56 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2014-2026 Dennis Sheirer - GPLv3
+ * ****************************************************************************
+ */
+
+/* Light theme for the JavaFX channel views (squelch + symbol constellation). */
+.root {
+    -fx-base: #ececec;
+    -fx-background: #fbfbfb;
+    -fx-control-inner-background: #ffffff;
+    -fx-text-fill: #1e1e1e;
+}
+
+.label {
+    -fx-text-fill: #1e1e1e;
+}
+
+.chart {
+    -fx-background-color: transparent;
+}
+
+.chart-plot-background {
+    -fx-background-color: #ffffff;
+}
+
+.chart-legend {
+    -fx-background-color: transparent;
+}
+
+.chart-legend-item {
+    -fx-text-fill: #303030;
+}
+
+.axis {
+    -fx-tick-label-fill: #404040;
+}
+
+.axis-label {
+    -fx-text-fill: #303030;
+}
+
+.chart-vertical-grid-lines {
+    -fx-stroke: #e2e2e2;
+}
+
+.chart-horizontal-grid-lines {
+    -fx-stroke: #e2e2e2;
+}
+
+/* Symbol constellation dots: dark on the light plot background */
+.chart-symbol {
+    -fx-background-color: #303030;
+    -fx-background-radius: 2px;
+    -fx-padding: 1px;
+}

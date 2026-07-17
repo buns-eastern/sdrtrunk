@@ -227,13 +227,14 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
 
         //Spin noise squelch panel construction off onto the JavafX UI thread.
         Platform.runLater(() -> {
-            URL resource = getClass().getResource("/sdrtrunk_style.css");
-            javafx.scene.paint.Color darkFill = javafx.scene.paint.Color.web("#1e1f22");
+            boolean dark = io.github.dsheirer.gui.theme.ThemeManager.isDarkTheme();
+            URL resource = getClass().getResource(dark ? "/sdrtrunk_style.css" : "/channel_light.css");
+            javafx.scene.paint.Color fill = javafx.scene.paint.Color.web(dark ? "#1e1f22" : "#fbfbfb");
 
             Scene scene = new Scene(mNoiseSquelchView);
-            scene.setFill(darkFill);
+            scene.setFill(fill);
             Scene scene2 = new Scene(mSymbolView);
-            scene2.setFill(darkFill);
+            scene2.setFill(fill);
 
             if(resource != null)
             {
