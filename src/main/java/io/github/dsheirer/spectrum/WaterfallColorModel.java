@@ -141,7 +141,8 @@ public class WaterfallColorModel
                 break;
             case INFERNO:
             default:
-                stops = new int[][]{{0, 0, 0, 4}, {48, 40, 11, 84}, {96, 101, 21, 110}, {144, 159, 42, 99}, {192, 212, 72, 66}, {224, 245, 125, 21}, {255, 252, 255, 164}};
+                //Low end lifted from near-black to a visible dark blue-purple so weak noise/signals still show.
+                stops = new int[][]{{0, 12, 10, 42}, {40, 55, 20, 92}, {96, 110, 30, 110}, {144, 165, 46, 96}, {192, 216, 78, 62}, {224, 246, 132, 24}, {255, 252, 255, 164}};
                 break;
         }
 

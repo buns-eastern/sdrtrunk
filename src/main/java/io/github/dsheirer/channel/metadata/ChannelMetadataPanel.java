@@ -250,7 +250,7 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
                 {
                     label.setText(Joiner.on(", ").skipNulls().join(aliases));
                     label.setIcon(mIconModel.getIcon(aliases.get(0).getIconName(), IconModel.DEFAULT_ICON_SIZE));
-                    label.setForeground(aliases.get(0).getDisplayColor());
+                    label.setForeground(io.github.dsheirer.gui.theme.ThemeManager.readableForeground(aliases.get(0).getDisplayColor(), table.getBackground(), table.getForeground()));
                 }
                 else
                 {
@@ -429,7 +429,7 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
                 int x = (getWidth() - pillWidth) / 2;
                 int y = (getHeight() - pillHeight) / 2;
                 g2.setColor(mPillColor);
-                g2.fillRoundRect(x, y, pillWidth, pillHeight, pillHeight, pillHeight);
+                g2.fillRoundRect(x, y, pillWidth, pillHeight, 9, 9);
             }
 
             g2.dispose();

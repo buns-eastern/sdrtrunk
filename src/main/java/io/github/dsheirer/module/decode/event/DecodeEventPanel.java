@@ -296,7 +296,7 @@ public class DecodeEventPanel extends JPanel implements Listener<ProcessingChain
             }
 
             label.setText(text);
-            label.setForeground(color);
+            label.setForeground(io.github.dsheirer.gui.theme.ThemeManager.readableForeground(color, mTable.getBackground(), mTable.getForeground()));
             label.setIcon(icon);
 
             return label;

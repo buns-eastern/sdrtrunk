@@ -187,7 +187,7 @@ public class BroadcastStatusPanel extends JPanel
                 int x = (getWidth() - pillWidth) / 2;
                 int y = (getHeight() - pillHeight) / 2;
                 g2.setColor(mPillColor);
-                g2.fillRoundRect(x, y, pillWidth, pillHeight, pillHeight, pillHeight);
+                g2.fillRoundRect(x, y, pillWidth, pillHeight, 9, 9);
             }
 
             g2.dispose();
