@@ -251,8 +251,13 @@ public class JFrequencyControl extends JPanel implements ISourceEventProcessor
         @Override
         public java.awt.Dimension getPreferredSize()
         {
+            //Use the text field's natural height (accounts for border insets so the glyph never clips) and
+            //only tighten the width to a single monospace digit plus insets.
+            java.awt.Dimension natural = super.getPreferredSize();
             java.awt.FontMetrics fm = getFontMetrics(getFont());
-            return new java.awt.Dimension(fm.charWidth('0') + 4, fm.getHeight() + 4);
+            java.awt.Insets insets = getInsets();
+            int width = fm.charWidth('0') + insets.left + insets.right + 4;
+            return new java.awt.Dimension(width, natural.height);
         }
 
         @Override
