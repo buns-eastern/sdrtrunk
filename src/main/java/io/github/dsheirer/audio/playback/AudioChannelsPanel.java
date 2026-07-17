@@ -49,7 +49,8 @@ public class AudioChannelsPanel extends JPanel
         setLayout(new MigLayout("insets 0 0 0 0",
             "[][sizegroup abc,grow,fill][][sizegroup abc,grow,fill]", "[grow,fill]"));
 
-        setBackground(Color.BLACK);
+        java.awt.Color audioBarBg = javax.swing.UIManager.getColor("Panel.background");
+        setBackground(audioBarBg != null ? audioBarBg : Color.BLACK);
 
         addSeparator();
 
@@ -92,7 +93,8 @@ public class AudioChannelsPanel extends JPanel
     private void addSeparator()
     {
         JSeparator separator = new JSeparator(JSeparator.VERTICAL);
-        separator.setBackground(Color.DARK_GRAY);
+        java.awt.Color sepColor = javax.swing.UIManager.getColor("Separator.foreground");
+        separator.setForeground(sepColor != null ? sepColor : Color.DARK_GRAY);
         add(separator);
     }
 }

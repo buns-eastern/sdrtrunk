@@ -86,7 +86,8 @@ public class AudioPanel extends JPanel implements Listener<AudioEvent>
     private void init()
     {
         setLayout(new MigLayout("insets 0 0 0 0", "[]0[grow,fill]", "[fill]0[]"));
-        setBackground(Color.BLACK);
+        java.awt.Color audioBarBg = javax.swing.UIManager.getColor("Panel.background");
+        setBackground(audioBarBg != null ? audioBarBg : Color.BLACK);
         mMuteButton = new MuteButton();
         mMuteButton.setBackground(getBackground());
         add(mMuteButton);
