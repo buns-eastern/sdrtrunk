@@ -18,6 +18,7 @@
  */
 package io.github.dsheirer.gui.preference.network;
 
+import io.github.dsheirer.gui.theme.ThemeManager;
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.preference.network.HeartbeatEntry;
 import io.github.dsheirer.preference.network.HeartbeatPreference;
@@ -129,8 +130,7 @@ public class HeartbeatPreferenceEditor extends HBox
             "✗  It does NOT apply to DMR or other protocols (P25 Phase 1 control channels only)\n" +
             "✗  It does NOT apply to traffic/voice channels — only the control channel");
         scope.setWrapText(true);
-        scope.setStyle("-fx-background-color: #f0f4f8; -fx-padding: 8px; " +
-                       "-fx-background-radius: 4px; -fx-font-size: 11.5px;");
+        scope.setStyle(ThemeManager.calloutStyle());
 
         box.getChildren().add(scope);
         box.getChildren().add(new Separator());

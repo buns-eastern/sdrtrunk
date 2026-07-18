@@ -111,8 +111,7 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
             "changed.  Put any complete web address here, including its own parameters, to notify a second " +
             "monitoring endpoint.");
         urls.setWrapText(true);
-        urls.setStyle("-fx-background-color: #f0f4f8; -fx-padding: 8px; " +
-                      "-fx-background-radius: 4px; -fx-font-size: 11.5px;");
+        urls.setStyle(ThemeManager.calloutStyle());
         box.getChildren().add(urls);
 
         Label kumaNote = new Label(
@@ -224,8 +223,7 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
             "Down window:  how long the monitor stays down after an error clears, so a brief hiccup is still " +
             "visible downstream (0 = report only the live state).");
         detail.setWrapText(true);
-        detail.setStyle("-fx-background-color: #f0f4f8; -fx-padding: 8px; " +
-                        "-fx-background-radius: 4px; -fx-font-size: 11.5px;");
+        detail.setStyle(ThemeManager.calloutStyle());
         box.getChildren().add(detail);
 
         return box;

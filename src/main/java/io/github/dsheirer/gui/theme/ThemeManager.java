@@ -180,6 +180,22 @@ public class ThemeManager
         return isDarkTheme() ? "#6ca8dc" : "#1a5276";
     }
 
+    /**
+     * Theme-aware style for a callout/info box (subtle panel background plus readable text) used in the
+     * preference editors, so the boxes work on both dark and light themes instead of a hardcoded light panel.
+     */
+    public static String calloutStyle()
+    {
+        if(isDarkTheme())
+        {
+            return "-fx-background-color: rgba(255,255,255,0.06); -fx-text-fill: #c9d1d9; " +
+                   "-fx-padding: 8px; -fx-background-radius: 4px; -fx-font-size: 11.5px;";
+        }
+
+        return "-fx-background-color: #f0f4f8; -fx-text-fill: #333333; " +
+               "-fx-padding: 8px; -fx-background-radius: 4px; -fx-font-size: 11.5px;";
+    }
+
     public static boolean isDarkTheme()
     {
         if(sPreferences == null)
