@@ -218,13 +218,9 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
 
         Label detail = new Label(
             "Down:  any tuner is in Error (with its actual error message) or has dropped off the bus.  The push " +
-            "message names the tuner and the reason.
-" +
-            "Up:  all tuners are healthy.
-" +
-            "Ignored:  a tuner you have intentionally disabled is not treated as a fault.
-
-" +
+            "message names the tuner and the reason.\n" +
+            "Up:  all tuners are healthy.\n" +
+            "Ignored:  a tuner you have intentionally disabled is not treated as a fault.\n\n" +
             "Down window:  how long the monitor stays down after an error clears, so a brief hiccup is still " +
             "visible downstream (0 = report only the live state).");
         detail.setWrapText(true);
