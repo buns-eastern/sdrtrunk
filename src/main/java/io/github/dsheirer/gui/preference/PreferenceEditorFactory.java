@@ -30,6 +30,7 @@ import io.github.dsheirer.gui.preference.record.RecordPreferenceEditor;
 import io.github.dsheirer.gui.preference.tuner.TunerPreferenceEditor;
 import io.github.dsheirer.audio.broadcast.BroadcastModel;
 import io.github.dsheirer.gui.preference.network.HeartbeatPreferenceEditor;
+import io.github.dsheirer.gui.preference.network.SoftwareHeartbeatPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.StreamHeartbeatPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.NetworkStreamPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.ImbeStreamPreferenceEditor;
@@ -64,6 +65,8 @@ public class PreferenceEditorFactory
                 return new DirectoryPreferenceEditor(userPreferences);
             case JMBE_LIBRARY:
                 return new JmbeLibraryPreferenceEditor(userPreferences);
+            case SOURCE_SOFTWARE_HEARTBEAT:
+                return new SoftwareHeartbeatPreferenceEditor(userPreferences);
             case SOURCE_HEARTBEAT:
                 return new HeartbeatPreferenceEditor(userPreferences);
             case SOURCE_STREAM_HEARTBEAT:
