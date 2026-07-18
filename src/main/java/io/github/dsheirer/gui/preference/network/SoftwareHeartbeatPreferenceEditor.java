@@ -51,27 +51,27 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
     private Spinner<Integer> mKumaInterval;
     private Spinner<Integer> mSecondInterval;
     private Label mStatusLabel;
+    private CheckBox mUsbEnabled;
+    private TextField mUsbKumaUrl;
+    private Spinner<Integer> mUsbInterval;
+    private Spinner<Integer> mUsbWindow;
+    private Label mUsbStatusLabel;
 
     public SoftwareHeartbeatPreferenceEditor(UserPreferences userPreferences)
     {
         mPreference = userPreferences.getSoftwareHeartbeatPreference();
         setMaxWidth(Double.MAX_VALUE);
 
-        VBox outer = new VBox();
-        outer.setMaxWidth(Double.MAX_VALUE);
+        VBox page = new VBox(6);
+        page.setMaxWidth(Double.MAX_VALUE);
+        page.getChildren().addAll(buildExplanation(), buildForm(), new Separator(),
+            buildUsbExplanation(), buildUsbForm());
 
-        ScrollPane topScroll = new ScrollPane(buildExplanation());
-        topScroll.setFitToWidth(true);
-        topScroll.setPrefHeight(300);
-        topScroll.setMaxHeight(300);
-        topScroll.setStyle("-fx-background-color: transparent;");
-
-        VBox formSection = buildForm();
-        VBox.setVgrow(formSection, Priority.ALWAYS);
-
-        outer.getChildren().addAll(topScroll, formSection);
-        HBox.setHgrow(outer, Priority.ALWAYS);
-        getChildren().add(outer);
+        ScrollPane scroll = new ScrollPane(page);
+        scroll.setFitToWidth(true);
+        scroll.setStyle("-fx-background-color: transparent;");
+        HBox.setHgrow(scroll, Priority.ALWAYS);
+        getChildren().add(scroll);
     }
 
     private VBox buildExplanation()
@@ -197,6 +197,108 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
         if(mStatusLabel != null)
         {
             mStatusLabel.setText(mEnabled.isSelected() ? "Saved — heartbeat active." : "Saved — heartbeat disabled.");
+        }
+    }
+
+    private VBox buildUsbExplanation()
+    {
+        VBox box = new VBox(12);
+        box.setPadding(new Insets(6, 20, 10, 20));
+        box.setMaxWidth(Double.MAX_VALUE);
+
+        box.getChildren().add(sectionHeader("USB / TUNER ERROR MONITOR"));
+
+        Label subtitle = new Label(
+            "Get a push the moment a tuner fails - a USB error, a shutdown, or a device dropping off the bus. " +
+            "This reads each tuner's real status inside SDRTrunk (Enabled, Disabled, Error, Removed), so there is " +
+            "no log file to parse and it covers every tuner type.");
+        subtitle.setWrapText(true);
+        subtitle.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + ";");
+        box.getChildren().add(subtitle);
+
+        Label detail = new Label(
+            "Down:  any tuner is in Error (with its actual error message) or has dropped off the bus.  The push " +
+            "message names the tuner and the reason.
+" +
+            "Up:  all tuners are healthy.
+" +
+            "Ignored:  a tuner you have intentionally disabled is not treated as a fault.
+
+" +
+            "Down window:  how long the monitor stays down after an error clears, so a brief hiccup is still " +
+            "visible downstream (0 = report only the live state).");
+        detail.setWrapText(true);
+        detail.setStyle("-fx-background-color: #f0f4f8; -fx-padding: 8px; " +
+                        "-fx-background-radius: 4px; -fx-font-size: 11.5px;");
+        box.getChildren().add(detail);
+
+        return box;
+    }
+
+    private VBox buildUsbForm()
+    {
+        VBox box = new VBox(8);
+        box.setPadding(new Insets(6, 20, 18, 20));
+        box.setMaxWidth(Double.MAX_VALUE);
+
+        box.getChildren().add(sectionHeader("USB ERROR CONFIGURATION"));
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(8, 0, 8, 0));
+
+        ColumnConstraints labelCol = new ColumnConstraints(150);
+        labelCol.setHalignment(HPos.RIGHT);
+        ColumnConstraints fieldCol = new ColumnConstraints();
+        fieldCol.setHgrow(Priority.ALWAYS);
+        fieldCol.setFillWidth(true);
+        grid.getColumnConstraints().addAll(labelCol, fieldCol);
+
+        int row = 0;
+
+        mUsbEnabled = new CheckBox("Enable USB / tuner error monitor");
+        mUsbEnabled.setSelected(mPreference.isUsbEnabled());
+        grid.add(rightLabel("Monitor:"), 0, row);
+        grid.add(mUsbEnabled, 1, row++);
+
+        mUsbKumaUrl = new TextField(mPreference.getUsbKumaUrl());
+        mUsbKumaUrl.setPromptText("http://kuma-host:3001/api/push/TOKEN");
+        mUsbKumaUrl.setMaxWidth(Double.MAX_VALUE);
+        grid.add(rightLabel("Uptime Kuma push URL:"), 0, row);
+        grid.add(mUsbKumaUrl, 1, row++);
+
+        mUsbInterval = intervalSpinner(mPreference.getUsbIntervalSeconds());
+        grid.add(rightLabel("Interval (s):"), 0, row);
+        grid.add(mUsbInterval, 1, row++);
+
+        mUsbWindow = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(
+            0, 3600, Math.max(0, Math.min(3600, mPreference.getUsbWindowSeconds())), 5));
+        mUsbWindow.setEditable(true);
+        mUsbWindow.setPrefWidth(110);
+        grid.add(rightLabel("Down window (s):"), 0, row);
+        grid.add(mUsbWindow, 1, row++);
+
+        Button saveButton = new Button("Save");
+        saveButton.setOnAction(e -> onSaveUsb());
+        mUsbStatusLabel = new Label("");
+        mUsbStatusLabel.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + "; -fx-font-size: 11px;");
+        HBox buttons = new HBox(8, saveButton, mUsbStatusLabel);
+        buttons.setAlignment(Pos.CENTER_LEFT);
+
+        box.getChildren().addAll(grid, buttons);
+        return box;
+    }
+
+    private void onSaveUsb()
+    {
+        int interval = (mUsbInterval.getValue() != null) ? mUsbInterval.getValue() : 60;
+        int window = (mUsbWindow.getValue() != null) ? mUsbWindow.getValue() : 60;
+        mPreference.storeUsb(mUsbEnabled.isSelected(), mUsbKumaUrl.getText(), interval, window);
+
+        if(mUsbStatusLabel != null)
+        {
+            mUsbStatusLabel.setText(mUsbEnabled.isSelected() ? "Saved - monitor active." : "Saved - monitor disabled.");
         }
     }
 

@@ -28,6 +28,7 @@ import io.github.dsheirer.alias.AliasModel;
 import io.github.dsheirer.audio.broadcast.BroadcastModel;
 import io.github.dsheirer.audio.broadcast.StreamHeartbeatManager;
 import io.github.dsheirer.monitor.SoftwareHeartbeatManager;
+import io.github.dsheirer.monitor.TunerErrorMonitor;
 import io.github.dsheirer.controller.channel.Channel.ChannelType;
 import io.github.dsheirer.controller.channel.ChannelEvent;
 import io.github.dsheirer.controller.channel.ChannelModel;
@@ -75,6 +76,7 @@ public class PlaylistManager implements Listener<ChannelEvent>
     private BroadcastModel mBroadcastModel;
     private StreamHeartbeatManager mStreamHeartbeatManager;
     private SoftwareHeartbeatManager mSoftwareHeartbeatManager;
+    private TunerErrorMonitor mTunerErrorMonitor;
     private ChannelModel mChannelModel;
     private ChannelProcessingManager mChannelProcessingManager;
     private TunerManager mTunerManager;
@@ -108,6 +110,7 @@ public class PlaylistManager implements Listener<ChannelEvent>
         mBroadcastModel = new BroadcastModel(mAliasModel, mIconModel, userPreferences);
         mStreamHeartbeatManager = new StreamHeartbeatManager(mUserPreferences, mBroadcastModel);
         mSoftwareHeartbeatManager = new SoftwareHeartbeatManager(mUserPreferences);
+        mTunerErrorMonitor = new TunerErrorMonitor(mUserPreferences, mTunerManager);
         mRadioReference = new RadioReference(mUserPreferences);
 
         mChannelModel = new ChannelModel(mAliasModel);
@@ -272,6 +275,7 @@ public class PlaylistManager implements Listener<ChannelEvent>
         transferPlaylistToModels(playlist);
         mStreamHeartbeatManager.start();
         mSoftwareHeartbeatManager.start();
+        mTunerErrorMonitor.start();
     }
 
     /**
