@@ -55,7 +55,8 @@ public class SoftwareHeartbeatManager
 
     private final UserPreferences mUserPreferences;
     private ScheduledFuture<?> mFuture;
-    private long mLastPushMs = 0;
+    private long mKumaLastPushMs = 0;
+    private long mSecondLastPushMs = 0;
 
     /**
      * Constructs an instance.
@@ -120,29 +121,35 @@ public class SoftwareHeartbeatManager
             return;
         }
 
-        long intervalMs = Math.max(1, pref.getIntervalSeconds()) * 1000L;
         long now = System.currentTimeMillis();
 
-        if((now - mLastPushMs) < intervalMs)
-        {
-            return;
-        }
-
-        mLastPushMs = now;
-
+        //Uptime Kuma target - its own interval
         String kumaUrl = pref.getKumaUrl();
 
         if(kumaUrl != null && !kumaUrl.isBlank())
         {
-            fireKuma(kumaUrl);
+            long kumaIntervalMs = Math.max(1, pref.getKumaIntervalSeconds()) * 1000L;
+
+            if((now - mKumaLastPushMs) >= kumaIntervalMs)
+            {
+                mKumaLastPushMs = now;
+                fireKuma(kumaUrl);
+            }
         }
 
+        //Second generic target - independent interval, sent exactly as entered
         String secondUrl = pref.getSecondUrl();
 
         if(secondUrl != null && !secondUrl.isBlank())
         {
-            final String url = secondUrl.trim();
-            Thread.ofVirtual().start(() -> fireGet(url, "second URL"));
+            long secondIntervalMs = Math.max(1, pref.getSecondIntervalSeconds()) * 1000L;
+
+            if((now - mSecondLastPushMs) >= secondIntervalMs)
+            {
+                mSecondLastPushMs = now;
+                final String url = secondUrl.trim();
+                Thread.ofVirtual().start(() -> fireGet(url, "second URL"));
+            }
         }
     }
 

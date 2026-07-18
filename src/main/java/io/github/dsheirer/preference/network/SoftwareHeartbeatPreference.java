@@ -26,20 +26,23 @@ import java.util.prefs.Preferences;
 /**
  * User preferences for the application (software) heartbeat monitor.  A single configuration that reports the
  * application itself is alive by pushing a periodic heartbeat to an Uptime Kuma push URL and, optionally, to a
- * second fully user-supplied URL that is sent exactly as entered.
+ * second fully user-supplied URL that is sent exactly as entered.  Each target has its own push interval.
  */
 public class SoftwareHeartbeatPreference extends Preference
 {
     private static final String KEY_ENABLED = "softwareheartbeat.enabled";
     private static final String KEY_KUMA_URL = "softwareheartbeat.kumaUrl";
     private static final String KEY_SECOND_URL = "softwareheartbeat.secondUrl";
-    private static final String KEY_INTERVAL = "softwareheartbeat.intervalSeconds";
+    private static final String KEY_KUMA_INTERVAL = "softwareheartbeat.kumaIntervalSeconds";
+    private static final String KEY_SECOND_INTERVAL = "softwareheartbeat.secondIntervalSeconds";
+    private static final String KEY_LEGACY_INTERVAL = "softwareheartbeat.intervalSeconds";
 
     private final Preferences mPreferences = Preferences.userNodeForPackage(SoftwareHeartbeatPreference.class);
     private boolean mEnabled;
     private String mKumaUrl;
     private String mSecondUrl;
-    private int mIntervalSeconds;
+    private int mKumaIntervalSeconds;
+    private int mSecondIntervalSeconds;
 
     /**
      * Constructs an instance.
@@ -51,7 +54,11 @@ public class SoftwareHeartbeatPreference extends Preference
         mEnabled = mPreferences.getBoolean(KEY_ENABLED, false);
         mKumaUrl = mPreferences.get(KEY_KUMA_URL, "");
         mSecondUrl = mPreferences.get(KEY_SECOND_URL, "");
-        mIntervalSeconds = mPreferences.getInt(KEY_INTERVAL, 60);
+
+        //Migrate: if a single legacy interval was saved, use it as the default for both targets
+        int legacy = mPreferences.getInt(KEY_LEGACY_INTERVAL, 60);
+        mKumaIntervalSeconds = mPreferences.getInt(KEY_KUMA_INTERVAL, legacy);
+        mSecondIntervalSeconds = mPreferences.getInt(KEY_SECOND_INTERVAL, legacy);
     }
 
     @Override
@@ -75,25 +82,33 @@ public class SoftwareHeartbeatPreference extends Preference
         return mSecondUrl;
     }
 
-    public int getIntervalSeconds()
+    public int getKumaIntervalSeconds()
     {
-        return mIntervalSeconds;
+        return mKumaIntervalSeconds;
+    }
+
+    public int getSecondIntervalSeconds()
+    {
+        return mSecondIntervalSeconds;
     }
 
     /**
      * Persists the supplied configuration and notifies listeners.
      */
-    public void store(boolean enabled, String kumaUrl, String secondUrl, int intervalSeconds)
+    public void store(boolean enabled, String kumaUrl, int kumaIntervalSeconds, String secondUrl,
+                      int secondIntervalSeconds)
     {
         mEnabled = enabled;
         mKumaUrl = kumaUrl != null ? kumaUrl : "";
         mSecondUrl = secondUrl != null ? secondUrl : "";
-        mIntervalSeconds = intervalSeconds;
+        mKumaIntervalSeconds = kumaIntervalSeconds;
+        mSecondIntervalSeconds = secondIntervalSeconds;
 
         mPreferences.putBoolean(KEY_ENABLED, mEnabled);
         mPreferences.put(KEY_KUMA_URL, mKumaUrl);
         mPreferences.put(KEY_SECOND_URL, mSecondUrl);
-        mPreferences.putInt(KEY_INTERVAL, mIntervalSeconds);
+        mPreferences.putInt(KEY_KUMA_INTERVAL, mKumaIntervalSeconds);
+        mPreferences.putInt(KEY_SECOND_INTERVAL, mSecondIntervalSeconds);
 
         notifyPreferenceUpdated();
     }
