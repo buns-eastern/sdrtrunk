@@ -84,11 +84,20 @@ public class ThemeManager
     private static final String[] FONT_FAMILIES = {"SansSerif", "Serif", "Monospaced", "Dialog"};
     //Curated cross-platform physical fonts; only those actually installed on the running machine are offered.
     private static final String[] FONT_CANDIDATES = {
-        "Segoe UI", "Calibri", "Tahoma", "Verdana", "Arial", "Roboto", "Open Sans", "Inter", "Lato",
-        "DejaVu Sans", "Liberation Sans", "Noto Sans", "Ubuntu", "Cantarell",
-        "Georgia", "Cambria", "Times New Roman", "DejaVu Serif", "Liberation Serif", "Noto Serif",
-        "Consolas", "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "Source Code Pro",
-        "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono", "Courier New", "Menlo", "Monaco"
+        //Windows sans
+        "Segoe UI", "Calibri", "Tahoma", "Verdana", "Arial",
+        //macOS sans
+        "SF Pro", "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Helvetica", "Avenir Next", "Avenir",
+        "Lucida Grande", "Geneva",
+        //Linux / cross-platform sans
+        "DejaVu Sans", "Liberation Sans", "Noto Sans", "Ubuntu", "Cantarell", "Roboto", "Open Sans", "Inter", "Lato",
+        //Serif
+        "Georgia", "Cambria", "Times New Roman", "Palatino", "Baskerville", "Hoefler Text",
+        "DejaVu Serif", "Liberation Serif", "Noto Serif",
+        //Monospace
+        "Consolas", "Cascadia Code", "Cascadia Mono", "SF Mono", "Menlo", "Monaco", "Andale Mono",
+        "JetBrains Mono", "Source Code Pro", "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono",
+        "Ubuntu Mono", "Courier New"
     };
     private static final int[] FONT_SIZES = {11, 12, 13, 14, 16, 18};
 
