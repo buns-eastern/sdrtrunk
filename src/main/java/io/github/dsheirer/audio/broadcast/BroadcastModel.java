@@ -590,7 +590,7 @@ public class BroadcastModel extends AbstractTableModel implements Listener<Audio
     {
         try
         {
-            if(rowIndex <= mConfiguredBroadcasts.size())
+            if(rowIndex >= 0 && rowIndex < mConfiguredBroadcasts.size())
             {
                 ConfiguredBroadcast configuredBroadcast = mConfiguredBroadcasts.get(rowIndex);
 
