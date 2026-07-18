@@ -83,6 +83,8 @@ public class BroadcastStatusPanel extends JPanel
         setLayout(new MigLayout("insets 0 0 0 0 ", "[grow,fill]", "[grow,fill]"));
 
         mTable = new JTable(mBroadcastModel);
+        //Fill the viewport so the right-click menu is reachable even when the filter hides all rows.
+        mTable.setFillsViewportHeight(true);
 
         DefaultTableCellRenderer renderer = (DefaultTableCellRenderer)mTable.getDefaultRenderer(String.class);
         renderer.setHorizontalAlignment(SwingConstants.CENTER);
