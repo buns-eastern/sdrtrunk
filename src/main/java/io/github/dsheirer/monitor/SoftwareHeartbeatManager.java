@@ -147,7 +147,7 @@ public class SoftwareHeartbeatManager
             if((now - mSecondLastPushMs) >= secondIntervalMs)
             {
                 mSecondLastPushMs = now;
-                final String url = secondUrl.trim();
+                final String url = sanitizeUrl(secondUrl.trim());
                 Thread.ofVirtual().start(() -> fireGet(url, "second URL"));
             }
         }
@@ -189,6 +189,57 @@ public class SoftwareHeartbeatManager
         }
 
         return seconds + "s";
+    }
+
+    /**
+     * Percent-encodes any characters that are not legal in a URL so a second URL pasted with raw special
+     * characters (for example a token containing braces or non-ASCII) is still sent successfully.  URL
+     * structure and anything already percent-encoded is preserved, so a clean URL passes through unchanged.
+     */
+    private static String sanitizeUrl(String url)
+    {
+        StringBuilder sb = new StringBuilder(url.length());
+        int i = 0;
+
+        while(i < url.length())
+        {
+            char c = url.charAt(i);
+
+            if(c == '%' && i + 2 < url.length() && isHexDigit(url.charAt(i + 1)) && isHexDigit(url.charAt(i + 2)))
+            {
+                sb.append(url, i, i + 3);
+                i += 3;
+            }
+            else if(isUriSafe(c))
+            {
+                sb.append(c);
+                i++;
+            }
+            else
+            {
+                int codePoint = url.codePointAt(i);
+
+                for(byte b: new String(Character.toChars(codePoint)).getBytes(StandardCharsets.UTF_8))
+                {
+                    sb.append('%').append(String.format("%02X", b & 0xFF));
+                }
+
+                i += Character.charCount(codePoint);
+            }
+        }
+
+        return sb.toString();
+    }
+
+    private static boolean isUriSafe(char c)
+    {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                || "-._~:/?#@!$&'()*+,;=".indexOf(c) >= 0;
+    }
+
+    private static boolean isHexDigit(char c)
+    {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
     }
 
     private void fireGet(String url, String label)
