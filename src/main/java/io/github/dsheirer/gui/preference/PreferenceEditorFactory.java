@@ -28,7 +28,9 @@ import io.github.dsheirer.gui.preference.mp3.MP3PreferenceEditor;
 import io.github.dsheirer.gui.preference.playback.PlaybackPreferenceEditor;
 import io.github.dsheirer.gui.preference.record.RecordPreferenceEditor;
 import io.github.dsheirer.gui.preference.tuner.TunerPreferenceEditor;
+import io.github.dsheirer.audio.broadcast.BroadcastModel;
 import io.github.dsheirer.gui.preference.network.HeartbeatPreferenceEditor;
+import io.github.dsheirer.gui.preference.network.StreamHeartbeatPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.NetworkStreamPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.ImbeStreamPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.PcmStreamPreferenceEditor;
@@ -41,7 +43,8 @@ import javafx.scene.Node;
  */
 public class PreferenceEditorFactory
 {
-    public static Node getEditor(PreferenceEditorType preferenceEditorType, UserPreferences userPreferences)
+    public static Node getEditor(PreferenceEditorType preferenceEditorType, UserPreferences userPreferences,
+                                 BroadcastModel broadcastModel)
     {
         switch(preferenceEditorType)
         {
@@ -63,6 +66,8 @@ public class PreferenceEditorFactory
                 return new JmbeLibraryPreferenceEditor(userPreferences);
             case SOURCE_HEARTBEAT:
                 return new HeartbeatPreferenceEditor(userPreferences);
+            case SOURCE_STREAM_HEARTBEAT:
+                return new StreamHeartbeatPreferenceEditor(userPreferences, broadcastModel);
             case SOURCE_NETWORK_STREAM:
                 return new NetworkStreamPreferenceEditor(userPreferences);
             case SOURCE_IMBE_STREAM:

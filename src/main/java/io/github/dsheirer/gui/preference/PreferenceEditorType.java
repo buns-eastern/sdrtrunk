@@ -33,6 +33,7 @@ public enum PreferenceEditorType
     AUDIO_OUTPUT("Playback/Tones"),
     AUDIO_CALL_MANAGEMENT("Call Management"),
     SOURCE_HEARTBEAT("Heartbeat Monitor"),
+    SOURCE_STREAM_HEARTBEAT("Streaming Heartbeat"),
     SOURCE_NETWORK_STREAM("Network Stream"),
     SOURCE_IMBE_STREAM("IMBE Audio Stream"),
     SOURCE_PCM_STREAM("PCM Audio Stream"),
