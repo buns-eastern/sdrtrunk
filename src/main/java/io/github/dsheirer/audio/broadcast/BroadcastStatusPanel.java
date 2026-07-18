@@ -82,8 +82,17 @@ public class BroadcastStatusPanel extends JPanel
     {
         setLayout(new MigLayout("insets 0 0 0 0 ", "[grow,fill]", "[grow,fill]"));
 
-        mTable = new JTable(mBroadcastModel);
-        //Fill the viewport so the right-click menu is reachable even when the filter hides all rows.
+        mTable = new JTable(mBroadcastModel)
+        {
+            @Override
+            protected void paintComponent(java.awt.Graphics g)
+            {
+                super.paintComponent(g);
+                paintFilterPlaceholder(g, this);
+            }
+        };
+        //Fill the viewport so the right-click menu is reachable (and the placeholder paints) when the filter
+        //hides every row.
         mTable.setFillsViewportHeight(true);
 
         DefaultTableCellRenderer renderer = (DefaultTableCellRenderer)mTable.getDefaultRenderer(String.class);
@@ -139,6 +148,54 @@ public class BroadcastStatusPanel extends JPanel
     }
 
     /**
+     * When the problems-only filter is on and no streams are showing, paints a centered reminder so an empty
+     * box does not look like streaming has stopped. Theme-aware via the table foreground.
+     */
+    private void paintFilterPlaceholder(java.awt.Graphics g, JTable table)
+    {
+        if(!mShowOnlyProblems || table.getRowCount() > 0)
+        {
+            return;
+        }
+
+        Graphics2D g2 = (Graphics2D)g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        int hidden = mBroadcastModel.getRowCount();
+        String line1 = "Stream filter active";
+        String line2 = "Showing problem streams only \u2014 " + hidden + (hidden == 1 ? " stream hidden" : " streams hidden");
+
+        java.awt.Font base = table.getFont();
+        java.awt.Font f1 = base.deriveFont(java.awt.Font.BOLD, base.getSize2D() + 3f);
+        java.awt.Font f2 = base.deriveFont(java.awt.Font.PLAIN, base.getSize2D());
+
+        Color fg = table.getForeground();
+        Color c1 = new Color(fg.getRed(), fg.getGreen(), fg.getBlue(), 175);
+        Color c2 = new Color(fg.getRed(), fg.getGreen(), fg.getBlue(), 120);
+
+        int w = table.getWidth();
+        int h = table.getHeight();
+
+        g2.setFont(f1);
+        FontMetrics fm1 = g2.getFontMetrics();
+        g2.setFont(f2);
+        FontMetrics fm2 = g2.getFontMetrics();
+
+        int startY = (h - (fm1.getHeight() + fm2.getHeight())) / 2 + fm1.getAscent();
+
+        g2.setFont(f1);
+        g2.setColor(c1);
+        g2.drawString(line1, (w - fm1.stringWidth(line1)) / 2, startY);
+
+        g2.setFont(f2);
+        g2.setColor(c2);
+        g2.drawString(line2, (w - fm2.stringWidth(line2)) / 2, startY + fm2.getHeight());
+
+        g2.dispose();
+    }
+
+    /**
      * Row filter that, when enabled, hides Connected and Disabled streams so only streams with an active
      * problem (errors, disconnected, connecting, etc.) remain visible.
      */
@@ -175,6 +232,7 @@ public class BroadcastStatusPanel extends JPanel
         mShowOnlyProblems = enabled;
         mUserPreferences.getSwingPreference().setInt(mPreferenceKey + ".problems.only", enabled ? 1 : 0);
         mSorter.setRowFilter(createStatusFilter());
+        mTable.repaint();
     }
 
     public class ServerTypeRenderer extends DefaultTableCellRenderer
