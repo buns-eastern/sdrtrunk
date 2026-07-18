@@ -285,8 +285,14 @@ public class StreamHeartbeatManager
      */
     private void push(String baseUrl, String status, String message, String streamName)
     {
-        String separator = baseUrl.contains("?") ? "&" : "?";
-        String url = baseUrl + separator + "status=" + status
+        //Use only the base push URL - the Kuma token lives in the path.  Strip any query the user pasted from
+        //Kuma's example (?status=up&msg=OK&ping=) so our parameters are not duplicated: duplicate query keys make
+        //Kuma parse status as an array, which never equals "up" and leaves the monitor stuck down.
+        String trimmed = baseUrl.trim();
+        int query = trimmed.indexOf('?');
+        String base = (query >= 0) ? trimmed.substring(0, query) : trimmed;
+
+        String url = base + "?status=" + status
                 + "&msg=" + URLEncoder.encode(message, StandardCharsets.UTF_8)
                 + "&ping=";
 
