@@ -22,6 +22,8 @@ Fires throttled HTTP GET pings to configured endpoints (e.g. Uptime Kuma, or any
 Configure under **View → Preferences → External Outputs → Heartbeat Monitor**:
 
 ![Heartbeat Monitor preferences panel](https://github.com/user-attachments/assets/ba7debd2-fe99-4a26-ac51-f53b055988de)
+<img width="1180" height="770" alt="Screenshot 2026-07-18 152204" src="https://github.com/user-attachments/assets/7c675c0d-c11e-441a-83e6-f98abb7d68e6" />
+
 
 ### TCP Network Streaming
 Streams all decode activity as live newline-delimited JSON (NDJSON) over TCP. Multiple clients can connect simultaneously with no polling delay. Two ports:
