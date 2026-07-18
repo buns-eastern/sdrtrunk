@@ -46,11 +46,35 @@ import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.swing.SwingUtilities;
+import javax.swing.event.TableModelEvent;
 import javax.swing.table.AbstractTableModel;
 
 public class BroadcastModel extends AbstractTableModel implements Listener<AudioRecording>
 {
     private final static Logger mLog = LoggerFactory.getLogger(BroadcastModel.class);
+
+    /**
+     * Ensures that all table model change events are delivered on the Swing event dispatch thread.
+     *
+     * Broadcaster state, queue-size and streamed-count updates are fired from background audio streaming
+     * threads.  Swing requires table model events to be delivered on the EDT; delivering them off-thread is
+     * tolerated by a plain JTable but corrupts a TableRowSorter's internal row-index mapping and throws an
+     * ArrayIndexOutOfBoundsException.  Marshalling every event through this single choke-point keeps the UI
+     * consistent and prevents streaming from being disrupted by UI table updates.
+     */
+    @Override
+    public void fireTableChanged(TableModelEvent e)
+    {
+        if(SwingUtilities.isEventDispatchThread())
+        {
+            super.fireTableChanged(e);
+        }
+        else
+        {
+            SwingUtilities.invokeLater(() -> super.fireTableChanged(e));
+        }
+    }
 
     public static final String TEMPORARY_STREAM_DIRECTORY = "streaming";
     public static final String TEMPORARY_STREAM_FILE_SUFFIX = "temporary_streaming_file_";
