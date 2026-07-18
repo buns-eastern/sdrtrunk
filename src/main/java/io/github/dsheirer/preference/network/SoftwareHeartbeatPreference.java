@@ -36,6 +36,10 @@ public class SoftwareHeartbeatPreference extends Preference
     private static final String KEY_KUMA_INTERVAL = "softwareheartbeat.kumaIntervalSeconds";
     private static final String KEY_SECOND_INTERVAL = "softwareheartbeat.secondIntervalSeconds";
     private static final String KEY_LEGACY_INTERVAL = "softwareheartbeat.intervalSeconds";
+    private static final String KEY_USB_ENABLED = "softwareheartbeat.usbEnabled";
+    private static final String KEY_USB_KUMA_URL = "softwareheartbeat.usbKumaUrl";
+    private static final String KEY_USB_INTERVAL = "softwareheartbeat.usbIntervalSeconds";
+    private static final String KEY_USB_WINDOW = "softwareheartbeat.usbWindowSeconds";
 
     private final Preferences mPreferences = Preferences.userNodeForPackage(SoftwareHeartbeatPreference.class);
     private boolean mEnabled;
@@ -43,6 +47,10 @@ public class SoftwareHeartbeatPreference extends Preference
     private String mSecondUrl;
     private int mKumaIntervalSeconds;
     private int mSecondIntervalSeconds;
+    private boolean mUsbEnabled;
+    private String mUsbKumaUrl;
+    private int mUsbIntervalSeconds;
+    private int mUsbWindowSeconds;
 
     /**
      * Constructs an instance.
@@ -59,6 +67,11 @@ public class SoftwareHeartbeatPreference extends Preference
         int legacy = mPreferences.getInt(KEY_LEGACY_INTERVAL, 60);
         mKumaIntervalSeconds = mPreferences.getInt(KEY_KUMA_INTERVAL, legacy);
         mSecondIntervalSeconds = mPreferences.getInt(KEY_SECOND_INTERVAL, legacy);
+
+        mUsbEnabled = mPreferences.getBoolean(KEY_USB_ENABLED, false);
+        mUsbKumaUrl = mPreferences.get(KEY_USB_KUMA_URL, "");
+        mUsbIntervalSeconds = mPreferences.getInt(KEY_USB_INTERVAL, 60);
+        mUsbWindowSeconds = mPreferences.getInt(KEY_USB_WINDOW, 60);
     }
 
     @Override
@@ -109,6 +122,44 @@ public class SoftwareHeartbeatPreference extends Preference
         mPreferences.put(KEY_SECOND_URL, mSecondUrl);
         mPreferences.putInt(KEY_KUMA_INTERVAL, mKumaIntervalSeconds);
         mPreferences.putInt(KEY_SECOND_INTERVAL, mSecondIntervalSeconds);
+
+        notifyPreferenceUpdated();
+    }
+
+    public boolean isUsbEnabled()
+    {
+        return mUsbEnabled;
+    }
+
+    public String getUsbKumaUrl()
+    {
+        return mUsbKumaUrl;
+    }
+
+    public int getUsbIntervalSeconds()
+    {
+        return mUsbIntervalSeconds;
+    }
+
+    public int getUsbWindowSeconds()
+    {
+        return mUsbWindowSeconds;
+    }
+
+    /**
+     * Persists the USB/tuner error monitor configuration and notifies listeners.
+     */
+    public void storeUsb(boolean usbEnabled, String usbKumaUrl, int usbIntervalSeconds, int usbWindowSeconds)
+    {
+        mUsbEnabled = usbEnabled;
+        mUsbKumaUrl = usbKumaUrl != null ? usbKumaUrl : "";
+        mUsbIntervalSeconds = usbIntervalSeconds;
+        mUsbWindowSeconds = usbWindowSeconds;
+
+        mPreferences.putBoolean(KEY_USB_ENABLED, mUsbEnabled);
+        mPreferences.put(KEY_USB_KUMA_URL, mUsbKumaUrl);
+        mPreferences.putInt(KEY_USB_INTERVAL, mUsbIntervalSeconds);
+        mPreferences.putInt(KEY_USB_WINDOW, mUsbWindowSeconds);
 
         notifyPreferenceUpdated();
     }
