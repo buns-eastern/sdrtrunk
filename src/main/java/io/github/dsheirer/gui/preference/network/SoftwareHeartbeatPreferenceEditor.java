@@ -48,7 +48,8 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
     private CheckBox mEnabled;
     private TextField mKumaUrl;
     private TextField mSecondUrl;
-    private Spinner<Integer> mInterval;
+    private Spinner<Integer> mKumaInterval;
+    private Spinner<Integer> mSecondInterval;
     private Label mStatusLabel;
 
     public SoftwareHeartbeatPreferenceEditor(UserPreferences userPreferences)
@@ -92,7 +93,7 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
         box.getChildren().add(sectionHeader("HOW IT WORKS"));
 
         Label howItWorks = new Label(
-            "While SDRTrunk is running it sends a heartbeat every Interval seconds to each URL you configure.\n\n" +
+            "While SDRTrunk is running it sends a heartbeat to each URL you configure, each at its own interval.\n\n" +
             "There is nothing to compute as \"down\" from inside the application — if this code is running, the " +
             "application is up.  A stopped or crashed application simply stops sending, and your monitor flips to " +
             "down on its own (silence = down).  This replaces an external watchdog script that only checks whether " +
@@ -115,7 +116,7 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
         box.getChildren().add(urls);
 
         Label kumaNote = new Label(
-            "Tip: set the Kuma monitor's own Heartbeat Interval to roughly double the Interval below, with a " +
+            "Tip: set the Kuma monitor's own Heartbeat Interval to roughly double the Kuma interval below, with a " +
             "retry or two, so a single missed beat does not flip it red.");
         kumaNote.setWrapText(true);
         kumaNote.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + "; -fx-font-size: 11px;");
@@ -161,18 +162,19 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
         grid.add(rightLabel("Uptime Kuma push URL:"), 0, row);
         grid.add(mKumaUrl, 1, row++);
 
+        mKumaInterval = intervalSpinner(mPreference.getKumaIntervalSeconds());
+        grid.add(rightLabel("Kuma interval (s):"), 0, row);
+        grid.add(mKumaInterval, 1, row++);
+
         mSecondUrl = new TextField(mPreference.getSecondUrl());
         mSecondUrl.setPromptText("https://your-endpoint.example.com/heartbeat?...  (optional, sent as-is)");
         mSecondUrl.setMaxWidth(Double.MAX_VALUE);
         grid.add(rightLabel("Second heartbeat URL:"), 0, row);
         grid.add(mSecondUrl, 1, row++);
 
-        mInterval = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(
-            5, 3600, Math.max(5, Math.min(3600, mPreference.getIntervalSeconds())), 5));
-        mInterval.setEditable(true);
-        mInterval.setPrefWidth(110);
-        grid.add(rightLabel("Interval (s):"), 0, row);
-        grid.add(mInterval, 1, row++);
+        mSecondInterval = intervalSpinner(mPreference.getSecondIntervalSeconds());
+        grid.add(rightLabel("Second URL interval (s):"), 0, row);
+        grid.add(mSecondInterval, 1, row++);
 
         Button saveButton = new Button("Save");
         saveButton.setOnAction(e -> onSave());
@@ -187,13 +189,24 @@ public class SoftwareHeartbeatPreferenceEditor extends HBox
 
     private void onSave()
     {
-        int interval = (mInterval.getValue() != null) ? mInterval.getValue() : 60;
-        mPreference.store(mEnabled.isSelected(), mKumaUrl.getText(), mSecondUrl.getText(), interval);
+        int kumaInterval = (mKumaInterval.getValue() != null) ? mKumaInterval.getValue() : 60;
+        int secondInterval = (mSecondInterval.getValue() != null) ? mSecondInterval.getValue() : 60;
+        mPreference.store(mEnabled.isSelected(), mKumaUrl.getText(), kumaInterval,
+            mSecondUrl.getText(), secondInterval);
 
         if(mStatusLabel != null)
         {
             mStatusLabel.setText(mEnabled.isSelected() ? "Saved — heartbeat active." : "Saved — heartbeat disabled.");
         }
+    }
+
+    private Spinner<Integer> intervalSpinner(int value)
+    {
+        Spinner<Integer> s = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(
+            5, 3600, Math.max(5, Math.min(3600, value)), 5));
+        s.setEditable(true);
+        s.setPrefWidth(110);
+        return s;
     }
 
     private Label sectionHeader(String text)
