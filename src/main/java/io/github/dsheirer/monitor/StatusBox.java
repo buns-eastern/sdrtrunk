@@ -25,6 +25,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.beans.property.StringProperty;
 import io.github.dsheirer.gui.theme.ThemeManager;
 
 /**
@@ -106,7 +109,68 @@ public class StatusBox extends HBox
         recordingsSizeLabel.setAlignment(Pos.CENTER_RIGHT);
         getChildren().add(recordingsSizeLabel);
 
+        //Flexible spacer pushes the uptime readouts to the far right, away from the resource cluster.
+        Region uptimeSpacer = new Region();
+        HBox.setHgrow(uptimeSpacer, Priority.ALWAYS);
+        getChildren().add(uptimeSpacer);
+
+        Region divider = new Region();
+        divider.setStyle("-fx-background-color: " + (ThemeManager.isDarkTheme() ? "#3c3f43" : "#d0d0d0") +
+                "; -fx-min-width: 1; -fx-max-width: 1; -fx-min-height: 16; -fx-max-height: 16;");
+
+        HBox machineBox = new HBox(6, buildIcon(ICON_MONITOR), mutedLabel("Computer"),
+                valueLabel(mResourceMonitor.machineUptimeProperty()));
+        machineBox.setAlignment(Pos.CENTER_LEFT);
+        Tooltip.install(machineBox, new Tooltip("How long this computer has been running (days, hours, minutes)"));
+
+        HBox appBox = new HBox(6, buildIcon(ICON_BROADCAST), mutedLabel("sdrtrunk"),
+                valueLabel(mResourceMonitor.sdrtrunkUptimeProperty()));
+        appBox.setAlignment(Pos.CENTER_LEFT);
+        Tooltip.install(appBox, new Tooltip("How long sdrtrunk has been running (days, hours, minutes)"));
+
+        HBox uptimeBox = new HBox(13, divider, machineBox, appBox);
+        uptimeBox.setAlignment(Pos.CENTER_RIGHT);
+        uptimeBox.setPadding(new Insets(0, 8, 0, 0));
+        getChildren().add(uptimeBox);
+
         applyTheme();
+    }
+
+    private static final String ICON_MONITOR =
+        "M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z";
+    private static final String ICON_BROADCAST =
+        "M12 11c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6-3l-1.4 1.4C17.9 10.6 18.5 12 18.5 13.5c0 1.5-.6 2.9-1.9 4.1L18 19c1.7-1.5 2.5-3.5 2.5-5.5S19.7 9.5 18 8zM6 13.5c0-1.5.6-2.9 1.9-4.1L6.5 8C4.8 9.5 4 11.5 4 13.5s.8 4 2.5 5.5l1.4-1.4C6.6 16.4 6 15 6 13.5z";
+
+    /**
+     * Builds a small theme-tinted vector glyph from an SVG path, scaled into a 14x14 box.
+     */
+    private Region buildIcon(String svgPath)
+    {
+        Region icon = new Region();
+        icon.setStyle("-fx-shape: \"" + svgPath + "\"; -fx-background-color: " + ThemeManager.headingTextColor() +
+                "; -fx-min-width: 14; -fx-min-height: 14; -fx-max-width: 14; -fx-max-height: 14;");
+        return icon;
+    }
+
+    /**
+     * A muted section label matching the theme.
+     */
+    private Label mutedLabel(String text)
+    {
+        Label label = new Label(text);
+        label.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + ";");
+        return label;
+    }
+
+    /**
+     * A monospaced value label bound to the supplied string property so the digits line up as they update.
+     */
+    private Label valueLabel(StringProperty property)
+    {
+        Label label = new Label();
+        label.textProperty().bind(property);
+        label.setStyle("-fx-font-family: 'Monospaced'; -fx-font-weight: bold;");
+        return label;
     }
 
     /**

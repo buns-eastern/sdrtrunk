@@ -28,6 +28,8 @@ import java.lang.management.OperatingSystemMXBean;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import javafx.application.Platform;
@@ -71,6 +73,10 @@ public class ResourceMonitor
     private DoubleProperty mDirectoryUsePercentRecordings = new SimpleDoubleProperty();
     private StringProperty mFileSizeEventLogs = new SimpleStringProperty();
     private StringProperty mFileSizeRecordings = new SimpleStringProperty();
+    private StringProperty mSdrtrunkUptime = new SimpleStringProperty();
+    private StringProperty mMachineUptime = new SimpleStringProperty();
+    private volatile Long mBootEpochMillis = null;
+    private boolean mBootTimeRequested = false;
     private OperatingSystemMXBean mOperatingSystemMXBean;
 
     /**
@@ -90,6 +96,8 @@ public class ResourceMonitor
         }
 
         mMemoryTotal.set(Runtime.getRuntime().maxMemory());
+        mSdrtrunkUptime.set(formatDuration(0));
+        mMachineUptime.set("\u2014");
     }
 
     /**
@@ -105,6 +113,23 @@ public class ResourceMonitor
         if(mStorageMonitorFuture == null)
         {
             mStorageMonitorFuture = ThreadPool.SCHEDULED.scheduleAtFixedRate(() -> updateDirectoryUsage(), 1,30, TimeUnit.SECONDS);
+        }
+
+        //Determine system boot time exactly once, on a background thread, so a slow or unavailable OS query
+        //can never stall the UI. Until it resolves (or if it fails), machine uptime simply shows a dash.
+        if(!mBootTimeRequested)
+        {
+            mBootTimeRequested = true;
+            ThreadPool.CACHED.submit(() -> {
+                try
+                {
+                    mBootEpochMillis = detectBootEpochMillis();
+                }
+                catch(Throwable t)
+                {
+                    sLog.debug("System boot time unavailable - machine uptime will show a dash: " + t.getMessage());
+                }
+            });
         }
     }
 
@@ -148,6 +173,9 @@ public class ResourceMonitor
             mSystemMemoryUsedPercentage.set((double)mMemoryAllocated.get() / (double)mMemoryTotal.get());
             mCpuPercentage.set(loadFinal > 0 ? loadFinal : 0);
             mCpuAvailable.set(loadFinal >= 0);
+            mSdrtrunkUptime.set(formatDuration(ManagementFactory.getRuntimeMXBean().getUptime()));
+            Long boot = mBootEpochMillis;
+            mMachineUptime.set(boot != null ? formatDuration(System.currentTimeMillis() - boot) : "\u2014");
         });
     }
 
@@ -281,5 +309,143 @@ public class ResourceMonitor
     public DoubleProperty systemMemoryUsedPercentageProperty()
     {
         return mSystemMemoryUsedPercentage;
+    }
+
+    /**
+     * Formatted sdrtrunk (application) uptime, e.g. "7d 2h 28m".
+     */
+    public StringProperty sdrtrunkUptimeProperty()
+    {
+        return mSdrtrunkUptime;
+    }
+
+    /**
+     * Formatted machine (operating system) uptime, e.g. "7d 2h 28m", or a dash if it cannot be determined.
+     */
+    public StringProperty machineUptimeProperty()
+    {
+        return mMachineUptime;
+    }
+
+    /**
+     * Formats a duration in milliseconds as days, hours and minutes (e.g. 0d 0h 5m).
+     */
+    private static String formatDuration(long millis)
+    {
+        if(millis < 0)
+        {
+            millis = 0;
+        }
+
+        long totalMinutes = millis / 60000L;
+        long days = totalMinutes / (60 * 24);
+        long hours = (totalMinutes % (60 * 24)) / 60;
+        long minutes = totalMinutes % 60;
+        return days + "d " + hours + "h " + minutes + "m";
+    }
+
+    /**
+     * Determines the system boot time (epoch millis) for the current OS, or null if it cannot be determined.
+     * Any failure returns null so the feature degrades to a dash rather than throwing.
+     */
+    private Long detectBootEpochMillis()
+    {
+        try
+        {
+            String os = System.getProperty("os.name", "").toLowerCase();
+
+            if(os.contains("win"))
+            {
+                return windowsBootEpochMillis();
+            }
+            else if(os.contains("mac") || os.contains("darwin"))
+            {
+                return macBootEpochMillis();
+            }
+
+            return unixProcBootEpochMillis();
+        }
+        catch(Throwable t)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * Linux (and other /proc systems): first token of /proc/uptime is seconds since boot.
+     */
+    private Long unixProcBootEpochMillis() throws Exception
+    {
+        Path uptime = Path.of("/proc/uptime");
+
+        if(!Files.exists(uptime))
+        {
+            return null;
+        }
+
+        String content = Files.readString(uptime).trim();
+        String first = content.split("\\s+")[0];
+        double seconds = Double.parseDouble(first);
+        return System.currentTimeMillis() - (long)(seconds * 1000.0);
+    }
+
+    /**
+     * macOS: sysctl kern.boottime reports the boot time as "{ sec = <epoch>, usec = ... }".
+     */
+    private Long macBootEpochMillis() throws Exception
+    {
+        String out = runCommand(new String[]{"sysctl", "-n", "kern.boottime"});
+
+        if(out != null)
+        {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("sec\\s*=\\s*(\\d+)").matcher(out);
+
+            if(m.find())
+            {
+                return Long.parseLong(m.group(1)) * 1000L;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Windows: ask PowerShell for whole seconds of uptime, then derive the boot epoch.
+     */
+    private Long windowsBootEpochMillis() throws Exception
+    {
+        String out = runCommand(new String[]{"powershell", "-NoProfile", "-NonInteractive", "-Command",
+            "[int64]((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalSeconds"});
+
+        if(out != null)
+        {
+            String digits = out.replaceAll("[^0-9]", "");
+
+            if(!digits.isEmpty())
+            {
+                return System.currentTimeMillis() - Long.parseLong(digits) * 1000L;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Runs a short-lived command and returns its output, or null on timeout/failure. Used only once at startup.
+     */
+    private String runCommand(String[] command) throws Exception
+    {
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+
+        if(!process.waitFor(5, TimeUnit.SECONDS))
+        {
+            process.destroyForcibly();
+            return null;
+        }
+
+        try(InputStream is = process.getInputStream())
+        {
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 }
