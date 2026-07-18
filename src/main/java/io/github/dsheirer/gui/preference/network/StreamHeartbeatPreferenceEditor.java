@@ -48,7 +48,7 @@ import javafx.scene.layout.VBox;
  *
  * Auto-populates one row per audio streaming configuration found in the active playlist and lets the user
  * push an Uptime Kuma heartbeat per stream, with independent down/up debounce timers so a flapping upstream
- * (e.g. OpenMHz) does not generate false alerts.
+ * flaps between states does not generate false alerts.
  */
 public class StreamHeartbeatPreferenceEditor extends HBox
 {
@@ -91,8 +91,8 @@ public class StreamHeartbeatPreferenceEditor extends HBox
         title.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
 
         Label subtitle = new Label(
-            "Continuously report the health of each audio streaming feed (Broadcastify, OpenMHz, " +
-            "RdioScanner, Icecast, etc.) to an Uptime Kuma push monitor — one independent monitor per stream.");
+            "Continuously report the health of each audio streaming feed to an Uptime Kuma push monitor — one " +
+            "independent monitor per stream, whatever streaming types you use.");
         subtitle.setWrapText(true);
         subtitle.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + ";");
 
@@ -100,27 +100,65 @@ public class StreamHeartbeatPreferenceEditor extends HBox
         box.getChildren().add(sectionHeader("HOW IT WORKS"));
 
         Label howItWorks = new Label(
-            "Every stream listed below is pulled straight from your active playlist.  Tick Monitor, paste " +
-            "that stream's Uptime Kuma push URL, and SDRTrunk reports its live connection state:\n\n" +
-            "•  While the stream is CONNECTED it pushes an \"up\" heartbeat every Interval seconds.  That " +
-            "steady heartbeat is also your backstop — if SDRTrunk itself stops, every monitor goes silent and " +
-            "Kuma alerts.\n" +
-            "•  When the stream faults, it pushes \"down\" with the exact reason (Disconnected, Network " +
-            "Unavailable, Invalid Credentials, and so on).\n" +
-            "•  A DISABLED stream stays green (paused) and never alerts.");
+            "Every stream listed below is pulled straight from your active playlist.  Tick Monitor, paste that " +
+            "stream's Uptime Kuma push URL, and SDRTrunk reports its live connection state:\n\n" +
+            "•  While the stream is CONNECTED it pushes an \"up\" heartbeat every Interval seconds.  That steady " +
+            "heartbeat is also your backstop — if SDRTrunk itself stops, every monitor goes silent and Kuma alerts.\n" +
+            "•  When the stream faults, it pushes \"down\" with the exact reason so you can see what went wrong at " +
+            "a glance.\n" +
+            "•  A stream you turn off (Disabled) is treated as paused — reported \"up\" so it never false-alerts.  " +
+            "A stream you remove from the playlist is simply dropped from monitoring.");
         howItWorks.setWrapText(true);
         box.getChildren().add(howItWorks);
+
+        box.getChildren().add(new Separator());
+        box.getChildren().add(sectionHeader("UP, PAUSED, OR DOWN"));
+
+        Label buckets = new Label(
+            "UP — the single healthy state:  Connected (actively streaming).\n" +
+            "PAUSED (never alerts) — Disabled:  a stream you intentionally turned off.\n" +
+            "DOWN — any of the 14 fault states below, once it persists past the stream's Down after time.");
+        buckets.setWrapText(true);
+        box.getChildren().add(buckets);
+
+        Label faults = new Label(
+            "A stream is reported DOWN when it sits in any of these states past its Down after time:\n\n" +
+            "1.   Connecting — reconnecting, not yet carrying audio\n" +
+            "2.   Disconnected — dropped the connection to the server\n" +
+            "3.   Network Unavailable — no network, or the server address cannot be resolved\n" +
+            "4.   No Server — the server is unknown or unreachable\n" +
+            "5.   Ready — configured but not yet connected\n" +
+            "6.   Temporary Broadcast Error — error while sending; will reset and retry\n" +
+            "7.   Configuration Error — settings the remote server rejects\n" +
+            "8.   Invalid User Name/Password — credentials were rejected\n" +
+            "9.   Invalid Mount/Stream ID — wrong mount point or stream identifier\n" +
+            "10.  Invalid Settings — the configuration is not valid\n" +
+            "11.  Max Sources Exceeded — the server is at its source limit\n" +
+            "12.  Mount Point In Use — that mount point is already taken\n" +
+            "13.  Unsupported Audio Type — the server will not accept this audio format\n" +
+            "14.  Error — unspecified streaming error");
+        faults.setWrapText(true);
+        faults.setStyle("-fx-background-color: #f0f4f8; -fx-padding: 8px; " +
+                        "-fx-background-radius: 4px; -fx-font-size: 11.5px;");
+        box.getChildren().add(faults);
+
+        Label pausedNote = new Label(
+            "A stream you stop or disable yourself will NOT show as DOWN in Kuma — that is deliberate, so planned " +
+            "downtime never pages you.  Only a stream that is supposed to be running, and is not, reports down.");
+        pausedNote.setWrapText(true);
+        pausedNote.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + "; -fx-font-size: 11px;");
+        box.getChildren().add(pausedNote);
 
         box.getChildren().add(new Separator());
         box.getChildren().add(sectionHeader("DOWN AFTER / UP AFTER — PER-STREAM DEBOUNCE"));
 
         Label debounce = new Label(
-            "Down after:  the stream must stay faulted continuously for this many seconds before Kuma is told " +
-            "it is DOWN.  A shorter blip that recovers first is absorbed and never alerts.\n\n" +
-            "Up after:  once DOWN, the stream must hold CONNECTED continuously for this many seconds before Kuma " +
-            "is told it recovered.  This stops a feed that flaps up/down/up from bouncing the monitor.\n\n" +
-            "Set both loose for a known-flaky feed (OpenMHz: Down 120 / Up 120) and tight for solid infrastructure " +
-            "(your own server: Down 5 / Up 0).");
+            "Down after:  the stream must stay faulted continuously for this many seconds before Kuma is told it " +
+            "is DOWN.  A shorter blip that recovers first is absorbed and never alerts.\n\n" +
+            "Up after:  once DOWN, the stream must hold Connected continuously for this many seconds before Kuma is " +
+            "told it recovered.  This stops a feed that flaps up/down/up from bouncing the monitor.\n\n" +
+            "Set both loose for a feed you know reconnects often (for example Down 120 / Up 120), and tight for a " +
+            "feed you expect to be rock-solid (for example Down 5 / Up 0).");
         debounce.setWrapText(true);
         debounce.setStyle("-fx-background-color: #f0f4f8; -fx-padding: 8px; " +
                           "-fx-background-radius: 4px; -fx-font-size: 11.5px;");

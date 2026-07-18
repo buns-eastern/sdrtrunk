@@ -47,7 +47,7 @@ import org.slf4j.LoggerFactory;
  *  - fault      -> after the fault persists continuously for the stream's "Down after" seconds, push "down"
  *                  with the exact BroadcastState label as the reason.  A shorter blip is absorbed (stays "up").
  *  - recovery   -> once DOWN, the stream must hold CONNECTED continuously for "Up after" seconds before "up"
- *                  is reported.  This debounces a feed (e.g. OpenMHz) that flaps up/down/up.
+ *                  is reported.  This debounces a feed that flaps up/down/up.
  *  - DISABLED   -> reported "up" (paused) so an intentionally disabled stream never alerts.
  *
  * All work runs off the audio path on a scheduled thread and can never throw into streaming.  Reads of the
