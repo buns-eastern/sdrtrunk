@@ -384,7 +384,8 @@ public class JavaFxWindowManager extends Application
     {
         if(mUserPreferencesEditor == null)
         {
-            mUserPreferencesEditor = new UserPreferencesEditor(mUserPreferences);
+            mUserPreferencesEditor = new UserPreferencesEditor(mUserPreferences,
+                mPlaylistManager != null ? mPlaylistManager.getBroadcastModel() : null);
         }
 
         return mUserPreferencesEditor;

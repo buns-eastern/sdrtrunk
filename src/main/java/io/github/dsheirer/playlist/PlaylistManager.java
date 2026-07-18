@@ -26,6 +26,7 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import io.github.dsheirer.alias.Alias;
 import io.github.dsheirer.alias.AliasModel;
 import io.github.dsheirer.audio.broadcast.BroadcastModel;
+import io.github.dsheirer.audio.broadcast.StreamHeartbeatManager;
 import io.github.dsheirer.controller.channel.Channel.ChannelType;
 import io.github.dsheirer.controller.channel.ChannelEvent;
 import io.github.dsheirer.controller.channel.ChannelModel;
@@ -71,6 +72,7 @@ public class PlaylistManager implements Listener<ChannelEvent>
     private IconModel mIconModel;
 
     private BroadcastModel mBroadcastModel;
+    private StreamHeartbeatManager mStreamHeartbeatManager;
     private ChannelModel mChannelModel;
     private ChannelProcessingManager mChannelProcessingManager;
     private TunerManager mTunerManager;
@@ -102,6 +104,7 @@ public class PlaylistManager implements Listener<ChannelEvent>
         mIconModel = iconModel;
 
         mBroadcastModel = new BroadcastModel(mAliasModel, mIconModel, userPreferences);
+        mStreamHeartbeatManager = new StreamHeartbeatManager(mUserPreferences, mBroadcastModel);
         mRadioReference = new RadioReference(mUserPreferences);
 
         mChannelModel = new ChannelModel(mAliasModel);
@@ -264,6 +267,7 @@ public class PlaylistManager implements Listener<ChannelEvent>
     {
         PlaylistV2 playlist = load();
         transferPlaylistToModels(playlist);
+        mStreamHeartbeatManager.start();
     }
 
     /**

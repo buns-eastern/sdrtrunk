@@ -19,6 +19,7 @@
 
 package io.github.dsheirer.gui.preference;
 
+import io.github.dsheirer.audio.broadcast.BroadcastModel;
 import io.github.dsheirer.eventbus.MyEventBus;
 import io.github.dsheirer.gui.playlist.ViewPlaylistRequest;
 import io.github.dsheirer.preference.UserPreferences;
@@ -55,6 +56,7 @@ public class UserPreferencesEditor extends BorderPane
 
     private Map<PreferenceEditorType,Node> mEditors = new EnumMap<>(PreferenceEditorType.class);
     private UserPreferences mUserPreferences;
+    private BroadcastModel mBroadcastModel;
     private MenuBar mMenuBar;
     private TreeView mEditorSelectionTreeView;
     private VBox mEditorAndButtonsBox;
@@ -65,10 +67,12 @@ public class UserPreferencesEditor extends BorderPane
      * Constructs an instance
      *
      * @param userPreferences to edit
+     * @param broadcastModel for enumerating active streaming configurations (may be null)
      */
-    public UserPreferencesEditor(UserPreferences userPreferences)
+    public UserPreferencesEditor(UserPreferences userPreferences, BroadcastModel broadcastModel)
     {
         mUserPreferences = userPreferences;
+        mBroadcastModel = broadcastModel;
 
         setTop(getMenuBar());
 
@@ -206,6 +210,7 @@ public class UserPreferencesEditor extends BorderPane
 
             TreeItem<String> externalOutputsItem = new TreeItem<>("External Outputs");
             externalOutputsItem.getChildren().add(new TreeItem(PreferenceEditorType.SOURCE_HEARTBEAT));
+            externalOutputsItem.getChildren().add(new TreeItem(PreferenceEditorType.SOURCE_STREAM_HEARTBEAT));
             externalOutputsItem.getChildren().add(new TreeItem(PreferenceEditorType.SOURCE_NETWORK_STREAM));
             externalOutputsItem.getChildren().add(new TreeItem(PreferenceEditorType.SOURCE_IMBE_STREAM));
             externalOutputsItem.getChildren().add(new TreeItem(PreferenceEditorType.SOURCE_PCM_STREAM));
@@ -285,7 +290,7 @@ public class UserPreferencesEditor extends BorderPane
             }
             else
             {
-                editor = PreferenceEditorFactory.getEditor(type, getUserPreferences());
+                editor = PreferenceEditorFactory.getEditor(type, getUserPreferences(), mBroadcastModel);
                 mEditors.put(type, editor);
             }
         }
