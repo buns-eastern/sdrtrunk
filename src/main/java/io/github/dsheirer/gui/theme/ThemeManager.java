@@ -62,7 +62,7 @@ public class ThemeManager
     public static final String THEME_DRACULA = "dracula";
     public static final String THEME_NORD = "nord";
     public static final String THEME_LIGHT = "light";
-    public static final String THEME_DEFAULT = THEME_ARC_DARK;
+    public static final String THEME_DEFAULT = THEME_LIGHT;
 
     public static final String FONT_DEFAULT = "default";
 
@@ -218,7 +218,8 @@ public class ThemeManager
     {
         if(sPreferences == null)
         {
-            return true;
+            //Preferences not wired yet - fall back to whatever the default theme is (not a hardcoded dark)
+            return !THEME_LIGHT.equalsIgnoreCase(THEME_DEFAULT);
         }
 
         return !THEME_LIGHT.equalsIgnoreCase(theme());
