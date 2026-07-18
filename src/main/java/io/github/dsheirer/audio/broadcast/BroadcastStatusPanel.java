@@ -164,15 +164,17 @@ public class BroadcastStatusPanel extends JPanel
 
         int hidden = mBroadcastModel.getRowCount();
         String line1 = "Stream filter active";
-        String line2 = "Showing problem streams only \u2014 " + hidden + (hidden == 1 ? " stream hidden" : " streams hidden");
+        String line2 = "Connected and Disabled streams are hidden (" + hidden + " not shown)";
+        String line3 = "Any stream with a problem will appear here";
 
         java.awt.Font base = table.getFont();
         java.awt.Font f1 = base.deriveFont(java.awt.Font.BOLD, base.getSize2D() + 3f);
         java.awt.Font f2 = base.deriveFont(java.awt.Font.PLAIN, base.getSize2D());
 
         Color fg = table.getForeground();
-        Color c1 = new Color(fg.getRed(), fg.getGreen(), fg.getBlue(), 175);
-        Color c2 = new Color(fg.getRed(), fg.getGreen(), fg.getBlue(), 120);
+        Color c1 = new Color(fg.getRed(), fg.getGreen(), fg.getBlue(), 180);
+        Color c2 = new Color(fg.getRed(), fg.getGreen(), fg.getBlue(), 135);
+        Color c3 = new Color(fg.getRed(), fg.getGreen(), fg.getBlue(), 110);
 
         int w = table.getWidth();
         int h = table.getHeight();
@@ -182,15 +184,18 @@ public class BroadcastStatusPanel extends JPanel
         g2.setFont(f2);
         FontMetrics fm2 = g2.getFontMetrics();
 
-        int startY = (h - (fm1.getHeight() + fm2.getHeight())) / 2 + fm1.getAscent();
+        int top = (h - (fm1.getHeight() + fm2.getHeight() * 2)) / 2;
 
         g2.setFont(f1);
         g2.setColor(c1);
-        g2.drawString(line1, (w - fm1.stringWidth(line1)) / 2, startY);
+        g2.drawString(line1, (w - fm1.stringWidth(line1)) / 2, top + fm1.getAscent());
 
         g2.setFont(f2);
         g2.setColor(c2);
-        g2.drawString(line2, (w - fm2.stringWidth(line2)) / 2, startY + fm2.getHeight());
+        g2.drawString(line2, (w - fm2.stringWidth(line2)) / 2, top + fm1.getHeight() + fm2.getAscent());
+
+        g2.setColor(c3);
+        g2.drawString(line3, (w - fm2.stringWidth(line3)) / 2, top + fm1.getHeight() + fm2.getHeight() + fm2.getAscent());
 
         g2.dispose();
     }
