@@ -138,8 +138,7 @@ public class StreamHeartbeatPreferenceEditor extends HBox
             "13.  Unsupported Audio Type — the server will not accept this audio format\n" +
             "14.  Error — unspecified streaming error");
         faults.setWrapText(true);
-        faults.setStyle("-fx-background-color: #f0f4f8; -fx-padding: 8px; " +
-                        "-fx-background-radius: 4px; -fx-font-size: 11.5px;");
+        faults.setStyle(ThemeManager.calloutStyle());
         box.getChildren().add(faults);
 
         Label pausedNote = new Label(
@@ -160,8 +159,7 @@ public class StreamHeartbeatPreferenceEditor extends HBox
             "Set both loose for a feed you know reconnects often (for example Down 120 / Up 120), and tight for a " +
             "feed you expect to be rock-solid (for example Down 5 / Up 0).");
         debounce.setWrapText(true);
-        debounce.setStyle("-fx-background-color: #f0f4f8; -fx-padding: 8px; " +
-                          "-fx-background-radius: 4px; -fx-font-size: 11.5px;");
+        debounce.setStyle(ThemeManager.calloutStyle());
         box.getChildren().add(debounce);
 
         Label restartNote = new Label("⚙  Click Save to apply. Changes take effect immediately — no restart needed.");
