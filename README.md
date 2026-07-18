@@ -21,9 +21,16 @@ Fires throttled HTTP GET pings to configured endpoints (e.g. Uptime Kuma, or any
 
 Configure under **View → Preferences → External Outputs → Heartbeat Monitor**:
 
-![Heartbeat Monitor preferences panel]
 <img width="1180" height="770" alt="Screenshot 2026-07-18 152204" src="https://github.com/user-attachments/assets/7c675c0d-c11e-441a-83e6-f98abb7d68e6" />
 
+### Software Heartbeat Monitor
+<img width="1180" height="770" alt="Screenshot 2026-07-18 152200" src="https://github.com/user-attachments/assets/71074bbb-d39e-43e5-9985-66823b18cff5" />
+
+### Control Channel Heartbeat Monitor
+<img width="1180" height="770" alt="Screenshot 2026-07-18 152204" src="https://github.com/user-attachments/assets/54b4ad45-dcd4-4e15-a587-3b9a77bd99a0" />
+
+### Streaming Heartbeat Monitor
+<img width="1180" height="770" alt="Screenshot 2026-07-18 152207" src="https://github.com/user-attachments/assets/4689d7f5-ce8f-4cfd-883b-4ef19579424f" />
 
 ### TCP Network Streaming
 Streams all decode activity as live newline-delimited JSON (NDJSON) over TCP. Multiple clients can connect simultaneously with no polling delay. Two ports:
@@ -33,7 +40,6 @@ Streams all decode activity as live newline-delimited JSON (NDJSON) over TCP. Mu
 
 Configure under **View → Preferences → External Outputs → Network Stream**:
 
-![Network Stream preferences panel]
 <img width="1180" height="770" alt="Screenshot 2026-07-18 152211" src="https://github.com/user-attachments/assets/f30e78bb-ee06-4927-ba0a-7150dcd1bb8c" />
 
 All existing CSV logging continues unchanged — TCP streaming is purely additive.
@@ -56,6 +62,11 @@ All existing MP3 recording continues unchanged — IMBE streaming is purely addi
 
 <img width="1180" height="770" alt="Screenshot 2026-05-20 124555" src="https://github.com/user-attachments/assets/a78ca1a1-f1d7-4a73-b520-1368b204c890" />
 
+### PCM Audio Stream
+<img width="1180" height="770" alt="Screenshot 2026-07-18 152216" src="https://github.com/user-attachments/assets/b6490cb2-8df2-44a2-8697-dff3264ee295" />
+
+### Standalone Channel Heartbeat
+<img width="1180" height="770" alt="Screenshot 2026-07-18 152219" src="https://github.com/user-attachments/assets/23350065-8780-42e5-927d-66edcd22c35a" />
 
 ---
 
