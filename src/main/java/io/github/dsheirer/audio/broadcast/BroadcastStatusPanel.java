@@ -115,6 +115,11 @@ public class BroadcastStatusPanel extends JPanel
         mSorter.setRowFilter(createStatusFilter());
         mTable.setRowSorter(mSorter);
 
+        //Broadcaster status/queue/count updates arrive from background audio threads (marshalled onto the
+        //event dispatch thread).  A coalesced full repaint of this small table on any model change guarantees
+        //no status cell is left showing a stale or blank value after an update or a row-sorter resync.
+        mBroadcastModel.addTableModelListener(e -> mTable.repaint());
+
         mTable.addMouseListener(new MouseAdapter()
         {
             @Override
