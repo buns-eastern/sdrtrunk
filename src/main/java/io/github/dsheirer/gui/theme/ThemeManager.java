@@ -31,6 +31,7 @@ import io.github.dsheirer.settings.ColorSetting.ColorSettingName;
 import io.github.dsheirer.settings.SettingsManager;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
 import java.awt.Font;
 import javax.swing.ButtonGroup;
@@ -81,6 +82,14 @@ public class ThemeManager
     };
 
     private static final String[] FONT_FAMILIES = {"SansSerif", "Serif", "Monospaced", "Dialog"};
+    //Curated cross-platform physical fonts; only those actually installed on the running machine are offered.
+    private static final String[] FONT_CANDIDATES = {
+        "Segoe UI", "Calibri", "Tahoma", "Verdana", "Arial", "Roboto", "Open Sans", "Inter", "Lato",
+        "DejaVu Sans", "Liberation Sans", "Noto Sans", "Ubuntu", "Cantarell",
+        "Georgia", "Cambria", "Times New Roman", "DejaVu Serif", "Liberation Serif", "Noto Serif",
+        "Consolas", "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "Source Code Pro",
+        "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono", "Courier New", "Menlo", "Monaco"
+    };
     private static final int[] FONT_SIZES = {11, 12, 13, 14, 16, 18};
 
     private static UserPreferences sPreferences;
@@ -443,7 +452,7 @@ public class ThemeManager
         JMenu familyMenu = new JMenu("Font");
         ButtonGroup familyGroup = new ButtonGroup();
         String currentFamily = fontFamily();
-        addRadio(familyMenu, familyGroup, "Default", FONT_DEFAULT.equalsIgnoreCase(currentFamily), () -> setFontFamily(FONT_DEFAULT));
+        addRadio(familyMenu, familyGroup, "Default (theme)", FONT_DEFAULT.equalsIgnoreCase(currentFamily), () -> setFontFamily(FONT_DEFAULT));
 
         for(String family : FONT_FAMILIES)
         {
@@ -451,12 +460,25 @@ public class ThemeManager
             addRadio(familyMenu, familyGroup, family, family.equalsIgnoreCase(currentFamily), () -> setFontFamily(f));
         }
 
+        java.util.List<String> installedFamilies = availableCuratedFamilies();
+
+        if(!installedFamilies.isEmpty())
+        {
+            familyMenu.addSeparator();
+
+            for(String family : installedFamilies)
+            {
+                final String f = family;
+                addRadio(familyMenu, familyGroup, family, family.equalsIgnoreCase(currentFamily), () -> setFontFamily(f));
+            }
+        }
+
         menu.add(familyMenu);
 
         JMenu sizeMenu = new JMenu("Font Size");
         ButtonGroup sizeGroup = new ButtonGroup();
         int currentSize = fontSize();
-        addRadio(sizeMenu, sizeGroup, "Default", currentSize == 0, () -> setFontSize(0));
+        addRadio(sizeMenu, sizeGroup, "Default (theme)", currentSize == 0, () -> setFontSize(0));
 
         for(int size : FONT_SIZES)
         {
@@ -475,6 +497,39 @@ public class ThemeManager
         menu.add(densityMenu);
 
         return menu;
+    }
+
+    /**
+     * Returns the curated physical font families that are actually installed on this machine, so every
+     * menu entry is guaranteed to render (offering an absent font would silently do nothing).
+     */
+    private static java.util.List<String> availableCuratedFamilies()
+    {
+        java.util.Set<String> installed = new java.util.HashSet<>();
+
+        try
+        {
+            for(String name: GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames())
+            {
+                installed.add(name.toLowerCase());
+            }
+        }
+        catch(Throwable t)
+        {
+            //If font enumeration fails for any reason, fall back to just the logical families
+        }
+
+        java.util.List<String> result = new java.util.ArrayList<>();
+
+        for(String candidate: FONT_CANDIDATES)
+        {
+            if(installed.contains(candidate.toLowerCase()))
+            {
+                result.add(candidate);
+            }
+        }
+
+        return result;
     }
 
     private static void addRadio(JMenu menu, ButtonGroup group, String label, boolean selected, Runnable action)
