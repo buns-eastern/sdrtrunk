@@ -209,6 +209,7 @@ public class UserPreferencesEditor extends BorderPane
             sourceItem.setExpanded(true);
 
             TreeItem<String> externalOutputsItem = new TreeItem<>("External Outputs");
+            externalOutputsItem.getChildren().add(new TreeItem(PreferenceEditorType.SOURCE_SOFTWARE_HEARTBEAT));
             externalOutputsItem.getChildren().add(new TreeItem(PreferenceEditorType.SOURCE_HEARTBEAT));
             externalOutputsItem.getChildren().add(new TreeItem(PreferenceEditorType.SOURCE_STREAM_HEARTBEAT));
             externalOutputsItem.getChildren().add(new TreeItem(PreferenceEditorType.SOURCE_NETWORK_STREAM));

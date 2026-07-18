@@ -37,6 +37,7 @@ import io.github.dsheirer.preference.source.ChannelMultiFrequencyPreference;
 import io.github.dsheirer.preference.source.TunerPreference;
 import io.github.dsheirer.preference.swing.SwingPreference;
 import io.github.dsheirer.preference.network.HeartbeatPreference;
+import io.github.dsheirer.preference.network.SoftwareHeartbeatPreference;
 import io.github.dsheirer.preference.network.StreamHeartbeatPreference;
 import io.github.dsheirer.preference.network.NetworkStreamPreference;
 import io.github.dsheirer.preference.network.ImbeStreamPreference;
@@ -79,6 +80,7 @@ public class UserPreferences implements Listener<PreferenceType>
     private NetworkStreamPreference mNetworkStreamPreference;
     private HeartbeatPreference mHeartbeatPreference;
     private StreamHeartbeatPreference mStreamHeartbeatPreference;
+    private SoftwareHeartbeatPreference mSoftwareHeartbeatPreference;
     private ImbeStreamPreference mImbeStreamPreference;
     private PcmStreamPreference mPcmStreamPreference;
     private StandaloneStreamPreference mStandaloneStreamPreference;
@@ -250,6 +252,14 @@ public class UserPreferences implements Listener<PreferenceType>
     }
 
     /**
+     * Software (application alive) heartbeat monitor preferences
+     */
+    public SoftwareHeartbeatPreference getSoftwareHeartbeatPreference()
+    {
+        return mSoftwareHeartbeatPreference;
+    }
+
+    /**
      * IMBE audio stream preferences
      */
     public ImbeStreamPreference getImbeStreamPreference()
@@ -292,6 +302,7 @@ public class UserPreferences implements Listener<PreferenceType>
         mNetworkStreamPreference = new NetworkStreamPreference(this::receive);
         mHeartbeatPreference = new HeartbeatPreference(this::receive);
         mStreamHeartbeatPreference = new StreamHeartbeatPreference(this::receive);
+        mSoftwareHeartbeatPreference = new SoftwareHeartbeatPreference(this::receive);
         mImbeStreamPreference = new ImbeStreamPreference(this::receive);
         mPcmStreamPreference = new PcmStreamPreference(this::receive);
         mStandaloneStreamPreference = new StandaloneStreamPreference(this::receive);
