@@ -24,6 +24,7 @@ import io.github.dsheirer.alias.id.AliasID;
 import io.github.dsheirer.alias.id.talkgroup.Talkgroup;
 import io.github.dsheirer.controller.channel.Channel;
 import io.github.dsheirer.controller.channel.ChannelModel;
+import io.github.dsheirer.module.decode.analog.DecodeConfigAnalog;
 import io.github.dsheirer.gui.theme.ThemeManager;
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.preference.network.ChannelHeartbeatEntry;
@@ -291,53 +292,80 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
     {
         List<SystemTalkgroupOption> options = new ArrayList<>();
 
-        if(mAliasModel == null)
+        if(mChannelModel == null)
         {
             return options;
         }
 
         try
         {
-            //Map each alias list to the system(s) that use it, from the channel configurations
-            java.util.Map<String,java.util.LinkedHashSet<String>> aliasListSystems = new java.util.HashMap<>();
+            //Index the playlist talkgroups (and friendly names) by alias list
+            java.util.Map<String,java.util.List<Integer>> talkgroupsByList = new java.util.HashMap<>();
+            java.util.Map<String,String> nameByListTalkgroup = new java.util.HashMap<>();
 
-            if(mChannelModel != null)
+            if(mAliasModel != null)
             {
-                for(Channel channel: mChannelModel.getChannels())
+                for(Alias alias: mAliasModel.getAliases())
                 {
-                    String system = channel.getSystem();
-                    String aliasList = channel.getAliasListName();
+                    String list = alias.getAliasListName();
 
-                    if(system != null && !system.isBlank() && aliasList != null && !aliasList.isBlank())
+                    if(list == null)
                     {
-                        aliasListSystems.computeIfAbsent(aliasList, k -> new java.util.LinkedHashSet<>()).add(system);
+                        continue;
+                    }
+
+                    for(AliasID id: alias.getAliasIdentifiers())
+                    {
+                        if(id instanceof Talkgroup)
+                        {
+                            int tg = ((Talkgroup)id).getValue();
+                            talkgroupsByList.computeIfAbsent(list, k -> new ArrayList<>()).add(tg);
+                            nameByListTalkgroup.putIfAbsent(list + "|" + tg, alias.getName());
+                        }
                     }
                 }
             }
 
-            //A talkgroup's system is the system whose alias list contains it - a real, valid pairing
+            //Derive real (system, talkgroup) pairs from each channel. The channel owns BOTH its system and,
+            //for a conventional channel, its assigned talkgroup - so a shared alias list can no longer bleed
+            //one system's talkgroups into another when an alias list is shared across systems.
             java.util.Set<String> seen = new java.util.HashSet<>();
 
-            for(Alias alias: mAliasModel.getAliases())
+            for(Channel channel: mChannelModel.getChannels())
             {
-                java.util.Set<String> systems = aliasListSystems.get(alias.getAliasListName());
+                String system = channel.getSystem();
 
-                if(systems == null || systems.isEmpty())
+                if(system == null || system.isBlank())
                 {
                     continue;
                 }
 
-                for(AliasID id: alias.getAliasIdentifiers())
-                {
-                    if(id instanceof Talkgroup)
-                    {
-                        int tg = ((Talkgroup)id).getValue();
+                String list = channel.getAliasListName();
 
-                        for(String system: systems)
+                if(channel.getDecodeConfiguration() instanceof DecodeConfigAnalog)
+                {
+                    //Conventional channel carries a single assigned talkgroup
+                    int tg = ((DecodeConfigAnalog)channel.getDecodeConfiguration()).getTalkgroup();
+
+                    if(tg > 0 && seen.add(system.toLowerCase() + "|" + tg))
+                    {
+                        String name = nameByListTalkgroup.getOrDefault(list + "|" + tg, channel.getName());
+                        options.add(new SystemTalkgroupOption(tg, system, name));
+                    }
+                }
+                else
+                {
+                    //Trunking (or other) channel: its talkgroups come from its alias list, all under this system
+                    java.util.List<Integer> tgs = talkgroupsByList.get(list);
+
+                    if(tgs != null)
+                    {
+                        for(int tg: tgs)
                         {
                             if(seen.add(system.toLowerCase() + "|" + tg))
                             {
-                                options.add(new SystemTalkgroupOption(tg, system, alias.getName()));
+                                options.add(new SystemTalkgroupOption(tg, system,
+                                    nameByListTalkgroup.get(list + "|" + tg)));
                             }
                         }
                     }
@@ -356,7 +384,6 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
 
         return options;
     }
-
     private void onAddManual()
     {
         String text = mManualTalkgroup.getText();
