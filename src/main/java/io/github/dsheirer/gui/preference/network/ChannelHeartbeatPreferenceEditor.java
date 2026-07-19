@@ -70,8 +70,7 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
     private Spinner<Integer> mDebounce;
     private TableView<ChannelHeartbeatEntry> mTable;
     private ObservableList<ChannelHeartbeatEntry> mItems;
-    private ComboBox<TalkgroupOption> mPicker;
-    private ComboBox<String> mPickerSystem;
+    private ComboBox<SystemTalkgroupOption> mPicker;
     private ComboBox<String> mManualSystem;
     private TextField mManualTalkgroup;
     private TextField mManualLabel;
@@ -135,9 +134,9 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         box.getChildren().add(url);
 
         Label systemNote = new Label(
-            "If the same talkgroup exists in more than one system, set its System so only that system " +
-            "fires the heartbeat - or leave it on Any to match every system.  You can also use {system} " +
-            "in the URL.");
+            "The playlist list is grouped by system, so if the same talkgroup exists in more than one system " +
+            "you pick the exact one you want - the system comes with it.  Manual entries can set a system or " +
+            "leave it Any.  You can also use {system} in the URL.");
         systemNote.setWrapText(true);
         systemNote.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + "; -fx-font-size: 11px;");
         box.getChildren().add(systemNote);
@@ -245,19 +244,18 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
 
         //Add from playlist
         mPicker = new ComboBox<>(FXCollections.observableArrayList(buildPickerOptions()));
-        mPicker.setPromptText("Pick a talkgroup from your playlist");
-        mPicker.setPrefWidth(240);
+        mPicker.setPromptText("Pick a system + talkgroup from your playlist");
+        mPicker.setPrefWidth(380);
         mPicker.setStyle("-fx-prompt-text-fill: " + ThemeManager.mutedTextColor() + ";");
         Button addFromPlaylist = new Button("Add");
-        mPickerSystem = systemCombo();
         addFromPlaylist.setOnAction(e -> {
-            TalkgroupOption option = mPicker.getValue();
+            SystemTalkgroupOption option = mPicker.getValue();
             if(option != null)
             {
-                addEntry(option.talkgroup, option.name, systemValue(mPickerSystem));
+                addEntry(option.talkgroup, option.name, option.system);
             }
         });
-        HBox pickerRow = new HBox(8, fieldLabel("From playlist:"), mPicker, fieldLabel("System:"), mPickerSystem, addFromPlaylist);
+        HBox pickerRow = new HBox(8, fieldLabel("From playlist:"), mPicker, addFromPlaylist);
         pickerRow.setAlignment(Pos.CENTER_LEFT);
 
         //Add manually
@@ -289,42 +287,72 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
     /**
      * Builds the picker options from the playlist aliases that carry a talkgroup, sorted and de-duplicated.
      */
-    private List<TalkgroupOption> buildPickerOptions()
+    private List<SystemTalkgroupOption> buildPickerOptions()
     {
-        TreeMap<Integer,String> byTalkgroup = new TreeMap<>();
+        List<SystemTalkgroupOption> options = new ArrayList<>();
 
-        if(mAliasModel != null)
+        if(mAliasModel == null)
         {
-            try
-            {
-                for(Alias alias: mAliasModel.getAliases())
-                {
-                    for(AliasID id: alias.getAliasIdentifiers())
-                    {
-                        if(id instanceof Talkgroup)
-                        {
-                            int tg = ((Talkgroup)id).getValue();
+            return options;
+        }
 
-                            if(!byTalkgroup.containsKey(tg))
+        try
+        {
+            //Map each alias list to the system(s) that use it, from the channel configurations
+            java.util.Map<String,java.util.LinkedHashSet<String>> aliasListSystems = new java.util.HashMap<>();
+
+            if(mChannelModel != null)
+            {
+                for(Channel channel: mChannelModel.getChannels())
+                {
+                    String system = channel.getSystem();
+                    String aliasList = channel.getAliasListName();
+
+                    if(system != null && !system.isBlank() && aliasList != null && !aliasList.isBlank())
+                    {
+                        aliasListSystems.computeIfAbsent(aliasList, k -> new java.util.LinkedHashSet<>()).add(system);
+                    }
+                }
+            }
+
+            //A talkgroup's system is the system whose alias list contains it - a real, valid pairing
+            java.util.Set<String> seen = new java.util.HashSet<>();
+
+            for(Alias alias: mAliasModel.getAliases())
+            {
+                java.util.Set<String> systems = aliasListSystems.get(alias.getAliasListName());
+
+                if(systems == null || systems.isEmpty())
+                {
+                    continue;
+                }
+
+                for(AliasID id: alias.getAliasIdentifiers())
+                {
+                    if(id instanceof Talkgroup)
+                    {
+                        int tg = ((Talkgroup)id).getValue();
+
+                        for(String system: systems)
+                        {
+                            if(seen.add(system.toLowerCase() + "|" + tg))
                             {
-                                byTalkgroup.put(tg, alias.getName());
+                                options.add(new SystemTalkgroupOption(tg, system, alias.getName()));
                             }
                         }
                     }
                 }
             }
-            catch(Throwable t)
-            {
-                //If the alias list can't be read, the picker is simply empty; manual entry still works
-            }
         }
-
-        List<TalkgroupOption> options = new ArrayList<>();
-
-        for(java.util.Map.Entry<Integer,String> e: byTalkgroup.entrySet())
+        catch(Throwable t)
         {
-            options.add(new TalkgroupOption(e.getKey(), e.getValue()));
+            //If the playlist can't be read, the picker is simply empty; manual entry still works
         }
+
+        options.sort((x, y) -> {
+            int c = x.system.compareToIgnoreCase(y.system);
+            return c != 0 ? c : Integer.compare(x.talkgroup, y.talkgroup);
+        });
 
         return options;
     }
@@ -441,23 +469,26 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
     }
 
     /**
-     * A pickable talkgroup with its friendly name for the playlist dropdown.
+     * A pickable system+talkgroup pair for the playlist dropdown, grouped under its system.
      */
-    private static class TalkgroupOption
+    private static class SystemTalkgroupOption
     {
         private final int talkgroup;
+        private final String system;
         private final String name;
 
-        TalkgroupOption(int talkgroup, String name)
+        SystemTalkgroupOption(int talkgroup, String system, String name)
         {
             this.talkgroup = talkgroup;
+            this.system = system != null ? system : "";
             this.name = name != null ? name : "";
         }
 
         @Override
         public String toString()
         {
-            return name.isEmpty() ? Integer.toString(talkgroup) : name + " (" + talkgroup + ")";
+            String label = name.isEmpty() ? Integer.toString(talkgroup) : name + " (" + talkgroup + ")";
+            return system.isEmpty() ? label : system + "  \u00b7  " + label;
         }
     }
 }
