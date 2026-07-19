@@ -171,6 +171,7 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         mUrlTemplate = new TextField(mPreference.getUrlTemplate());
         mUrlTemplate.setPromptText("https://your-endpoint.example.com/path?token=XXXX&channel={channel}&status=active");
         mUrlTemplate.setMaxWidth(Double.MAX_VALUE);
+        mUrlTemplate.setStyle("-fx-prompt-text-fill: " + ThemeManager.mutedTextColor() + ";");
         grid.add(rightLabel("URL template:"), 0, row);
         grid.add(mUrlTemplate, 1, row++);
 
@@ -196,7 +197,9 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
 
         mTable = new TableView<>(mItems);
         mTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        mTable.setPlaceholder(new Label("No talkgroups yet - add from your playlist or enter one below."));
+        Label placeholder = new Label("No talkgroups yet - add from your playlist or enter one below.");
+        placeholder.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + ";");
+        mTable.setPlaceholder(placeholder);
         mTable.setPrefHeight(200);
 
         TableColumn<ChannelHeartbeatEntry, Number> tgCol = new TableColumn<>("Talkgroup");
@@ -209,8 +212,8 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
 
         mTable.getColumns().addAll(tgCol, labelCol);
 
-        Button removeButton = new Button("Remove selected");
-        removeButton.setStyle("-fx-text-fill: #cc0000;");
+        Button removeButton = new Button("Remove selected talkgroup");
+        removeButton.setStyle("-fx-text-fill: " + (ThemeManager.isDarkTheme() ? "#ff7a7a" : "#cc0000") + ";");
         removeButton.setOnAction(e -> {
             ChannelHeartbeatEntry selected = mTable.getSelectionModel().getSelectedItem();
             if(selected != null)
@@ -223,6 +226,7 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         mPicker = new ComboBox<>(FXCollections.observableArrayList(buildPickerOptions()));
         mPicker.setPromptText("Pick a talkgroup from your playlist");
         mPicker.setPrefWidth(320);
+        mPicker.setStyle("-fx-prompt-text-fill: " + ThemeManager.mutedTextColor() + ";");
         Button addFromPlaylist = new Button("Add");
         addFromPlaylist.setOnAction(e -> {
             TalkgroupOption option = mPicker.getValue();
@@ -231,19 +235,21 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
                 addEntry(option.talkgroup, option.name);
             }
         });
-        HBox pickerRow = new HBox(8, new Label("From playlist:"), mPicker, addFromPlaylist);
+        HBox pickerRow = new HBox(8, fieldLabel("From playlist:"), mPicker, addFromPlaylist);
         pickerRow.setAlignment(Pos.CENTER_LEFT);
 
         //Add manually
         mManualTalkgroup = new TextField();
         mManualTalkgroup.setPromptText("Talkgroup #");
         mManualTalkgroup.setPrefWidth(110);
+        mManualTalkgroup.setStyle("-fx-prompt-text-fill: " + ThemeManager.mutedTextColor() + ";");
         mManualLabel = new TextField();
         mManualLabel.setPromptText("Label (optional)");
         mManualLabel.setPrefWidth(160);
+        mManualLabel.setStyle("-fx-prompt-text-fill: " + ThemeManager.mutedTextColor() + ";");
         Button addManual = new Button("Add");
         addManual.setOnAction(e -> onAddManual());
-        HBox manualRow = new HBox(8, new Label("Or manually:"), mManualTalkgroup, mManualLabel, addManual);
+        HBox manualRow = new HBox(8, fieldLabel("Or manually:"), mManualTalkgroup, mManualLabel, addManual);
         manualRow.setAlignment(Pos.CENTER_LEFT);
 
         Button saveButton = new Button("Save");
@@ -349,10 +355,22 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         return l;
     }
 
+    private Label fieldLabel(String text)
+    {
+        Label l = new Label(text);
+        l.setStyle("-fx-text-fill: " + fg() + ";");
+        return l;
+    }
+
+    private static String fg()
+    {
+        return ThemeManager.isDarkTheme() ? "#e3e8ee" : "#1a1a1a";
+    }
+
     private Label rightLabel(String text)
     {
         Label l = new Label(text);
-        l.setStyle("-fx-font-weight: bold;");
+        l.setStyle("-fx-font-weight: bold; -fx-text-fill: " + fg() + ";");
         GridPane.setHalignment(l, HPos.RIGHT);
         return l;
     }
