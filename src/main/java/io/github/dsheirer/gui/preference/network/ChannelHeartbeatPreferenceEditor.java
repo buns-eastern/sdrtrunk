@@ -22,6 +22,8 @@ import io.github.dsheirer.alias.Alias;
 import io.github.dsheirer.alias.AliasModel;
 import io.github.dsheirer.alias.id.AliasID;
 import io.github.dsheirer.alias.id.talkgroup.Talkgroup;
+import io.github.dsheirer.controller.channel.Channel;
+import io.github.dsheirer.controller.channel.ChannelModel;
 import io.github.dsheirer.gui.theme.ThemeManager;
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.preference.network.ChannelHeartbeatEntry;
@@ -59,22 +61,27 @@ import javafx.scene.layout.VBox;
  */
 public class ChannelHeartbeatPreferenceEditor extends HBox
 {
+    private static final String ANY_SYSTEM = "Any system";
     private final ChannelHeartbeatPreference mPreference;
     private final AliasModel mAliasModel;
+    private final ChannelModel mChannelModel;
     private CheckBox mEnabled;
     private TextField mUrlTemplate;
     private Spinner<Integer> mDebounce;
     private TableView<ChannelHeartbeatEntry> mTable;
     private ObservableList<ChannelHeartbeatEntry> mItems;
     private ComboBox<TalkgroupOption> mPicker;
+    private ComboBox<String> mPickerSystem;
+    private ComboBox<String> mManualSystem;
     private TextField mManualTalkgroup;
     private TextField mManualLabel;
     private Label mStatusLabel;
 
-    public ChannelHeartbeatPreferenceEditor(UserPreferences userPreferences, AliasModel aliasModel)
+    public ChannelHeartbeatPreferenceEditor(UserPreferences userPreferences, AliasModel aliasModel, ChannelModel channelModel)
     {
         mPreference = userPreferences.getChannelHeartbeatPreference();
         mAliasModel = aliasModel;
+        mChannelModel = channelModel;
         mItems = FXCollections.observableArrayList(mPreference.getEntries());
         setMaxWidth(Double.MAX_VALUE);
 
@@ -126,6 +133,14 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         url.setWrapText(true);
         url.setStyle(ThemeManager.calloutStyle());
         box.getChildren().add(url);
+
+        Label systemNote = new Label(
+            "If the same talkgroup exists in more than one system, set its System so only that system " +
+            "fires the heartbeat - or leave it on Any to match every system.  You can also use {system} " +
+            "in the URL.");
+        systemNote.setWrapText(true);
+        systemNote.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + "; -fx-font-size: 11px;");
+        box.getChildren().add(systemNote);
 
         Label debounceNote = new Label(
             "Debounce is the minimum seconds between heartbeats for the same talkgroup, so one transmission (or " +
@@ -207,10 +222,16 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         tgCol.setMinWidth(100);
         tgCol.setCellValueFactory(data -> new SimpleIntegerProperty(data.getValue().getTalkgroup()));
 
+        TableColumn<ChannelHeartbeatEntry, String> systemCol = new TableColumn<>("System");
+        systemCol.setMaxWidth(170);
+        systemCol.setMinWidth(90);
+        systemCol.setCellValueFactory(data -> new SimpleStringProperty(
+            data.getValue().getSystem().isBlank() ? "(any)" : data.getValue().getSystem()));
+
         TableColumn<ChannelHeartbeatEntry, String> labelCol = new TableColumn<>("Label");
         labelCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getLabel()));
 
-        mTable.getColumns().addAll(tgCol, labelCol);
+        mTable.getColumns().addAll(tgCol, systemCol, labelCol);
 
         Button removeButton = new Button("Remove selected talkgroup");
         removeButton.setStyle("-fx-text-fill: " + (ThemeManager.isDarkTheme() ? "#ff7a7a" : "#cc0000") + ";");
@@ -225,17 +246,18 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         //Add from playlist
         mPicker = new ComboBox<>(FXCollections.observableArrayList(buildPickerOptions()));
         mPicker.setPromptText("Pick a talkgroup from your playlist");
-        mPicker.setPrefWidth(320);
+        mPicker.setPrefWidth(240);
         mPicker.setStyle("-fx-prompt-text-fill: " + ThemeManager.mutedTextColor() + ";");
         Button addFromPlaylist = new Button("Add");
+        mPickerSystem = systemCombo();
         addFromPlaylist.setOnAction(e -> {
             TalkgroupOption option = mPicker.getValue();
             if(option != null)
             {
-                addEntry(option.talkgroup, option.name);
+                addEntry(option.talkgroup, option.name, systemValue(mPickerSystem));
             }
         });
-        HBox pickerRow = new HBox(8, fieldLabel("From playlist:"), mPicker, addFromPlaylist);
+        HBox pickerRow = new HBox(8, fieldLabel("From playlist:"), mPicker, fieldLabel("System:"), mPickerSystem, addFromPlaylist);
         pickerRow.setAlignment(Pos.CENTER_LEFT);
 
         //Add manually
@@ -249,7 +271,8 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         mManualLabel.setStyle("-fx-prompt-text-fill: " + ThemeManager.mutedTextColor() + ";");
         Button addManual = new Button("Add");
         addManual.setOnAction(e -> onAddManual());
-        HBox manualRow = new HBox(8, fieldLabel("Or manually:"), mManualTalkgroup, mManualLabel, addManual);
+        mManualSystem = systemCombo();
+        HBox manualRow = new HBox(8, fieldLabel("Or manually:"), mManualTalkgroup, mManualSystem, mManualLabel, addManual);
         manualRow.setAlignment(Pos.CENTER_LEFT);
 
         Button saveButton = new Button("Save");
@@ -315,7 +338,7 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
             try
             {
                 int tg = Integer.parseInt(text.trim());
-                addEntry(tg, mManualLabel.getText());
+                addEntry(tg, mManualLabel.getText(), systemValue(mManualSystem));
                 mManualTalkgroup.clear();
                 mManualLabel.clear();
             }
@@ -326,19 +349,61 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         }
     }
 
-    private void addEntry(int talkgroup, String label)
+    private void addEntry(int talkgroup, String label, String system)
     {
+        String sys = system != null ? system : "";
+
         for(ChannelHeartbeatEntry existing: mItems)
         {
-            if(existing.getTalkgroup() == talkgroup)
+            if(existing.getTalkgroup() == talkgroup && existing.getSystem().equalsIgnoreCase(sys))
             {
-                mStatusLabel.setText("Talkgroup " + talkgroup + " is already in the list.");
+                mStatusLabel.setText("Talkgroup " + talkgroup + (sys.isEmpty() ? "" : " on " + sys) + " is already in the list.");
                 return;
             }
         }
 
-        mItems.add(new ChannelHeartbeatEntry(talkgroup, label != null ? label : ""));
+        mItems.add(new ChannelHeartbeatEntry(talkgroup, label != null ? label : "", sys));
         mStatusLabel.setText("");
+    }
+
+    private ComboBox<String> systemCombo()
+    {
+        java.util.TreeSet<String> systems = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+
+        if(mChannelModel != null)
+        {
+            try
+            {
+                for(Channel channel: mChannelModel.getChannels())
+                {
+                    String system = channel.getSystem();
+
+                    if(system != null && !system.isBlank())
+                    {
+                        systems.add(system);
+                    }
+                }
+            }
+            catch(Throwable t)
+            {
+                //If channels can't be read, only the Any option is offered
+            }
+        }
+
+        List<String> options = new ArrayList<>();
+        options.add(ANY_SYSTEM);
+        options.addAll(systems);
+
+        ComboBox<String> combo = new ComboBox<>(FXCollections.observableArrayList(options));
+        combo.setValue(ANY_SYSTEM);
+        combo.setPrefWidth(150);
+        return combo;
+    }
+
+    private static String systemValue(ComboBox<String> combo)
+    {
+        String value = combo.getValue();
+        return (value == null || ANY_SYSTEM.equals(value)) ? "" : value;
     }
 
     private void onSave()

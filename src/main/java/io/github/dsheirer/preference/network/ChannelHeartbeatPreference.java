@@ -127,6 +127,7 @@ public class ChannelHeartbeatPreference extends Preference
             ChannelHeartbeatEntry entry = new ChannelHeartbeatEntry();
             entry.setTalkgroup(mPreferences.getInt(KEY_PREFIX + i + ".talkgroup", 0));
             entry.setLabel(mPreferences.get(KEY_PREFIX + i + ".label", ""));
+            entry.setSystem(mPreferences.get(KEY_PREFIX + i + ".system", ""));
             entries.add(entry);
         }
 
@@ -143,12 +144,14 @@ public class ChannelHeartbeatPreference extends Preference
             ChannelHeartbeatEntry entry = mEntries.get(i);
             mPreferences.putInt(KEY_PREFIX + i + ".talkgroup", entry.getTalkgroup());
             mPreferences.put(KEY_PREFIX + i + ".label", entry.getLabel());
+            mPreferences.put(KEY_PREFIX + i + ".system", entry.getSystem());
         }
 
         for(int i = mEntries.size(); i < oldCount; i++)
         {
             mPreferences.remove(KEY_PREFIX + i + ".talkgroup");
             mPreferences.remove(KEY_PREFIX + i + ".label");
+            mPreferences.remove(KEY_PREFIX + i + ".system");
         }
     }
 }
