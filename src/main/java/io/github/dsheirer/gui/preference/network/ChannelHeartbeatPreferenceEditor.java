@@ -30,6 +30,7 @@ import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.preference.network.ChannelHeartbeatEntry;
 import io.github.dsheirer.preference.network.ChannelHeartbeatPreference;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.List;
 import java.util.TreeMap;
 import javafx.beans.property.SimpleIntegerProperty;
@@ -39,7 +40,9 @@ import javafx.collections.ObservableList;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -54,6 +57,7 @@ import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 /**
@@ -236,13 +240,7 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
 
         Button removeButton = new Button("Remove selected talkgroup");
         removeButton.setStyle("-fx-text-fill: " + (ThemeManager.isDarkTheme() ? "#ff7a7a" : "#cc0000") + ";");
-        removeButton.setOnAction(e -> {
-            ChannelHeartbeatEntry selected = mTable.getSelectionModel().getSelectedItem();
-            if(selected != null)
-            {
-                mItems.remove(selected);
-            }
-        });
+        removeButton.setOnAction(e -> onRemoveSelected());
 
         //Add from playlist
         javafx.collections.transformation.FilteredList<SystemTalkgroupOption> filteredOptions =
@@ -292,7 +290,9 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         saveButton.setOnAction(e -> onSave());
         mStatusLabel = new Label("");
         mStatusLabel.setStyle("-fx-text-fill: " + ThemeManager.mutedTextColor() + "; -fx-font-size: 11px;");
-        HBox saveRow = new HBox(8, saveButton, removeButton, mStatusLabel);
+        Region saveSpacer = new Region();
+        HBox.setHgrow(saveSpacer, Priority.ALWAYS);
+        HBox saveRow = new HBox(8, saveButton, mStatusLabel, saveSpacer, removeButton);
         saveRow.setAlignment(Pos.CENTER_LEFT);
 
         box.getChildren().addAll(mTable, pickerRow, manualRow, saveRow);
@@ -473,6 +473,40 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
     {
         String value = combo.getValue();
         return (value == null || ANY_SYSTEM.equals(value)) ? "" : value;
+    }
+
+    private void onRemoveSelected()
+    {
+        ChannelHeartbeatEntry selected = mTable.getSelectionModel().getSelectedItem();
+
+        if(selected == null)
+        {
+            mStatusLabel.setText("Select a talkgroup in the list first, then Remove.");
+            return;
+        }
+
+        String system = selected.getSystem().isBlank() ? "any system" : selected.getSystem();
+        String label = selected.getLabel().isBlank() ? "" : selected.getLabel() + " - ";
+        String description = label + "talkgroup " + selected.getTalkgroup() + "  (" + system + ")";
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Remove talkgroup");
+        confirm.setHeaderText("Remove this talkgroup from the Channel Heartbeat list?");
+        confirm.setContentText(description +
+            "\n\nThis only removes it from the heartbeat list - it does not change your playlist.");
+
+        if(getScene() != null && getScene().getWindow() != null)
+        {
+            confirm.initOwner(getScene().getWindow());
+        }
+
+        Optional<ButtonType> result = confirm.showAndWait();
+
+        if(result.isPresent() && result.get() == ButtonType.OK)
+        {
+            mItems.remove(selected);
+            mStatusLabel.setText("Removed " + description + ".");
+        }
     }
 
     private void onSave()
