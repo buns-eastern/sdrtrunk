@@ -34,6 +34,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -66,8 +67,8 @@ public class ChannelHeartbeatManager
     private final UserPreferences mUserPreferences;
     private final ChannelMetadataModel mChannelMetadataModel;
     private ScheduledFuture<?> mFuture;
-    private final Set<Integer> mActiveTalkgroups = new HashSet<>();
-    private final Map<Integer,Long> mLastFiredMs = new HashMap<>();
+    private final Set<String> mActiveKeys = new HashSet<>();
+    private final Map<String,Long> mLastFiredMs = new HashMap<>();
 
     /**
      * Constructs an instance.
@@ -148,15 +149,8 @@ public class ChannelHeartbeatManager
             return;
         }
 
-        Map<Integer,String> watched = new HashMap<>();
-
-        for(ChannelHeartbeatEntry entry: entries)
-        {
-            watched.put(entry.getTalkgroup(), entry.getLabel());
-        }
-
-        //Which watched talkgroups are currently in a call, per the live "Now Playing" metadata
-        Set<Integer> activeNow = new HashSet<>();
+        //Collect the systems currently in a call, keyed by talkgroup, from the live "Now Playing" metadata
+        Map<Integer,List<String>> activeSystemsByTalkgroup = new HashMap<>();
         int rows = mChannelMetadataModel.getRowCount();
 
         for(int i = 0; i < rows; i++)
@@ -179,15 +173,21 @@ public class ChannelHeartbeatManager
 
                 Identifier toIdentifier = metadata.getToIdentifier();
 
-                if(toIdentifier != null && toIdentifier.getValue() instanceof Integer)
+                if(toIdentifier == null || !(toIdentifier.getValue() instanceof Integer))
                 {
-                    int talkgroup = (Integer)toIdentifier.getValue();
-
-                    if(watched.containsKey(talkgroup))
-                    {
-                        activeNow.add(talkgroup);
-                    }
+                    continue;
                 }
+
+                int talkgroup = (Integer)toIdentifier.getValue();
+                String system = "";
+
+                if(metadata.getSystemConfigurationIdentifier() != null
+                        && metadata.getSystemConfigurationIdentifier().getValue() != null)
+                {
+                    system = metadata.getSystemConfigurationIdentifier().getValue();
+                }
+
+                activeSystemsByTalkgroup.computeIfAbsent(talkgroup, k -> new ArrayList<>()).add(system);
             }
             catch(Throwable t)
             {
@@ -197,51 +197,75 @@ public class ChannelHeartbeatManager
 
         long now = System.currentTimeMillis();
         long debounceMs = Math.max(0, pref.getDebounceSeconds()) * 1000L;
+        Set<String> currentKeys = new HashSet<>();
 
-        for(Map.Entry<Integer,String> watchedEntry: watched.entrySet())
+        for(ChannelHeartbeatEntry entry: entries)
         {
-            int talkgroup = watchedEntry.getKey();
-            boolean isActive = activeNow.contains(talkgroup);
-            boolean wasActive = mActiveTalkgroups.contains(talkgroup);
+            String key = entry.getTalkgroup() + "|" + entry.getSystem().toLowerCase();
+            currentKeys.add(key);
 
-            //Fire once on the transition into a call, subject to the per-talkgroup debounce
+            List<String> activeSystems = activeSystemsByTalkgroup.get(entry.getTalkgroup());
+            boolean isActive = false;
+            String matchedSystem = entry.getSystem();
+
+            if(activeSystems != null)
+            {
+                //Blank system filter matches this talkgroup on any system; otherwise require a system match
+                if(entry.getSystem().isBlank())
+                {
+                    isActive = true;
+                    matchedSystem = activeSystems.get(0);
+                }
+                else
+                {
+                    for(String system: activeSystems)
+                    {
+                        if(entry.getSystem().equalsIgnoreCase(system))
+                        {
+                            isActive = true;
+                            matchedSystem = system;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            boolean wasActive = mActiveKeys.contains(key);
+
+            //Fire once on the transition into a call, subject to the per-entry debounce
             if(isActive && !wasActive)
             {
-                Long last = mLastFiredMs.get(talkgroup);
+                Long last = mLastFiredMs.get(key);
 
                 if(last == null || (now - last) >= debounceMs)
                 {
-                    fire(template, talkgroup, watchedEntry.getValue());
-                    mLastFiredMs.put(talkgroup, now);
+                    fire(template, entry.getTalkgroup(), entry.getLabel(), matchedSystem);
+                    mLastFiredMs.put(key, now);
                 }
             }
 
             if(isActive)
             {
-                mActiveTalkgroups.add(talkgroup);
+                mActiveKeys.add(key);
             }
             else
             {
-                mActiveTalkgroups.remove(talkgroup);
+                mActiveKeys.remove(key);
             }
         }
 
-        //Drop tracking for talkgroups no longer watched
-        mActiveTalkgroups.retainAll(watched.keySet());
-        mLastFiredMs.keySet().retainAll(watched.keySet());
+        //Drop tracking for entries that no longer exist
+        mActiveKeys.retainAll(currentKeys);
+        mLastFiredMs.keySet().retainAll(currentKeys);
     }
-
     /**
      * Builds the URL from the template and fires it on a virtual thread.
      */
-    private void fire(String template, int talkgroup, String label)
+    private void fire(String template, int talkgroup, String label, String system)
     {
         String built = template.replace("{channel}", Integer.toString(talkgroup));
-
-        if(label != null)
-        {
-            built = built.replace("{label}", label);
-        }
+        built = built.replace("{label}", label != null ? label : "");
+        built = built.replace("{system}", system != null ? system : "");
 
         final String url = sanitizeUrl(built);
         Thread.ofVirtual().start(() -> fireGet(url, talkgroup));

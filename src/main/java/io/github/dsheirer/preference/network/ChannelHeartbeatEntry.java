@@ -26,21 +26,24 @@ public class ChannelHeartbeatEntry
 {
     private int mTalkgroup;
     private String mLabel = "";
+    private String mSystem = "";
 
     public ChannelHeartbeatEntry()
     {
     }
 
-    public ChannelHeartbeatEntry(int talkgroup, String label)
+    public ChannelHeartbeatEntry(int talkgroup, String label, String system)
     {
         mTalkgroup = talkgroup;
         mLabel = label != null ? label : "";
+        mSystem = system != null ? system : "";
     }
 
     public ChannelHeartbeatEntry(ChannelHeartbeatEntry other)
     {
         mTalkgroup = other.mTalkgroup;
         mLabel = other.mLabel;
+        mSystem = other.mSystem;
     }
 
     public int getTalkgroup()
@@ -61,5 +64,18 @@ public class ChannelHeartbeatEntry
     public void setLabel(String label)
     {
         mLabel = label != null ? label : "";
+    }
+
+    /**
+     * Optional system filter.  Blank means match this talkgroup on any system.
+     */
+    public String getSystem()
+    {
+        return mSystem;
+    }
+
+    public void setSystem(String system)
+    {
+        mSystem = system != null ? system : "";
     }
 }

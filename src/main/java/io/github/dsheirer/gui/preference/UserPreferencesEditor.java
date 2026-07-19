@@ -19,8 +19,7 @@
 
 package io.github.dsheirer.gui.preference;
 
-import io.github.dsheirer.alias.AliasModel;
-import io.github.dsheirer.audio.broadcast.BroadcastModel;
+import io.github.dsheirer.playlist.PlaylistManager;
 import io.github.dsheirer.eventbus.MyEventBus;
 import io.github.dsheirer.gui.playlist.ViewPlaylistRequest;
 import io.github.dsheirer.preference.UserPreferences;
@@ -57,8 +56,7 @@ public class UserPreferencesEditor extends BorderPane
 
     private Map<PreferenceEditorType,Node> mEditors = new EnumMap<>(PreferenceEditorType.class);
     private UserPreferences mUserPreferences;
-    private BroadcastModel mBroadcastModel;
-    private AliasModel mAliasModel;
+    private PlaylistManager mPlaylistManager;
     private MenuBar mMenuBar;
     private TreeView mEditorSelectionTreeView;
     private VBox mEditorAndButtonsBox;
@@ -71,11 +69,10 @@ public class UserPreferencesEditor extends BorderPane
      * @param userPreferences to edit
      * @param broadcastModel for enumerating active streaming configurations (may be null)
      */
-    public UserPreferencesEditor(UserPreferences userPreferences, BroadcastModel broadcastModel, AliasModel aliasModel)
+    public UserPreferencesEditor(UserPreferences userPreferences, PlaylistManager playlistManager)
     {
         mUserPreferences = userPreferences;
-        mBroadcastModel = broadcastModel;
-        mAliasModel = aliasModel;
+        mPlaylistManager = playlistManager;
 
         setTop(getMenuBar());
 
@@ -295,7 +292,7 @@ public class UserPreferencesEditor extends BorderPane
             }
             else
             {
-                editor = PreferenceEditorFactory.getEditor(type, getUserPreferences(), mBroadcastModel, mAliasModel);
+                editor = PreferenceEditorFactory.getEditor(type, getUserPreferences(), mPlaylistManager);
                 mEditors.put(type, editor);
             }
         }

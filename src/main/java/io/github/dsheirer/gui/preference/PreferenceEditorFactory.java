@@ -28,8 +28,7 @@ import io.github.dsheirer.gui.preference.mp3.MP3PreferenceEditor;
 import io.github.dsheirer.gui.preference.playback.PlaybackPreferenceEditor;
 import io.github.dsheirer.gui.preference.record.RecordPreferenceEditor;
 import io.github.dsheirer.gui.preference.tuner.TunerPreferenceEditor;
-import io.github.dsheirer.alias.AliasModel;
-import io.github.dsheirer.audio.broadcast.BroadcastModel;
+import io.github.dsheirer.playlist.PlaylistManager;
 import io.github.dsheirer.gui.preference.network.HeartbeatPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.ChannelHeartbeatPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.SoftwareHeartbeatPreferenceEditor;
@@ -47,7 +46,7 @@ import javafx.scene.Node;
 public class PreferenceEditorFactory
 {
     public static Node getEditor(PreferenceEditorType preferenceEditorType, UserPreferences userPreferences,
-                                 BroadcastModel broadcastModel, AliasModel aliasModel)
+                                 PlaylistManager playlistManager)
     {
         switch(preferenceEditorType)
         {
@@ -70,11 +69,14 @@ public class PreferenceEditorFactory
             case SOURCE_SOFTWARE_HEARTBEAT:
                 return new SoftwareHeartbeatPreferenceEditor(userPreferences);
             case SOURCE_CHANNEL_HEARTBEAT:
-                return new ChannelHeartbeatPreferenceEditor(userPreferences, aliasModel);
+                return new ChannelHeartbeatPreferenceEditor(userPreferences,
+                    playlistManager != null ? playlistManager.getAliasModel() : null,
+                    playlistManager != null ? playlistManager.getChannelModel() : null);
             case SOURCE_HEARTBEAT:
                 return new HeartbeatPreferenceEditor(userPreferences);
             case SOURCE_STREAM_HEARTBEAT:
-                return new StreamHeartbeatPreferenceEditor(userPreferences, broadcastModel);
+                return new StreamHeartbeatPreferenceEditor(userPreferences,
+                    playlistManager != null ? playlistManager.getBroadcastModel() : null);
             case SOURCE_NETWORK_STREAM:
                 return new NetworkStreamPreferenceEditor(userPreferences);
             case SOURCE_IMBE_STREAM:
