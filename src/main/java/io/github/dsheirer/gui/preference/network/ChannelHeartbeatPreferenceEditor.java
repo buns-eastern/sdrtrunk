@@ -72,6 +72,7 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
     private TableView<ChannelHeartbeatEntry> mTable;
     private ObservableList<ChannelHeartbeatEntry> mItems;
     private ComboBox<SystemTalkgroupOption> mPicker;
+    private TextField mFilter;
     private ComboBox<String> mManualSystem;
     private TextField mManualTalkgroup;
     private TextField mManualLabel;
@@ -244,10 +245,23 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         });
 
         //Add from playlist
-        mPicker = new ComboBox<>(FXCollections.observableArrayList(buildPickerOptions()));
+        javafx.collections.transformation.FilteredList<SystemTalkgroupOption> filteredOptions =
+            new javafx.collections.transformation.FilteredList<>(
+                FXCollections.observableArrayList(buildPickerOptions()), o -> true);
+        mPicker = new ComboBox<>(filteredOptions);
         mPicker.setPromptText("Pick a system + talkgroup from your playlist");
-        mPicker.setPrefWidth(380);
+        mPicker.setPrefWidth(340);
         mPicker.setStyle("-fx-prompt-text-fill: " + ThemeManager.mutedTextColor() + ";");
+
+        mFilter = new TextField();
+        mFilter.setPromptText("Filter by system, name, or TG");
+        mFilter.setPrefWidth(180);
+        mFilter.setStyle("-fx-prompt-text-fill: " + ThemeManager.mutedTextColor() + ";");
+        mFilter.textProperty().addListener((obs, oldValue, newValue) -> {
+            String query = (newValue == null) ? "" : newValue.trim().toLowerCase();
+            filteredOptions.setPredicate(option -> query.isEmpty() || option.matches(query));
+        });
+
         Button addFromPlaylist = new Button("Add");
         addFromPlaylist.setOnAction(e -> {
             SystemTalkgroupOption option = mPicker.getValue();
@@ -256,7 +270,7 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
                 addEntry(option.talkgroup, option.name, option.system);
             }
         });
-        HBox pickerRow = new HBox(8, fieldLabel("From playlist:"), mPicker, addFromPlaylist);
+        HBox pickerRow = new HBox(8, fieldLabel("From playlist:"), mFilter, mPicker, addFromPlaylist);
         pickerRow.setAlignment(Pos.CENTER_LEFT);
 
         //Add manually
@@ -516,6 +530,13 @@ public class ChannelHeartbeatPreferenceEditor extends HBox
         {
             String label = name.isEmpty() ? Integer.toString(talkgroup) : name + " (" + talkgroup + ")";
             return system.isEmpty() ? label : system + "  \u00b7  " + label;
+        }
+
+        boolean matches(String query)
+        {
+            return system.toLowerCase().contains(query)
+                    || name.toLowerCase().contains(query)
+                    || Integer.toString(talkgroup).contains(query);
         }
     }
 }
