@@ -35,6 +35,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -58,6 +59,9 @@ public class ChannelHeartbeatManager
 {
     private static final Logger mLog = LoggerFactory.getLogger(ChannelHeartbeatManager.class);
     private static final long TICK_MILLIS = 250;
+    //A watched talkgroup counts as active for either a clear call or an encrypted call - an encrypted
+    //transmission is still a keyed-up group, it just reports a different channel state than clear voice.
+    private static final Set<State> ACTIVE_CALL_STATES = EnumSet.of(State.CALL, State.ENCRYPTED);
 
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
@@ -166,7 +170,7 @@ public class ChannelHeartbeatManager
 
                 ChannelStateIdentifier stateIdentifier = metadata.getChannelStateIdentifier();
 
-                if(stateIdentifier == null || stateIdentifier.getValue() != State.CALL)
+                if(stateIdentifier == null || !ACTIVE_CALL_STATES.contains(stateIdentifier.getValue()))
                 {
                     continue;
                 }
