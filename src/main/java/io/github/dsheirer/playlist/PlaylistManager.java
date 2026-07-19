@@ -29,6 +29,7 @@ import io.github.dsheirer.audio.broadcast.BroadcastModel;
 import io.github.dsheirer.audio.broadcast.StreamHeartbeatManager;
 import io.github.dsheirer.monitor.SoftwareHeartbeatManager;
 import io.github.dsheirer.monitor.TunerErrorMonitor;
+import io.github.dsheirer.monitor.ChannelHeartbeatManager;
 import io.github.dsheirer.controller.channel.Channel.ChannelType;
 import io.github.dsheirer.controller.channel.ChannelEvent;
 import io.github.dsheirer.controller.channel.ChannelModel;
@@ -77,6 +78,7 @@ public class PlaylistManager implements Listener<ChannelEvent>
     private StreamHeartbeatManager mStreamHeartbeatManager;
     private SoftwareHeartbeatManager mSoftwareHeartbeatManager;
     private TunerErrorMonitor mTunerErrorMonitor;
+    private ChannelHeartbeatManager mChannelHeartbeatManager;
     private ChannelModel mChannelModel;
     private ChannelProcessingManager mChannelProcessingManager;
     private TunerManager mTunerManager;
@@ -116,6 +118,8 @@ public class PlaylistManager implements Listener<ChannelEvent>
         mChannelModel = new ChannelModel(mAliasModel);
         mChannelProcessingManager = new ChannelProcessingManager(mChannelMapModel, eventLogManager, mTunerManager,
             mAliasModel, mUserPreferences);
+        mChannelHeartbeatManager = new ChannelHeartbeatManager(mUserPreferences,
+            mChannelProcessingManager.getChannelMetadataModel());
 
         //Register the channel processing manager to receive global channel stop processing requests so that it can
         //respond to tuner shutdown (ie error) events
@@ -276,6 +280,7 @@ public class PlaylistManager implements Listener<ChannelEvent>
         mStreamHeartbeatManager.start();
         mSoftwareHeartbeatManager.start();
         mTunerErrorMonitor.start();
+        mChannelHeartbeatManager.start();
     }
 
     /**
