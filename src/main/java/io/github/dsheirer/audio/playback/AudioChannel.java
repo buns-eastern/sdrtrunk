@@ -57,7 +57,8 @@ public class AudioChannel implements Listener<IdentifierUpdateNotification>
     private Listener<IdentifierCollection> mIdentifierCollectionListener;
     private boolean mDropDuplicates;
     private boolean mMetadataSent = false;
-    private boolean mMuted;
+    //Audio playback starts muted by default; the user un-mutes with the speaker button in the audio panel.
+    private boolean mMuted = true;
     private boolean mDisabled;
     private float[] mAudioSegmentStartTone;
     private float[] mAudioSegmentDropTone;
