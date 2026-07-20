@@ -35,7 +35,11 @@ import io.github.dsheirer.gui.theme.ThemeManager;
  */
 public class StatusBox extends HBox
 {
+    private static final double BASE_FONT_SIZE = 12.0d;
+    private static final double MIN_FONT_SIZE = 8.5d;
     private ResourceMonitor mResourceMonitor;
+    private String mThemeStyle = "";
+    private boolean mAdjusting = false;
 
     /**
      * Constructs an instance.
@@ -134,6 +138,9 @@ public class StatusBox extends HBox
         getChildren().add(uptimeBox);
 
         applyTheme();
+
+        //Shrink the bar font to fit as the window narrows, so labels stop truncating.
+        widthProperty().addListener((observable, oldValue, newValue) -> adjustFontSize());
     }
 
     private static final String ICON_MONITOR =
@@ -182,7 +189,58 @@ public class StatusBox extends HBox
         String base = dark ? "#3c3f43" : "#ececec";
         String background = dark ? "#1e1f22" : "#f4f4f4";
         String inner = dark ? "#2b2d31" : "#ffffff";
-        setStyle("-fx-base: " + base + "; -fx-background-color: " + background + "; -fx-control-inner-background: " + inner + ";");
+        mThemeStyle = "-fx-base: " + base + "; -fx-background-color: " + background +
+            "; -fx-control-inner-background: " + inner + "; ";
+        applyFontSize(BASE_FONT_SIZE);
+    }
+
+    /**
+     * Applies the theme style plus a font size. Font size cascades to all the child labels.
+     */
+    private void applyFontSize(double size)
+    {
+        setStyle(mThemeStyle + "-fx-font-size: " + size + "px;");
+    }
+
+    /**
+     * Shrinks the status bar font just enough to fit the current width so the labels stop truncating, down to a
+     * readable floor. Runs whenever the bar is resized.
+     */
+    private void adjustFontSize()
+    {
+        if(mAdjusting)
+        {
+            return;
+        }
+
+        double available = getWidth();
+
+        if(available <= 8.0d)
+        {
+            return;
+        }
+
+        mAdjusting = true;
+
+        try
+        {
+            //Measure the natural width at the base font, then scale the font down if it overflows
+            applyFontSize(BASE_FONT_SIZE);
+            applyCss();
+            double needed = prefWidth(-1);
+            double size = BASE_FONT_SIZE;
+
+            if(needed > available && needed > 0)
+            {
+                size = Math.max(MIN_FONT_SIZE, BASE_FONT_SIZE * (available / needed));
+            }
+
+            applyFontSize(size);
+        }
+        finally
+        {
+            mAdjusting = false;
+        }
     }
 
     /**
