@@ -65,6 +65,8 @@ public class ThemeManager
     public static final String THEME_DEFAULT = THEME_LIGHT;
 
     public static final String FONT_DEFAULT = "default";
+    public static final String FONT_WEIGHT_KEY = "application.appearance.font.weight";
+    public static final String FONT_WEIGHT_DEFAULT = "Regular";
 
     public static final String DENSITY_KEY = "application.appearance.density";
     public static final String DENSITY_COMPACT = "compact";
@@ -100,6 +102,7 @@ public class ThemeManager
         "Ubuntu Mono", "Courier New"
     };
     private static final int[] FONT_SIZES = {11, 12, 13, 14, 16, 18};
+    private static final String[] FONT_WEIGHTS = {"Regular", "Medium", "Semibold", "Bold", "Extra Bold"};
 
     private static UserPreferences sPreferences;
     private static SettingsManager sSettingsManager;
@@ -131,6 +134,31 @@ public class ThemeManager
     private static int fontSize()
     {
         return sPreferences.getSwingPreference().getInt(FONT_SIZE_KEY, 0);
+    }
+
+    private static String fontWeight()
+    {
+        return sPreferences.getSwingPreference().getString(FONT_WEIGHT_KEY, FONT_WEIGHT_DEFAULT);
+    }
+
+    /**
+     * Maps a font weight name to a java.awt weight multiplier (1.0 = regular).
+     */
+    private static float weightValue(String name)
+    {
+        if(name == null)
+        {
+            return 1.0f;
+        }
+
+        switch(name.toLowerCase())
+        {
+            case "medium": return 1.25f;
+            case "semibold": return 1.5f;
+            case "bold": return 2.0f;
+            case "extra bold": return 2.5f;
+            default: return 1.0f;
+        }
     }
 
     private static String density()
@@ -318,8 +346,10 @@ public class ThemeManager
 
             String family = fontFamily();
             int size = fontSize();
+            float weight = weightValue(fontWeight());
+            boolean customFamily = family != null && !FONT_DEFAULT.equalsIgnoreCase(family);
 
-            if((family != null && !FONT_DEFAULT.equalsIgnoreCase(family)) || size > 0)
+            if(customFamily || size > 0 || weight != 1.0f)
             {
                 Font base = UIManager.getFont("defaultFont");
 
@@ -328,9 +358,18 @@ public class ThemeManager
                     base = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
                 }
 
-                String resolvedFamily = (family == null || FONT_DEFAULT.equalsIgnoreCase(family)) ? base.getFamily() : family;
+                String resolvedFamily = customFamily ? family : base.getFamily();
                 int resolvedSize = (size > 0) ? size : base.getSize();
-                UIManager.put("defaultFont", new Font(resolvedFamily, Font.PLAIN, resolvedSize));
+                Font resolved = new Font(resolvedFamily, Font.PLAIN, resolvedSize);
+
+                if(weight != 1.0f)
+                {
+                    java.util.Map<java.awt.font.TextAttribute, Object> attributes = new java.util.HashMap<>();
+                    attributes.put(java.awt.font.TextAttribute.WEIGHT, weight);
+                    resolved = resolved.deriveFont(attributes);
+                }
+
+                UIManager.put("defaultFont", resolved);
             }
 
             //Density: scale table/tree row height from the current font so it never clips.
@@ -434,6 +473,12 @@ public class ThemeManager
         applyLive();
     }
 
+    public static void setFontWeight(String weight)
+    {
+        sPreferences.getSwingPreference().setString(FONT_WEIGHT_KEY, weight);
+        applyLive();
+    }
+
     public static void setDensity(String density)
     {
         sPreferences.getSwingPreference().setString(DENSITY_KEY, density);
@@ -497,6 +542,18 @@ public class ThemeManager
         }
 
         menu.add(sizeMenu);
+
+        JMenu weightMenu = new JMenu("Font Weight");
+        ButtonGroup weightGroup = new ButtonGroup();
+        String currentWeight = fontWeight();
+
+        for(String w : FONT_WEIGHTS)
+        {
+            final String weight = w;
+            addRadio(weightMenu, weightGroup, w, w.equalsIgnoreCase(currentWeight), () -> setFontWeight(weight));
+        }
+
+        menu.add(weightMenu);
 
         JMenu densityMenu = new JMenu("Density");
         ButtonGroup densityGroup = new ButtonGroup();
