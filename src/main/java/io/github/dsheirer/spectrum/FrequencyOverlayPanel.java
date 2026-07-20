@@ -360,8 +360,12 @@ public class FrequencyOverlayPanel extends JPanel implements ISourceEventProcess
         double verticalAxisTop = height * 0.8d;
         double verticalAxisBottom = height * 0.98d;
 
-        double minXAxis = getAxisFromFrequency(minFrequency);
-        double maxXAxis = getAxisFromFrequency(maxFrequency);
+        //Clamp to the visible panel width. The frequency-to-x mapping reserves a couple of bins at the edges,
+        //so a bandwidth edge near the panel boundary can map just past it; clamping keeps both edge markers
+        //visible instead of one falling off-screen.
+        double width = getSize().getWidth();
+        double minXAxis = Math.max(0.0d, Math.min(width - 1.0d, getAxisFromFrequency(minFrequency)));
+        double maxXAxis = Math.max(0.0d, Math.min(width - 1.0d, getAxisFromFrequency(maxFrequency)));
 
         graphics.setColor(Color.GREEN);
 
