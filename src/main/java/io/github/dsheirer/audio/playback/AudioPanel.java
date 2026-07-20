@@ -288,13 +288,14 @@ public class AudioPanel extends JPanel implements Listener<AudioEvent>
      */
     public class MuteButton extends JButton
     {
-        private boolean mMuted = false;
+        private boolean mMuted = true;
 
         public MuteButton()
         {
-            setIcon(UNMUTED_ICON);
+            //Audio playback defaults to muted at startup, so the button starts in the muted (unmute) state.
+            setIcon(MUTED_ICON);
             setBorderPainted(false);
-            getAccessibleContext().setAccessibleName("Mute");
+            getAccessibleContext().setAccessibleName("Unmute");
             addActionListener(e -> {
                 mMuted = !mMuted;
                 mAudioPlaybackManager.getAudioOutput().setMuted(mMuted);
