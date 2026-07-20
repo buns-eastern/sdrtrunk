@@ -360,17 +360,19 @@ public class FrequencyOverlayPanel extends JPanel implements ISourceEventProcess
         double verticalAxisTop = height * 0.8d;
         double verticalAxisBottom = height * 0.98d;
 
-        //Clamp to the visible panel width. The frequency-to-x mapping reserves a couple of bins at the edges,
-        //so a bandwidth edge near the panel boundary can map just past it; clamping keeps both edge markers
-        //visible instead of one falling off-screen.
-        double width = getSize().getWidth();
-        double minXAxis = Math.max(0.0d, Math.min(width - 1.0d, getAxisFromFrequency(minFrequency)));
-        double maxXAxis = Math.max(0.0d, Math.min(width - 1.0d, getAxisFromFrequency(maxFrequency)));
+        //Snap the two 1px markers to whole pixels and draw them with anti-aliasing off. With anti-aliasing on
+        //(the panel default), a vertical line at a fractional x is smeared across two columns and renders
+        //washed-out, which made one green edge marker look like it lost its color at certain window widths.
+        double minXAxis = Math.rint(getAxisFromFrequency(minFrequency));
+        double maxXAxis = Math.rint(getAxisFromFrequency(maxFrequency));
 
+        Object priorAntiAlias = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         graphics.setColor(Color.GREEN);
-
         graphics.draw(new Line2D.Double(minXAxis, verticalAxisTop, minXAxis, verticalAxisBottom));
         graphics.draw(new Line2D.Double(maxXAxis, verticalAxisTop, maxXAxis, verticalAxisBottom));
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+            priorAntiAlias != null ? priorAntiAlias : RenderingHints.VALUE_ANTIALIAS_DEFAULT);
     }
 
     /**
