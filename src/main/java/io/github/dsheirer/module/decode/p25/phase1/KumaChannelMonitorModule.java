@@ -54,6 +54,7 @@ public class KumaChannelMonitorModule extends Module
     private final String mUrl;
     private final long mIntervalSeconds;
     private ScheduledFuture<?> mFuture;
+    private volatile boolean mLoggedFirstPing;
 
     /**
      * Constructs an instance.
@@ -72,6 +73,7 @@ public class KumaChannelMonitorModule extends Module
     public void start()
     {
         //Ping once immediately so the monitor comes up without waiting a full interval, then ping on schedule.
+        mLog.info("Channel monitor started for [{}] -- pinging every {}s", mChannelName, mIntervalSeconds);
         ping();
 
         try
@@ -139,6 +141,11 @@ public class KumaChannelMonitorModule extends Module
             if(code < 200 || code >= 300)
             {
                 mLog.warn("Channel monitor for [{}] -> HTTP {}", mChannelName, code);
+            }
+            else if(!mLoggedFirstPing)
+            {
+                mLoggedFirstPing = true;
+                mLog.info("Channel monitor for [{}] first ping OK (HTTP {})", mChannelName, code);
             }
         }
         catch(Throwable t)

@@ -244,6 +244,8 @@ public class DecoderFactory
 
             if(kumaMonitor != null && !kumaMonitor.getUrl().isBlank())
             {
+                mLog.info("Attaching per-channel liveness monitor for [{}] (system [{}]) every {}s",
+                        channel.getName(), channel.getSystem(), kumaMonitor.getIntervalSeconds());
                 modules.add(new KumaChannelMonitorModule(channel.getName(), kumaMonitor.getUrl(),
                         kumaMonitor.getIntervalSeconds()));
             }
