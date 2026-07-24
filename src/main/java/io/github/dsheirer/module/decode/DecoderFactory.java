@@ -114,8 +114,6 @@ import io.github.dsheirer.module.decode.traffic.TrafficChannelManager;
 import io.github.dsheirer.module.demodulate.fm.FMDemodulatorModule;
 import io.github.dsheirer.identifier.alias.TalkerAliasLogger;
 import io.github.dsheirer.module.decode.p25.phase1.ChannelHeartbeatModule;
-import io.github.dsheirer.module.decode.p25.phase1.KumaChannelMonitorModule;
-import io.github.dsheirer.preference.network.KumaChannelMonitorEntry;
 import io.github.dsheirer.module.decode.p25.phase1.ControlChannelHeartbeat;
 import io.github.dsheirer.module.decode.p25.phase1.NetworkEventBroadcastModule;
 import io.github.dsheirer.module.decode.p25.phase1.NetworkStreamManager;
@@ -232,23 +230,6 @@ public class DecoderFactory
         {
             modules.add(new ChannelHeartbeatModule(channel.getName(),
                     userPreferences.getStandaloneStreamPreference().getIntervalSeconds()));
-        }
-
-        //Per-channel Kuma liveness monitor: if this running channel has a configured monitor URL, ping it on
-        //its own interval for as long as the channel runs (independent of the 9504 stream above).  Same name
-        //filter as the standalone heartbeat so trunking voice (traffic) channels are excluded.
-        if(channel.getName() != null && !channel.getName().startsWith("T-"))
-        {
-            KumaChannelMonitorEntry kumaMonitor = userPreferences.getStandaloneStreamPreference()
-                    .findKumaMonitor(channel.getName(), channel.getSystem());
-
-            if(kumaMonitor != null && !kumaMonitor.getUrl().isBlank())
-            {
-                mLog.info("Attaching per-channel liveness monitor for [{}] (system [{}]) every {}s",
-                        channel.getName(), channel.getSystem(), kumaMonitor.getIntervalSeconds());
-                modules.add(new KumaChannelMonitorModule(channel.getName(), kumaMonitor.getUrl(),
-                        kumaMonitor.getIntervalSeconds()));
-            }
         }
 
         return modules;
