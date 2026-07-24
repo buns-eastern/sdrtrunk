@@ -139,41 +139,6 @@ public class StandaloneStreamPreference extends Preference
         notifyPreferenceUpdated();
     }
 
-    /**
-     * Finds the configured monitor for a running channel, matching by channel name.  If an entry specifies a
-     * system, that system must also match; entries with a blank system match the channel name on any system.
-     * Returns null when no monitor is configured for the channel.
-     */
-    public KumaChannelMonitorEntry findKumaMonitor(String channelName, String system)
-    {
-        if(channelName == null || channelName.isBlank())
-        {
-            return null;
-        }
-
-        //Match by channel name first.  An exact system match wins outright (used only to disambiguate the same
-        //channel name existing under more than one system).  Otherwise any name match is returned, so a monitor
-        //still fires even if the channel's system value differs from what was saved or is blank at runtime.
-        KumaChannelMonitorEntry nameMatch = null;
-
-        for(KumaChannelMonitorEntry entry: mKumaMonitors)
-        {
-            if(entry.getUrl().isBlank() || !entry.getChannelName().equalsIgnoreCase(channelName))
-            {
-                continue;
-            }
-
-            if(system != null && !entry.getSystem().isBlank() && entry.getSystem().equalsIgnoreCase(system))
-            {
-                return entry;
-            }
-
-            nameMatch = entry;
-        }
-
-        return nameMatch;
-    }
-
     private List<KumaChannelMonitorEntry> loadKumaMonitors()
     {
         List<KumaChannelMonitorEntry> monitors = new ArrayList<>();
