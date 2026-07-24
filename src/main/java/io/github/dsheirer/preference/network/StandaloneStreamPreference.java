@@ -151,26 +151,27 @@ public class StandaloneStreamPreference extends Preference
             return null;
         }
 
-        KumaChannelMonitorEntry nameOnlyMatch = null;
+        //Match by channel name first.  An exact system match wins outright (used only to disambiguate the same
+        //channel name existing under more than one system).  Otherwise any name match is returned, so a monitor
+        //still fires even if the channel's system value differs from what was saved or is blank at runtime.
+        KumaChannelMonitorEntry nameMatch = null;
 
         for(KumaChannelMonitorEntry entry: mKumaMonitors)
         {
-            if(!entry.getChannelName().equalsIgnoreCase(channelName) || entry.getUrl().isBlank())
+            if(entry.getUrl().isBlank() || !entry.getChannelName().equalsIgnoreCase(channelName))
             {
                 continue;
             }
 
-            if(entry.getSystem().isBlank())
-            {
-                nameOnlyMatch = entry;
-            }
-            else if(system != null && entry.getSystem().equalsIgnoreCase(system))
+            if(system != null && !entry.getSystem().isBlank() && entry.getSystem().equalsIgnoreCase(system))
             {
                 return entry;
             }
+
+            nameMatch = entry;
         }
 
-        return nameOnlyMatch;
+        return nameMatch;
     }
 
     private List<KumaChannelMonitorEntry> loadKumaMonitors()
