@@ -401,7 +401,7 @@ public class SDRTrunk implements Listener<TunerEvent>
         {
             mMainGui.setLocationRelativeTo(null);
         }
-        mMainGui.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        mMainGui.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         mMainGui.addWindowListener(new ShutdownMonitor());
 
         Dimension dimension = mUserPreferences.getSwingPreference().getDimension(WINDOW_FRAME_IDENTIFIER);
@@ -510,11 +510,7 @@ public class SDRTrunk implements Listener<TunerEvent>
         fileMenu.add(new JSeparator(JSeparator.HORIZONTAL));
 
         JMenuItem exitMenu = new JMenuItem("Exit");
-        exitMenu.addActionListener(event -> {
-                processShutdown();
-                System.exit(0);
-            }
-        );
+        exitMenu.addActionListener(event -> confirmAndShutdown());
 
         fileMenu.add(exitMenu);
 
@@ -919,12 +915,31 @@ public class SDRTrunk implements Listener<TunerEvent>
         }
     }
 
+    /**
+     * Prompts the user to confirm before closing so an accidental window close (or Exit) does not quit the
+     * application.  On confirmation the normal shutdown runs -- which is where window location, size and the
+     * split-pane divider positions are saved -- and then the JVM exits.  On cancel nothing is saved and the
+     * application stays open, so the save behavior is untouched: it still runs exactly once, only on a real exit.
+     */
+    private void confirmAndShutdown()
+    {
+        int choice = JOptionPane.showConfirmDialog(mMainGui,
+                "Close SDRTrunk?  Any running channels and streams will stop.",
+                "Confirm Exit", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+
+        if(choice == JOptionPane.YES_OPTION)
+        {
+            processShutdown();
+            System.exit(0);
+        }
+    }
+
     public class ShutdownMonitor extends WindowAdapter
     {
         @Override
         public void windowClosing(WindowEvent e)
         {
-            processShutdown();
+            confirmAndShutdown();
         }
     }
 
