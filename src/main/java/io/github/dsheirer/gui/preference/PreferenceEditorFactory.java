@@ -84,7 +84,8 @@ public class PreferenceEditorFactory
             case SOURCE_PCM_STREAM:
                 return new PcmStreamPreferenceEditor(userPreferences);
             case SOURCE_STANDALONE_STREAM:
-                return new StandaloneStreamPreferenceEditor(userPreferences);
+                return new StandaloneStreamPreferenceEditor(userPreferences,
+                    playlistManager != null ? playlistManager.getChannelModel() : null);
             case SOURCE_TUNERS:
                 return new TunerPreferenceEditor(userPreferences);
             case TALKGROUP_FORMAT:

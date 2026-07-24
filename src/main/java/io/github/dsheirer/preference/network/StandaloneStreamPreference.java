@@ -21,6 +21,8 @@ package io.github.dsheirer.preference.network;
 import io.github.dsheirer.preference.Preference;
 import io.github.dsheirer.preference.PreferenceType;
 import io.github.dsheirer.sample.Listener;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.prefs.Preferences;
 
 /**
@@ -38,12 +40,15 @@ public class StandaloneStreamPreference extends Preference
     private static final String KEY_ENABLED  = "standalone.stream.enabled";
     private static final String KEY_PORT     = "standalone.stream.port";
     private static final String KEY_INTERVAL = "standalone.stream.interval.seconds";
+    private static final String KEY_KUMA_COUNT = "standalone.stream.kuma.count";
+    private static final String KEY_KUMA_PREFIX = "standalone.stream.kuma.";
 
     private static final boolean DEFAULT_ENABLED  = true;
     private static final int     DEFAULT_PORT     = 9504;
     private static final int     DEFAULT_INTERVAL = 30;
 
     private final Preferences mPreferences = Preferences.userNodeForPackage(StandaloneStreamPreference.class);
+    private List<KumaChannelMonitorEntry> mKumaMonitors;
 
     /**
      * Constructs an instance.
@@ -52,6 +57,7 @@ public class StandaloneStreamPreference extends Preference
     public StandaloneStreamPreference(Listener<PreferenceType> updateListener)
     {
         super(updateListener);
+        mKumaMonitors = loadKumaMonitors();
     }
 
     @Override
@@ -94,5 +100,117 @@ public class StandaloneStreamPreference extends Preference
     {
         mPreferences.putInt(KEY_INTERVAL, intervalSeconds);
         notifyPreferenceUpdated();
+    }
+
+    /**
+     * Per-channel liveness monitors: while a named channel is running, SDRTrunk pings that entry's URL on its
+     * interval, so a push-style uptime monitor can watch specific conventional channels.  Independent of the
+     * TCP heartbeat server above -- these fire whether or not the 9504 stream is enabled.  Returns a defensive
+     * copy.
+     */
+    public List<KumaChannelMonitorEntry> getKumaMonitors()
+    {
+        List<KumaChannelMonitorEntry> copy = new ArrayList<>();
+
+        for(KumaChannelMonitorEntry entry: mKumaMonitors)
+        {
+            copy.add(new KumaChannelMonitorEntry(entry));
+        }
+
+        return copy;
+    }
+
+    /**
+     * Persists the per-channel monitors and notifies listeners.
+     */
+    public void storeKumaMonitors(List<KumaChannelMonitorEntry> monitors)
+    {
+        mKumaMonitors = new ArrayList<>();
+
+        if(monitors != null)
+        {
+            for(KumaChannelMonitorEntry entry: monitors)
+            {
+                mKumaMonitors.add(new KumaChannelMonitorEntry(entry));
+            }
+        }
+
+        persistKumaMonitors();
+        notifyPreferenceUpdated();
+    }
+
+    /**
+     * Finds the configured monitor for a running channel, matching by channel name.  If an entry specifies a
+     * system, that system must also match; entries with a blank system match the channel name on any system.
+     * Returns null when no monitor is configured for the channel.
+     */
+    public KumaChannelMonitorEntry findKumaMonitor(String channelName, String system)
+    {
+        if(channelName == null || channelName.isBlank())
+        {
+            return null;
+        }
+
+        KumaChannelMonitorEntry nameOnlyMatch = null;
+
+        for(KumaChannelMonitorEntry entry: mKumaMonitors)
+        {
+            if(!entry.getChannelName().equalsIgnoreCase(channelName) || entry.getUrl().isBlank())
+            {
+                continue;
+            }
+
+            if(entry.getSystem().isBlank())
+            {
+                nameOnlyMatch = entry;
+            }
+            else if(system != null && entry.getSystem().equalsIgnoreCase(system))
+            {
+                return entry;
+            }
+        }
+
+        return nameOnlyMatch;
+    }
+
+    private List<KumaChannelMonitorEntry> loadKumaMonitors()
+    {
+        List<KumaChannelMonitorEntry> monitors = new ArrayList<>();
+        int count = mPreferences.getInt(KEY_KUMA_COUNT, 0);
+
+        for(int i = 0; i < count; i++)
+        {
+            KumaChannelMonitorEntry entry = new KumaChannelMonitorEntry();
+            entry.setChannelName(mPreferences.get(KEY_KUMA_PREFIX + i + ".channel", ""));
+            entry.setSystem(mPreferences.get(KEY_KUMA_PREFIX + i + ".system", ""));
+            entry.setUrl(mPreferences.get(KEY_KUMA_PREFIX + i + ".url", ""));
+            entry.setIntervalSeconds(mPreferences.getInt(KEY_KUMA_PREFIX + i + ".interval", 60));
+            monitors.add(entry);
+        }
+
+        return monitors;
+    }
+
+    private void persistKumaMonitors()
+    {
+        int oldCount = mPreferences.getInt(KEY_KUMA_COUNT, 0);
+        mPreferences.putInt(KEY_KUMA_COUNT, mKumaMonitors.size());
+
+        for(int i = 0; i < mKumaMonitors.size(); i++)
+        {
+            KumaChannelMonitorEntry entry = mKumaMonitors.get(i);
+            mPreferences.put(KEY_KUMA_PREFIX + i + ".channel", entry.getChannelName());
+            mPreferences.put(KEY_KUMA_PREFIX + i + ".system", entry.getSystem());
+            mPreferences.put(KEY_KUMA_PREFIX + i + ".url", entry.getUrl());
+            mPreferences.putInt(KEY_KUMA_PREFIX + i + ".interval", entry.getIntervalSeconds());
+        }
+
+        for(int i = mKumaMonitors.size(); i < oldCount; i++)
+        {
+            mPreferences.remove(KEY_KUMA_PREFIX + i + ".channel");
+            mPreferences.remove(KEY_KUMA_PREFIX + i + ".system");
+            mPreferences.remove(KEY_KUMA_PREFIX + i + ".url");
+            mPreferences.remove(KEY_KUMA_PREFIX + i + ".interval");
+        }
     }
 }
