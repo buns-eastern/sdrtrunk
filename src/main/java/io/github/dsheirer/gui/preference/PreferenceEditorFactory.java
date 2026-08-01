@@ -31,6 +31,7 @@ import io.github.dsheirer.gui.preference.tuner.TunerPreferenceEditor;
 import io.github.dsheirer.playlist.PlaylistManager;
 import io.github.dsheirer.gui.preference.network.HeartbeatPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.ChannelHeartbeatPreferenceEditor;
+import io.github.dsheirer.gui.preference.call.IssiCallMergePreferenceEditor;
 import io.github.dsheirer.gui.preference.network.SoftwareHeartbeatPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.StreamHeartbeatPreferenceEditor;
 import io.github.dsheirer.gui.preference.network.NetworkStreamPreferenceEditor;
@@ -54,6 +55,10 @@ public class PreferenceEditorFactory
                 return new ApplicationPreferenceEditor(userPreferences);
             case AUDIO_CALL_MANAGEMENT:
                 return new CallManagementPreferenceEditor(userPreferences);
+            case AUDIO_ISSI_CALL_MERGE:
+                return new IssiCallMergePreferenceEditor(userPreferences,
+                    playlistManager != null ? playlistManager.getAliasModel() : null,
+                    playlistManager != null ? playlistManager.getChannelModel() : null);
             case AUDIO_MP3:
                 return new MP3PreferenceEditor(userPreferences);
             case AUDIO_OUTPUT:

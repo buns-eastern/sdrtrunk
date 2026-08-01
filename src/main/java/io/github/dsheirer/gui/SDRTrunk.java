@@ -22,6 +22,7 @@ import com.jidesoft.plaf.LookAndFeelFactory;
 import com.jidesoft.swing.JideSplitPane;
 import io.github.dsheirer.alias.AliasModel;
 import io.github.dsheirer.audio.DuplicateCallDetector;
+import io.github.dsheirer.audio.IssiCallMergeManager;
 import io.github.dsheirer.audio.broadcast.AudioStreamingManager;
 import io.github.dsheirer.audio.broadcast.BroadcastFormat;
 import io.github.dsheirer.audio.broadcast.BroadcastStatusPanel;
@@ -257,6 +258,12 @@ public class SDRTrunk implements Listener<TunerEvent>
         mAudioStreamingManager.start();
 
         DuplicateCallDetector duplicateCallDetector = new DuplicateCallDetector(mUserPreferences);
+
+        //ISSI Call Merge must run before the duplicate detector and streaming so a matched source call is
+        //re-pointed to its primary identity first.  Inert unless the feature is enabled with entries configured.
+        IssiCallMergeManager issiCallMergeManager = new IssiCallMergeManager(mUserPreferences,
+            mPlaylistManager.getAliasModel(), mPlaylistManager.getChannelModel());
+        mPlaylistManager.getChannelProcessingManager().addAudioSegmentListener(issiCallMergeManager);
 
         mPlaylistManager.getChannelProcessingManager().addAudioSegmentListener(duplicateCallDetector);
         mPlaylistManager.getChannelProcessingManager().addAudioSegmentListener(audioPlaybackManager);

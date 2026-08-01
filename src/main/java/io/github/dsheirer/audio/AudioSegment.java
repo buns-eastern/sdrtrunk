@@ -245,6 +245,15 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
     }
 
     /**
+     * Sets the alias list for this audio segment.  Used by the ISSI Call Merge feature to re-point a source
+     * call to a primary system's alias list so it resolves the primary's streaming configuration.
+     */
+    public void setAliasList(AliasList aliasList)
+    {
+        mAliasList = aliasList;
+    }
+
+    /**
      * Indicates if this audio segment is linked to a preceding audio segment.
      */
     public boolean isLinked()
@@ -288,6 +297,16 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
     public IdentifierCollection getIdentifierCollection()
     {
         return mIdentifierCollection;
+    }
+
+    /**
+     * Replaces the identifier that shares the same class/form/role (for example the SYSTEM configuration or the
+     * TO talkgroup), without broadcasting an update notification.  Used by the ISSI Call Merge feature to
+     * re-point a source call to a primary identity.
+     */
+    public void silentUpdateIdentifier(Identifier identifier)
+    {
+        mIdentifierCollection.silentUpdate(identifier);
     }
 
     /**

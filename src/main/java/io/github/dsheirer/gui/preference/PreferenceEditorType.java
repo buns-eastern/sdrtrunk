@@ -32,6 +32,7 @@ public enum PreferenceEditorType
     AUDIO_RECORD("Record"),
     AUDIO_OUTPUT("Playback/Tones"),
     AUDIO_CALL_MANAGEMENT("Call Management"),
+    AUDIO_ISSI_CALL_MERGE("ISSI Call Merge"),
     SOURCE_SOFTWARE_HEARTBEAT("Software Heartbeat"),
     SOURCE_CHANNEL_HEARTBEAT("Channel Heartbeat"),
     SOURCE_HEARTBEAT("Heartbeat Monitor"),

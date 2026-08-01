@@ -25,6 +25,7 @@ import io.github.dsheirer.preference.calibration.VectorCalibrationPreference;
 import io.github.dsheirer.preference.decoder.JmbeLibraryPreference;
 import io.github.dsheirer.preference.directory.DirectoryPreference;
 import io.github.dsheirer.preference.duplicate.CallManagementPreference;
+import io.github.dsheirer.preference.duplicate.IssiCallMergePreference;
 import io.github.dsheirer.preference.event.DecodeEventPreference;
 import io.github.dsheirer.preference.identifier.TalkgroupFormatPreference;
 import io.github.dsheirer.preference.javafx.JavaFxPreferences;
@@ -69,6 +70,7 @@ public class UserPreferences implements Listener<PreferenceType>
     private DecodeEventPreference mDecodeEventPreference;
     private DirectoryPreference mDirectoryPreference;
     private CallManagementPreference mCallManagementPreference;
+    private IssiCallMergePreference mIssiCallMergePreference;
     private JmbeLibraryPreference mJmbeLibraryPreference;
     private MP3Preference mMP3Preference;
     private PlaybackPreference mPlaybackPreference;
@@ -229,6 +231,11 @@ public class UserPreferences implements Listener<PreferenceType>
         return mCallManagementPreference;
     }
 
+    public IssiCallMergePreference getIssiCallMergePreference()
+    {
+        return mIssiCallMergePreference;
+    }
+
     /**
      * Network stream preferences
      */
@@ -300,6 +307,7 @@ public class UserPreferences implements Listener<PreferenceType>
         mDecodeEventPreference = new DecodeEventPreference(this::receive);
         mDirectoryPreference = new DirectoryPreference(this::receive);
         mCallManagementPreference = new CallManagementPreference(this::receive);
+        mIssiCallMergePreference = new IssiCallMergePreference(this::receive);
         mJmbeLibraryPreference = new JmbeLibraryPreference(this::receive);
         mMP3Preference = new MP3Preference(this::receive);
         mPlaybackPreference = new PlaybackPreference(this::receive);
