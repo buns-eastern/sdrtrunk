@@ -1,7 +1,7 @@
 # ISSI Call Merge branch build.  Run manually (workflow_dispatch) and select the issi-call-merge
 # branch to build it.  Uploads the packaged zips as a downloadable artifact; does NOT publish a release.
 # Builds native JNI libraries for each platform, then packages with Gradle.
-name: ISSI Call Merge Build
+name: Nightly Release ISSI Merge
 
 on:
   workflow_dispatch:
