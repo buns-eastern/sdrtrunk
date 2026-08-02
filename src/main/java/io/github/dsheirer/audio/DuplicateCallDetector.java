@@ -375,14 +375,32 @@ public class DuplicateCallDetector implements Listener<AudioSegment>
                                 {
                                     if(isDuplicate(current, toCheck))
                                     {
-                                        toCheck.setDuplicate(true);
-                                        toCheck.decrementConsumerCount();
-                                        duplicates.add(toCheck);
+                                        //ISSI Call Merge preference: keep the true primary copy over a re-pointed
+                                        //source copy, regardless of arrival order.  A merged source copy is tagged;
+                                        //the primary copy is not.  When exactly one of the pair is a merged source,
+                                        //that one loses.  Otherwise this falls back to first-come (the later-arriving
+                                        //toCheck loses), so normal duplicate handling for every other call is unchanged.
+                                        AudioSegment loser = toCheck;
+
+                                        if(current.isIssiMergedSource() && !toCheck.isIssiMergedSource())
+                                        {
+                                            loser = current;
+                                        }
+
+                                        loser.setDuplicate(true);
+                                        loser.decrementConsumerCount();
+                                        duplicates.add(loser);
 
                                         //Notify optional listener that we flagged the call as duplicate.
                                         if(mDuplicateCallDetectionListener != null)
                                         {
-                                            mDuplicateCallDetectionListener.receive(toCheck);
+                                            mDuplicateCallDetectionListener.receive(loser);
+                                        }
+
+                                        //If the current (earlier) call is the one we dropped, stop comparing it.
+                                        if(loser == current)
+                                        {
+                                            break;
                                         }
                                     }
                                 }

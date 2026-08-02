@@ -69,6 +69,7 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
     private final static Logger mLog = LoggerFactory.getLogger(AudioSegment.class);
     private BooleanProperty mComplete = new SimpleBooleanProperty(false);
     private BooleanProperty mDuplicate = new SimpleBooleanProperty(false);
+    private boolean mIssiMergedSource = false;
     private BooleanProperty mEncrypted = new SimpleBooleanProperty(false);
     private BooleanProperty mRecordAudio = new SimpleBooleanProperty(false);
     private IntegerProperty mMonitorPriority = new SimpleIntegerProperty(Priority.DEFAULT_PRIORITY);
@@ -505,6 +506,20 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
     public void setDuplicate(boolean duplicate)
     {
         mDuplicate.set(duplicate);
+    }
+
+    /**
+     * Indicates this segment is a source call that the ISSI Call Merge feature re-pointed to a primary identity.
+     * Used by the duplicate detector to keep the true primary copy over a merged source copy.
+     */
+    public boolean isIssiMergedSource()
+    {
+        return mIssiMergedSource;
+    }
+
+    public void setIssiMergedSource(boolean issiMergedSource)
+    {
+        mIssiMergedSource = issiMergedSource;
     }
 
     /**

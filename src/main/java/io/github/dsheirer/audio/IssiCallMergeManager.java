@@ -104,6 +104,9 @@ public class IssiCallMergeManager implements Listener<AudioSegment>
      */
     private void apply(AudioSegment audioSegment, IssiCallMergeEntry redirect)
     {
+        //Tag this as a merged source so the duplicate detector keeps the true primary copy over this one.
+        audioSegment.setIssiMergedSource(true);
+
         //Replace SYSTEM and TO talkgroup with the primary values (same class/form/role, so they replace in place)
         audioSegment.silentUpdateIdentifier(SystemConfigurationIdentifier.create(redirect.getPrimarySystem()));
         audioSegment.silentUpdateIdentifier(new APCO25Talkgroup(redirect.getPrimaryTalkgroup(), Role.TO));
