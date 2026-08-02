@@ -123,6 +123,16 @@ public class IssiCallMergeManager implements Listener<AudioSegment>
             {
                 for(Alias alias: aliases)
                 {
+                    //Mirror the primary alias record setting so a source-carried call is recorded exactly as the
+                    //primary would be.  Without this the record flag can depend on decoder identifier timing, which
+                    //could let a source-landed call stream but not record - unacceptable when recordings feed
+                    //transcription.  Setting it here (before the recorder sees the segment) makes recording
+                    //deterministic: if the primary talkgroup is set to record, the merged call always records.
+                    if(alias.isRecordable())
+                    {
+                        audioSegment.recordAudioProperty().set(true);
+                    }
+
                     for(BroadcastChannel channel: alias.getBroadcastChannels())
                     {
                         audioSegment.broadcastChannelsProperty().add(channel);
