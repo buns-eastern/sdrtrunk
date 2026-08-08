@@ -20,10 +20,10 @@ jobs:
         include:
           - os: ubuntu-latest
             target: linux-x86_64
-            lib_glob: "*.so"
+            lib_glob: "*.so*"
           - os: ubuntu-24.04-arm
             target: linux-aarch64
-            lib_glob: "*.so"
+            lib_glob: "*.so*"
           - os: macos-latest
             target: osx-aarch64
             lib_glob: "*.dylib"
@@ -90,6 +90,17 @@ jobs:
           cd jni/build
           cmake ../ -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
+        shell: bash
+
+      - name: Bundle HydraSDR driver next to the JNI (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # FetchContent builds the versioned driver libhydrasdr.so.1 in a sub-directory.  Copy the real
+          # library next to libhydrasdr_jni.so so it is uploaded and ends up in lib/native, where the
+          # launcher's LD_LIBRARY_PATH resolves it at runtime (no system install required).
+          find jni/build -name 'libhydrasdr.so*' -type f -exec cp -v {} jni/build/ \;
+          echo "=== jni/build native libs ==="
+          ls -l jni/build/*.so* || true
         shell: bash
 
       - name: Upload native libraries
