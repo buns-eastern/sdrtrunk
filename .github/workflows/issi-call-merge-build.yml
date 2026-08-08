@@ -95,10 +95,11 @@ jobs:
       - name: Bundle HydraSDR driver next to the JNI (Linux)
         if: runner.os == 'Linux'
         run: |
-          # FetchContent builds the versioned driver libhydrasdr.so.1 in a sub-directory.  Copy the real
-          # library next to libhydrasdr_jni.so so it is uploaded and ends up in lib/native, where the
-          # launcher's LD_LIBRARY_PATH resolves it at runtime (no system install required).
-          find jni/build -name 'libhydrasdr.so*' -type f -exec cp -v {} jni/build/ \;
+          # FetchContent builds libhydrasdr.so.1.1.2 (real) plus SONAME symlinks (libhydrasdr.so.1 -> ...).
+          # The JNI's NEEDED dependency is the SONAME libhydrasdr.so.1, so copy every libhydrasdr.so* from
+          # the dependency build tree, dereferencing symlinks into real files (cp -L) so the SONAME file
+          # itself ships in lib/native (a plain zip cannot carry the symlink).  no system install required.
+          find jni/build -mindepth 2 -name 'libhydrasdr.so*' \( -type f -o -type l \) -exec cp -Lv {} jni/build/ \;
           echo "=== jni/build native libs ==="
           ls -l jni/build/*.so* || true
         shell: bash
