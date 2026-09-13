@@ -59,6 +59,7 @@ import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
@@ -595,12 +596,21 @@ public class NXDNConfigurationEditor extends ChannelConfigurationEditor
 
         if(config instanceof DecodeConfigNXDN configNXDN)
         {
+            boolean matched = false;
+
             for(ToggleButton toggle: getTransmissionModeButton().getButtons())
             {
                 if(toggle.getUserData() == configNXDN.getTransmissionMode())
                 {
                     toggle.setSelected(true);
+                    matched = true;
                 }
+            }
+
+            //Ensure a toggle is always selected so that save never sees a null selection
+            if(!matched && !getTransmissionModeButton().getButtons().isEmpty())
+            {
+                getTransmissionModeButton().getButtons().get(0).setSelected(true);
             }
 
             getTrafficChannelPoolSizeSpinner().getValueFactory().setValue(configNXDN.getTrafficChannelPoolSize());
@@ -636,8 +646,19 @@ public class NXDNConfigurationEditor extends ChannelConfigurationEditor
             config = new DecodeConfigNXDN(TransmissionMode.M4800);
         }
 
-        TransmissionMode selected = (TransmissionMode)getTransmissionModeButton().getToggleGroup().selectedToggleProperty().get().getUserData();
-        config.setTransmissionMode(selected);
+        //The segmented button's toggle group can report a null selection (e.g. when the decoder pane was collapsed
+        //while the config was loaded, or the user deselected the active toggle).  Fall back to the existing mode so
+        //the save doesn't abort with an NPE and leave the source/frequency configuration unsaved.
+        Toggle selectedToggle = getTransmissionModeButton().getToggleGroup().getSelectedToggle();
+
+        if(selectedToggle != null && selectedToggle.getUserData() instanceof TransmissionMode selected)
+        {
+            config.setTransmissionMode(selected);
+        }
+        else if(config.getTransmissionMode() == null)
+        {
+            config.setTransmissionMode(TransmissionMode.M4800);
+        }
 
         config.setTrafficChannelPoolSize(getTrafficChannelPoolSizeSpinner().getValue());
         
