@@ -56,8 +56,15 @@ public class DiscoveredTunerModel extends AbstractTableModel implements Listener
     public static final int COLUMN_TUNER_TYPE = 2;
     public static final int COLUMN_FREQUENCY = 3;
     public static final int COLUMN_CHANNEL_COUNT = 4;
+    public static final int COLUMN_IN_SERVICE = 5;
     private static final String MHZ = " MHz";
-    private static final String[] COLUMN_HEADERS = {"Status","Class", "Type", "Frequency", "Channels"};
+    private static final String[] COLUMN_HEADERS = {"Status","Class", "Type", "Frequency", "Channels", "Service"};
+
+    /**
+     * Label shown in the service column for a tuner that has been taken out of service.
+     */
+    public static final String OUT_OF_SERVICE = "OUT OF SERVICE";
+    public static final String IN_SERVICE = "In Service";
 
     private List<DiscoveredTuner> mDiscoveredTuners = new CopyOnWriteArrayList<>();
     private List<Listener<TunerEvent>> mTunerEventListeners = new ArrayList<>();
@@ -419,6 +426,36 @@ public class DiscoveredTunerModel extends AbstractTableModel implements Listener
         }
     }
 
+    /**
+     * Repaints the row for the specified tuner so that a change to its in-service state is reflected in the table.
+     * Only the affected row is updated so that the current table selection is preserved.
+     *
+     * @param discoveredTuner whose row should be updated.
+     */
+    public void updateServiceState(DiscoveredTuner discoveredTuner)
+    {
+        if(discoveredTuner == null)
+        {
+            return;
+        }
+
+        mLock.lock();
+
+        try
+        {
+            int index = mDiscoveredTuners.indexOf(discoveredTuner);
+
+            if(index >= 0)
+            {
+                EventQueue.invokeLater(() -> fireTableCellUpdated(index, COLUMN_IN_SERVICE));
+            }
+        }
+        finally
+        {
+            mLock.unlock();
+        }
+    }
+
     @Override
     public void receive(TunerEvent event)
     {
@@ -512,6 +549,8 @@ public class DiscoveredTunerModel extends AbstractTableModel implements Listener
                     {
                         return "";
                     }
+                case COLUMN_IN_SERVICE:
+                    return discoveredTuner.isInService() ? IN_SERVICE : OUT_OF_SERVICE;
                 case COLUMN_CHANNEL_COUNT:
                     if(discoveredTuner.hasTuner())
                     {

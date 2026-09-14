@@ -181,6 +181,8 @@ public class TunerViewPanel extends JPanel
 
         TableCellRenderer errorCellRenderer = new TunerStatusCellRenderer();
         mTunerTable.getColumnModel().getColumn(DiscoveredTunerModel.COLUMN_TUNER_STATUS).setCellRenderer(errorCellRenderer);
+        mTunerTable.getColumnModel().getColumn(DiscoveredTunerModel.COLUMN_IN_SERVICE)
+                .setCellRenderer(new ServiceStateCellRenderer());
 
         mColumnWidthMonitor = new JTableColumnWidthMonitor(mUserPreferences, mTunerTable, TABLE_PREFERENCE_KEY);
         JScrollPane tunerTableScroller = new JScrollPane(mTunerTable);
@@ -253,6 +255,31 @@ public class TunerViewPanel extends JPanel
         }
 
         return mRemoveRecordingButton;
+    }
+
+    /**
+     * Custom cell renderer for the in-service column that highlights tuners which have been taken out of service so
+     * that an out-of-service tuner is never a mystery.
+     */
+    public class ServiceStateCellRenderer extends DefaultTableCellRenderer
+    {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,
+                                                       int row, int column)
+        {
+            Component component = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+            if(DiscoveredTunerModel.OUT_OF_SERVICE.equals(value))
+            {
+                component.setForeground(Color.RED);
+            }
+            else if(!isSelected)
+            {
+                component.setForeground(table.getForeground());
+            }
+
+            return component;
+        }
     }
 
     /**
