@@ -98,6 +98,15 @@ public abstract class ChannelSourceManager implements ISourceEventProcessor
     public abstract TunerFrequencyErrorManager getTunerFrequencyErrorManager();
 
     /**
+     * Polyphase channel manager backing this source manager, or null if this manager is not polyphase based.
+     * Used by signal discovery to tap raw channelizer output.
+     */
+    public io.github.dsheirer.dsp.filter.channelizer.PolyphaseChannelManager getPolyphaseChannelManager()
+    {
+        return null;
+    }
+
+    /**
      * Adds a listener to receive source events
      */
     public void addSourceEventListener(Listener<SourceEvent> listener)

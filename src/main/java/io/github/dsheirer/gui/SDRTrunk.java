@@ -693,6 +693,18 @@ public class SDRTrunk implements Listener<TunerEvent>
         mControllerPanel.getNowPlayingPanel().storeDividerLocations();
         mJavaFxWindowManager.shutdown();
         mLog.info("Stopping channels ...");
+        if(mControllerPanel != null && mControllerPanel.getDiscoveryManager() != null)
+        {
+            try
+            {
+                mControllerPanel.getDiscoveryManager().shutdown();
+            }
+            catch(Throwable t)
+            {
+                mLog.error("Error shutting down signal discovery", t);
+            }
+        }
+
         mPlaylistManager.getChannelProcessingManager().shutdown();
         mAudioRecordingManager.stop();
         mResourceMonitor.stop();
