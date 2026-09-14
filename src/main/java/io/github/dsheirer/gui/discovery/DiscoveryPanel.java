@@ -85,6 +85,10 @@ public class DiscoveryPanel extends JPanel
     private JCheckBox mAutoAnalyzeCheck;
     private JCheckBox mIncludeP25Check;
     private JCheckBox mIgnoreDcCheck;
+    private JSpinner mMinHitsSpinner;
+    private JCheckBox mHideBelowLevelCheck;
+    private JCheckBox mHideIgnoredCheck;
+    private TableRowSorter<HitTableModel> mSorter;
     private boolean mLoadingSettings = false;
     private final Timer mRefreshTimer;
     private volatile boolean mRefreshPending = false;
@@ -98,7 +102,7 @@ public class DiscoveryPanel extends JPanel
             if(mRefreshPending)
             {
                 mRefreshPending = false;
-                mTableModel.refresh();
+                refreshTablePreservingSelection();
             }
 
             updateStatus();
@@ -185,7 +189,7 @@ public class DiscoveryPanel extends JPanel
         mIgnoreDcCheck.addActionListener(e -> applySettings());
 
         //Row 3: global options and actions
-        JPanel row3 = new JPanel(new MigLayout("insets 0", "[][][][][grow][][][][][][]", "[]"));
+        JPanel row3 = new JPanel(new MigLayout("insets 0", "[][][][][][][][grow][][][][][][]", "[]"));
         mAutoAnalyzeCheck = new JCheckBox("Auto-analyze clips", mManager.getPreference().isAutoAnalyze());
         mAutoAnalyzeCheck.addActionListener(e -> mManager.getPreference().setAutoAnalyze(mAutoAnalyzeCheck.isSelected()));
         mIncludeP25Check = new JCheckBox("Include P25", mManager.getPreference().isIncludeP25());
@@ -197,7 +201,22 @@ public class DiscoveryPanel extends JPanel
         row3.add(mIncludeP25Check);
         row3.add(new JLabel("Keep clips"));
         row3.add(mRetentionSpinner, "w 60");
-        row3.add(new JLabel("days (0 = forever)"), "growx");
+        row3.add(new JLabel("days (0 = forever)"));
+
+        mMinHitsSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 1000, 1));
+        mMinHitsSpinner.setToolTipText("View filter: only show signals heard at least this many times");
+        mMinHitsSpinner.addChangeListener(e -> applyViewFilter());
+        mHideBelowLevelCheck = new JCheckBox("Hide below Level", false);
+        mHideBelowLevelCheck.setToolTipText("View filter: hide rows whose peak level is below the Level threshold");
+        mHideBelowLevelCheck.addActionListener(e -> applyViewFilter());
+        mHideIgnoredCheck = new JCheckBox("Hide ignored", true);
+        mHideIgnoredCheck.addActionListener(e -> applyViewFilter());
+        mLevelSpinner.addChangeListener(e -> applyViewFilter());
+
+        row3.add(new JLabel("Min hits"), "gapleft 12");
+        row3.add(mMinHitsSpinner, "w 60");
+        row3.add(mHideBelowLevelCheck);
+        row3.add(mHideIgnoredCheck, "growx");
 
         JButton analyze = new JButton("Analyze");
         analyze.setToolTipText("Run offline identification on the selected clip(s)");
@@ -232,10 +251,11 @@ public class DiscoveryPanel extends JPanel
         mTable = new JTable(mTableModel);
         mTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         mTable.setAutoCreateRowSorter(true);
-        TableRowSorter<HitTableModel> sorter = new TableRowSorter<>(mTableModel);
-        mTable.setRowSorter(sorter);
-        sorter.toggleSortOrder(HitTableModel.COL_PEAK_LEVEL);
-        sorter.toggleSortOrder(HitTableModel.COL_PEAK_LEVEL); //descending
+        mSorter = new TableRowSorter<>(mTableModel);
+        mTable.setRowSorter(mSorter);
+        mSorter.toggleSortOrder(HitTableModel.COL_PEAK_LEVEL);
+        mSorter.toggleSortOrder(HitTableModel.COL_PEAK_LEVEL); //descending
+        applyViewFilter();
         mTable.getColumnModel().getColumn(HitTableModel.COL_ACTIVE).setMaxWidth(40);
         mTable.getColumnModel().getColumn(HitTableModel.COL_FREQUENCY).setPreferredWidth(90);
         mTable.getColumnModel().getColumn(HitTableModel.COL_CARRIER).setPreferredWidth(90);
@@ -313,6 +333,90 @@ public class DiscoveryPanel extends JPanel
         refreshTuners();
         loadSettings();
         updateToggle();
+    }
+
+    /**
+     * Applies the view-only filters (min hits, hide below level, hide ignored) to the table.  Never changes the
+     * underlying hit data.
+     */
+    private void applyViewFilter()
+    {
+        if(mSorter == null)
+        {
+            return;
+        }
+
+        final int minHits = mMinHitsSpinner != null ? (Integer)mMinHitsSpinner.getValue() : 1;
+        final boolean hideBelowLevel = mHideBelowLevelCheck != null && mHideBelowLevelCheck.isSelected();
+        final double level = mLevelSpinner != null ? (Double)mLevelSpinner.getValue() : -200.0;
+        final boolean hideIgnored = mHideIgnoredCheck == null || mHideIgnoredCheck.isSelected();
+
+        mSorter.setRowFilter(new javax.swing.RowFilter<HitTableModel,Integer>()
+        {
+            @Override
+            public boolean include(Entry<? extends HitTableModel,? extends Integer> entry)
+            {
+                DiscoveryHit hit = entry.getModel().getHit(entry.getIdentifier());
+
+                if(hit == null)
+                {
+                    return false;
+                }
+
+                if(hideIgnored && hit.getStatus() == DiscoveryHit.Status.IGNORED)
+                {
+                    return false;
+                }
+
+                if(hit.getHitCount() < minHits)
+                {
+                    return false;
+                }
+
+                if(hideBelowLevel && hit.getPeakLevelDb() < level)
+                {
+                    return false;
+                }
+
+                return true;
+            }
+        });
+    }
+
+    /**
+     * Refreshes the table model and restores the previous row selection (by hit key) so that a live-updating table
+     * doesn't steal the user's selection.
+     */
+    private void refreshTablePreservingSelection()
+    {
+        java.util.Set<String> selectedKeys = new java.util.HashSet<>();
+
+        for(int row : mTable.getSelectedRows())
+        {
+            DiscoveryHit hit = mTableModel.getHit(mTable.convertRowIndexToModel(row));
+
+            if(hit != null)
+            {
+                selectedKeys.add(hit.getKey());
+            }
+        }
+
+        mTableModel.refresh();
+
+        if(!selectedKeys.isEmpty())
+        {
+            mTable.clearSelection();
+
+            for(int viewRow = 0; viewRow < mTable.getRowCount(); viewRow++)
+            {
+                DiscoveryHit hit = mTableModel.getHit(mTable.convertRowIndexToModel(viewRow));
+
+                if(hit != null && selectedKeys.contains(hit.getKey()))
+                {
+                    mTable.addRowSelectionInterval(viewRow, viewRow);
+                }
+            }
+        }
     }
 
     private void refreshTuners()

@@ -38,7 +38,9 @@ import io.github.dsheirer.module.decode.dmr.DecodeConfigDMR;
 import io.github.dsheirer.module.decode.dmr.message.DMRBurst;
 import io.github.dsheirer.module.decode.dmr.message.data.DataMessage;
 import io.github.dsheirer.module.decode.dmr.message.voice.VoiceEMBMessage;
+import io.github.dsheirer.module.decode.dcs.DCSCode;
 import io.github.dsheirer.module.decode.nbfm.CTCSSDetector;
+import io.github.dsheirer.module.decode.nbfm.DCSDetector;
 import io.github.dsheirer.module.decode.nxdn.DecodeConfigNXDN;
 import io.github.dsheirer.module.decode.nxdn.NXDNDecoder;
 import io.github.dsheirer.module.decode.nxdn.NXDNMessage;
@@ -342,7 +344,7 @@ public class ClipAnalyzer
     }
 
     /**
-     * FM demodulates the clip and looks for a CTCSS tone.
+     * FM demodulates the clip, resamples to 8 kHz and looks for CTCSS and DCS squelch codes.
      */
     private String analyzeAnalog(Loaded loaded)
     {
@@ -350,38 +352,50 @@ public class ClipAnalyzer
         {
             IDemodulator demodulator = FmDemodulatorFactory.getFmDemodulator();
             float[] audio = demodulator.demodulate(loaded.i, loaded.q);
+            float[] audio8k = resampleTo8k(audio, loaded.sampleRate);
 
-            //Crude decimation to ~8 kHz for the tone detector (CTCSS is below 260 Hz so boxcar averaging is fine)
-            int decimation = Math.max(1, (int)Math.round(loaded.sampleRate / 8000.0));
-            float toneRate = (float)(loaded.sampleRate / decimation);
-            float[] decimated = new float[audio.length / decimation];
+            List<String> found = new ArrayList<>();
 
-            for(int x = 0; x < decimated.length; x++)
+            CTCSSDetector ctcss = new CTCSSDetector(null, 8000.0f);
+            ctcss.process(audio8k);
+            CTCSSCode tone = ctcss.getDetectedCode();
+
+            if(tone == null)
             {
-                float sum = 0;
-                int base = x * decimation;
+                tone = ctcss.getRawDetectedCode();
+            }
 
-                for(int y = 0; y < decimation; y++)
+            if(tone != null)
+            {
+                found.add("CTCSS " + tone);
+            }
+
+            try
+            {
+                DCSDetector dcs = new DCSDetector(DCSCode.STANDARD_CODES);
+
+                //Feed in blocks so the detector's periodic checks run as they would on a live channel
+                for(int start = 0; start < audio8k.length; start += 1024)
                 {
-                    sum += audio[base + y];
+                    int length = Math.min(1024, audio8k.length - start);
+                    float[] block = new float[length];
+                    System.arraycopy(audio8k, start, block, 0, length);
+                    dcs.process(block);
                 }
 
-                decimated[x] = sum / decimation;
+                DCSCode code = dcs.getDetectedCode();
+
+                if(code != null)
+                {
+                    found.add("DCS " + code);
+                }
             }
-
-            CTCSSDetector detector = new CTCSSDetector(null, toneRate);
-            detector.process(decimated);
-            CTCSSCode code = detector.getDetectedCode();
-
-            if(code == null)
+            catch(Throwable t)
             {
-                code = detector.getRawDetectedCode();
+                mLog.debug("DCS analysis failed", t);
             }
 
-            if(code != null)
-            {
-                return "CTCSS " + code;
-            }
+            return String.join(" ", found);
         }
         catch(Throwable t)
         {
@@ -389,6 +403,58 @@ public class ClipAnalyzer
         }
 
         return "";
+    }
+
+    /**
+     * Resamples demodulated audio to 8 kHz: boxcar low-pass over the decimation ratio followed by linear
+     * interpolation.  Sub-audible squelch codes are all below 300 Hz so this is plenty.
+     */
+    private static float[] resampleTo8k(float[] audio, double inputRate)
+    {
+        double ratio = inputRate / 8000.0;
+
+        if(Math.abs(ratio - 1.0) < 1e-6)
+        {
+            return audio;
+        }
+
+        //Boxcar pre-filter to knock down content above 4 kHz before interpolating
+        int box = Math.max(1, (int)Math.floor(ratio));
+        float[] filtered = new float[audio.length];
+        double sum = 0;
+
+        for(int x = 0; x < audio.length; x++)
+        {
+            sum += audio[x];
+
+            if(x >= box)
+            {
+                sum -= audio[x - box];
+            }
+
+            filtered[x] = (float)(sum / Math.min(box, x + 1));
+        }
+
+        int outputLength = (int)(audio.length / ratio);
+        float[] output = new float[outputLength];
+
+        for(int x = 0; x < outputLength; x++)
+        {
+            double position = x * ratio;
+            int index = (int)position;
+            double fraction = position - index;
+
+            if(index + 1 < filtered.length)
+            {
+                output[x] = (float)(filtered[index] * (1.0 - fraction) + filtered[index + 1] * fraction);
+            }
+            else if(index < filtered.length)
+            {
+                output[x] = filtered[index];
+            }
+        }
+
+        return output;
     }
 
     //---------------------------------------------------------------------------------------------------------------
