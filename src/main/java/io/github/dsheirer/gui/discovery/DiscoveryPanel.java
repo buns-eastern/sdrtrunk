@@ -157,7 +157,7 @@ public class DiscoveryPanel extends JPanel
         //Row 2: detection thresholds (per tuner)
         JPanel row2 = new JPanel(new MigLayout("insets 0", "[][][][][][][][][][][]", "[]"));
         mSnrSpinner = new JSpinner(new SpinnerNumberModel(15.0, 0.0, 80.0, 1.0));
-        mLevelSpinner = new JSpinner(new SpinnerNumberModel(-50.0, -150.0, 20.0, 1.0));
+        mLevelSpinner = new JSpinner(new SpinnerNumberModel(-150.0, -200.0, 20.0, 1.0));
         mDwellSpinner = new JSpinner(new SpinnerNumberModel(200, 0, 5000, 100));
         mClipSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 60, 1));
         mCooldownSpinner = new JSpinner(new SpinnerNumberModel(60, 0, 3600, 10));

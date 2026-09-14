@@ -362,7 +362,7 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
 
                         if(timestamp - mLastCaptureTime[bin] >= cooldownMs)
                         {
-                            startCapture(bin, timestamp);
+                            startCapture(bin, timestamp, level);
                         }
                     }
                 }
@@ -392,7 +392,7 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
         mListener.floorUpdated(mTunerId, floor, count);
     }
 
-    private void startCapture(int bin, long timestamp)
+    private void startCapture(int bin, long timestamp, double levelDb)
     {
         synchronized(mCaptures)
         {
@@ -415,7 +415,11 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
                     sanitize(mTunerId) + "_baseband";
                 Path prefix = mClipDirectory.resolve(name);
                 long samples = (long)(mSettings.getClipSeconds() * mChannelSampleRate);
-                Capture capture = new Capture(bin, mBinFrequency[bin], prefix.toString(), samples);
+                //Channelizer output amplitudes are tiny (tens of micro-units); scale so the signal RMS lands near
+                //-10 dBFS in the 16-bit clip, otherwise every sample quantizes to zero.
+                double rms = Math.pow(10.0, levelDb / 20.0);
+                float gain = (float)Math.min(1.0E9, 0.3 / Math.max(rms, 1.0E-12));
+                Capture capture = new Capture(bin, mBinFrequency[bin], prefix.toString(), samples, gain);
                 capture.start();
                 mCaptures.add(capture);
                 mLastCaptureTime[bin] = timestamp;
@@ -441,17 +445,19 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
         private final long mFrequency;
         private final ComplexSamplesWaveRecorder mRecorder;
         private final long mTargetSamples;
+        private final float mGain;
         private long mSamplesWritten = 0;
         private float[] mI = new float[CAPTURE_BUFFER_SAMPLES];
         private float[] mQ = new float[CAPTURE_BUFFER_SAMPLES];
         private int mPointer = 0;
         private boolean mComplete = false;
 
-        Capture(int bin, long frequency, String filePrefix, long targetSamples)
+        Capture(int bin, long frequency, String filePrefix, long targetSamples, float gain)
         {
             mBin = bin;
             mFrequency = frequency;
             mTargetSamples = targetSamples;
+            mGain = gain;
             mRecorder = new ComplexSamplesWaveRecorder((float)mChannelSampleRate, filePrefix);
         }
 
@@ -481,8 +487,8 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
                     continue;
                 }
 
-                mI[mPointer] = sample[idx];
-                mQ[mPointer] = sample[idx + 1];
+                mI[mPointer] = clamp(sample[idx] * mGain);
+                mQ[mPointer] = clamp(sample[idx + 1] * mGain);
                 mPointer++;
                 mSamplesWritten++;
 
@@ -497,6 +503,11 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
                     return;
                 }
             }
+        }
+
+        private static float clamp(float value)
+        {
+            return value > 0.999f ? 0.999f : (value < -0.999f ? -0.999f : value);
         }
 
         private void flush(long timestamp)
