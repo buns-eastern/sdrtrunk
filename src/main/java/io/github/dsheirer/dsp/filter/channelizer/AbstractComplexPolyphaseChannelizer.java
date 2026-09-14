@@ -33,6 +33,7 @@ public abstract class AbstractComplexPolyphaseChannelizer implements Listener<In
     private final static Logger mLog = LoggerFactory.getLogger(AbstractComplexPolyphaseChannelizer.class);
     private Broadcaster<SourceEvent> mSourceChangeBroadcaster = new Broadcaster();
     private List<PolyphaseChannelSource> mChannels = new CopyOnWriteArrayList<>();
+    private List<IChannelResultsListener> mChannelResultsListeners = new CopyOnWriteArrayList<>();
     private double mSampleRate;
     private int mChannelCount;
     private int mSubChannelCount;
@@ -108,6 +109,51 @@ public abstract class AbstractComplexPolyphaseChannelizer implements Listener<In
         {
             channel.receiveChannelResults(channelResultsList, mCurrentSamplesTimestamp);
         }
+
+        if(!mChannelResultsListeners.isEmpty())
+        {
+            //Output sample rate is 2x the channel spacing for this 2x oversampled channelizer
+            double outputSampleRate = getChannelSampleRate() * 2.0;
+
+            for(IChannelResultsListener listener : mChannelResultsListeners)
+            {
+                try
+                {
+                    listener.receiveChannelResults(channelResultsList, outputSampleRate, mCurrentSamplesTimestamp);
+                }
+                catch(Throwable t)
+                {
+                    mLog.error("Error in channel results listener", t);
+                }
+            }
+        }
+    }
+
+    /**
+     * Registers a listener to receive raw channelizer output for all channels (e.g. signal discovery).
+     */
+    public void addChannelResultsListener(IChannelResultsListener listener)
+    {
+        if(listener != null && !mChannelResultsListeners.contains(listener))
+        {
+            mChannelResultsListeners.add(listener);
+        }
+    }
+
+    /**
+     * Removes a raw channel results listener.
+     */
+    public void removeChannelResultsListener(IChannelResultsListener listener)
+    {
+        mChannelResultsListeners.remove(listener);
+    }
+
+    /**
+     * Count of registered raw channel results listeners.
+     */
+    public int getChannelResultsListenerCount()
+    {
+        return mChannelResultsListeners.size();
     }
 
     /**

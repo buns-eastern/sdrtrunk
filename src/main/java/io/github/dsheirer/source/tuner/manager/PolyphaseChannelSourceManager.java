@@ -57,6 +57,12 @@ public class PolyphaseChannelSourceManager extends ChannelSourceManager
     }
 
     @Override
+    public PolyphaseChannelManager getPolyphaseChannelManager()
+    {
+        return mPolyphaseChannelManager;
+    }
+
+    @Override
     public TunerFrequencyErrorManager getTunerFrequencyErrorManager()
     {
         return mTunerController.getTunerFrequencyErrorManager();
