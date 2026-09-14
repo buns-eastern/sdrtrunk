@@ -26,10 +26,10 @@ package io.github.dsheirer.discovery;
 public class DiscoverySettings
 {
     private volatile double mSnrThresholdDb = 15.0;
-    private volatile double mLevelThresholdDb = -50.0;
+    private volatile double mLevelThresholdDb = -150.0;
     private volatile int mDwellMs = 200;
     private volatile int mClipSeconds = 5;
-    private volatile int mMaxConcurrentCaptures = 4;
+    private volatile int mMaxConcurrentCaptures = 8;
     private volatile int mCaptureCooldownSeconds = 60;
     private volatile boolean mIgnoreDcBin = true;
 
