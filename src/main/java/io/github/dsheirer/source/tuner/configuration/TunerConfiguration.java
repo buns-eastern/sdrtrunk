@@ -65,6 +65,7 @@ public abstract class TunerConfiguration
     private long mMaximumFrequency;
     private double mFrequencyCorrection = 0.0d;
     private boolean mAutoPPMCorrection = true;
+    private boolean mInService = true;
 
     /**
      * Default constructor to support Jackson
@@ -125,6 +126,28 @@ public abstract class TunerConfiguration
     public void setFrequencyCorrection(double value)
     {
         mFrequencyCorrection = value;
+    }
+
+    /**
+     * Indicates if the tuner is in service and available to source channels.  A tuner that is out of service stays
+     * powered and streaming but is skipped during channel allocation.  Defaults to true so that existing
+     * configurations load as in-service.
+     *
+     * @return true if in service.
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "in_service")
+    public boolean isInService()
+    {
+        return mInService;
+    }
+
+    /**
+     * Sets the in-service state for the tuner.
+     * @param inService true to allow channel allocation on this tuner.
+     */
+    public void setInService(boolean inService)
+    {
+        mInService = inService;
     }
 
     /**
