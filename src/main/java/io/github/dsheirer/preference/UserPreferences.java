@@ -69,6 +69,7 @@ public class UserPreferences implements Listener<PreferenceType>
     private ChannelMultiFrequencyPreference mChannelMultiFrequencyPreference;
     private DecodeEventPreference mDecodeEventPreference;
     private DirectoryPreference mDirectoryPreference;
+    private io.github.dsheirer.discovery.DiscoveryPreference mDiscoveryPreference;
     private CallManagementPreference mCallManagementPreference;
     private IssiCallMergePreference mIssiCallMergePreference;
     private JmbeLibraryPreference mJmbeLibraryPreference;
@@ -148,6 +149,14 @@ public class UserPreferences implements Listener<PreferenceType>
     public DirectoryPreference getDirectoryPreference()
     {
         return mDirectoryPreference;
+    }
+
+    /**
+     * Signal discovery preferences
+     */
+    public io.github.dsheirer.discovery.DiscoveryPreference getDiscoveryPreference()
+    {
+        return mDiscoveryPreference;
     }
 
     /**
@@ -306,6 +315,7 @@ public class UserPreferences implements Listener<PreferenceType>
         mChannelMultiFrequencyPreference = new ChannelMultiFrequencyPreference(this::receive);
         mDecodeEventPreference = new DecodeEventPreference(this::receive);
         mDirectoryPreference = new DirectoryPreference(this::receive);
+        mDiscoveryPreference = new io.github.dsheirer.discovery.DiscoveryPreference(this::receive);
         mCallManagementPreference = new CallManagementPreference(this::receive);
         mIssiCallMergePreference = new IssiCallMergePreference(this::receive);
         mJmbeLibraryPreference = new JmbeLibraryPreference(this::receive);

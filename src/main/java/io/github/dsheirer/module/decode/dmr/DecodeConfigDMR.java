@@ -19,6 +19,7 @@
 package io.github.dsheirer.module.decode.dmr;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
@@ -42,6 +43,7 @@ public class DecodeConfigDMR extends DecodeConfiguration
     private boolean mIgnoreCRCChecksums = false;
     private boolean mUseCompressedTalkgroups = false;
     private List<TimeslotFrequency> mTimeslotMap = new ArrayList<>();
+    private List<Integer> mColorCodeFilter = new ArrayList<>();
 
     @JsonIgnore
     private DecodeEvent mChannelGrantEvent;
@@ -77,6 +79,52 @@ public class DecodeConfigDMR extends DecodeConfiguration
     /**
      * Indicates if traffic channel grants for data calls should be ignored
      */
+    /**
+     * Optional list of color codes (0-15) that are allowed on this channel.  When the list is empty the filter is
+     * disabled and every burst is processed, which is the default and matches the behavior of an unfiltered channel.
+     *
+     * When the list is populated, a burst carrying a CRC-valid color code that is not in this list causes its
+     * timeslot to be rejected for the remainder of the call.  Bursts that do not carry a color code (such as voice
+     * frame A) inherit the current decision for their timeslot, and a burst whose color code cannot be read is
+     * always allowed through.
+     *
+     * @return allowed color codes, never null.
+     */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    @JacksonXmlProperty(isAttribute = false, localName = "color_code_filter")
+    public List<Integer> getColorCodeFilter()
+    {
+        return mColorCodeFilter;
+    }
+
+    /**
+     * Sets the list of allowed color codes.  Null or empty disables the filter.
+     * @param colorCodes to allow.
+     */
+    public void setColorCodeFilter(List<Integer> colorCodes)
+    {
+        mColorCodeFilter = (colorCodes != null) ? colorCodes : new ArrayList<>();
+    }
+
+    /**
+     * Indicates if the color code filter is enabled, meaning at least one allowed color code is specified.
+     */
+    @JsonIgnore
+    public boolean hasColorCodeFilter()
+    {
+        return mColorCodeFilter != null && !mColorCodeFilter.isEmpty();
+    }
+
+    /**
+     * Indicates if the specified color code is allowed on this channel.  Always true when the filter is disabled.
+     * @param colorCode to test.
+     */
+    @JsonIgnore
+    public boolean isColorCodeAllowed(int colorCode)
+    {
+        return !hasColorCodeFilter() || mColorCodeFilter.contains(colorCode);
+    }
+
     @JacksonXmlProperty(isAttribute = true, localName = "ignore_data_calls")
     public boolean getIgnoreDataCalls()
     {

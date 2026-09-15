@@ -28,6 +28,7 @@ public enum PreferenceType
     CALIBRATION,
     DECODE_EVENT,
     DIRECTORY,
+    DISCOVERY,
     DUPLICATE_CALL_DETECTION,
     JMBE_LIBRARY,
     MP3,

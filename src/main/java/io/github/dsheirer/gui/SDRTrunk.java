@@ -231,6 +231,9 @@ public class SDRTrunk implements Listener<TunerEvent>
         EventLogManager eventLogManager = new EventLogManager(aliasModel, mUserPreferences);
         mPlaylistManager = new PlaylistManager(mUserPreferences, mTunerManager, aliasModel, eventLogManager, mIconModel);
 
+        //Provides the tuner UI with the ability to take tuners in and out of service for channel allocation
+        io.github.dsheirer.source.tuner.manager.TunerServiceManager.initialize(mPlaylistManager);
+
         boolean headless = GraphicsEnvironment.isHeadless();
 
         mDiagnosticMonitor = new DiagnosticMonitor(mUserPreferences, mPlaylistManager.getChannelProcessingManager(),
@@ -693,6 +696,18 @@ public class SDRTrunk implements Listener<TunerEvent>
         mControllerPanel.getNowPlayingPanel().storeDividerLocations();
         mJavaFxWindowManager.shutdown();
         mLog.info("Stopping channels ...");
+        if(mControllerPanel != null && mControllerPanel.getDiscoveryManager() != null)
+        {
+            try
+            {
+                mControllerPanel.getDiscoveryManager().shutdown();
+            }
+            catch(Throwable t)
+            {
+                mLog.error("Error shutting down signal discovery", t);
+            }
+        }
+
         mPlaylistManager.getChannelProcessingManager().shutdown();
         mAudioRecordingManager.stop();
         mResourceMonitor.stop();

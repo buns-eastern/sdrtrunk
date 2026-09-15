@@ -54,6 +54,8 @@ public class ControllerPanel extends JPanel
     private NowPlayingPanel mNowPlayingPanel;
     private MapPanel mMapPanel;
     private TunerViewPanel mTunerManagerPanel;
+    private io.github.dsheirer.discovery.DiscoveryManager mDiscoveryManager;
+    private io.github.dsheirer.gui.discovery.DiscoveryPanel mDiscoveryPanel;
 
     private JideTabbedPane mTabbedPane;
 
@@ -67,6 +69,16 @@ public class ControllerPanel extends JPanel
         mMapPanel = new MapPanel(mapService, playlistManager.getAliasModel(), iconModel, settingsManager);
         mTunerManagerPanel = new TunerViewPanel(tunerManager, userPreferences);
 
+        try
+        {
+            mDiscoveryManager = new io.github.dsheirer.discovery.DiscoveryManager(tunerManager, playlistManager, userPreferences);
+            mDiscoveryPanel = new io.github.dsheirer.gui.discovery.DiscoveryPanel(mDiscoveryManager);
+        }
+        catch(Throwable t)
+        {
+            mLog.error("Error creating signal discovery panel", t);
+        }
+
         init();
     }
 
@@ -76,6 +88,14 @@ public class ControllerPanel extends JPanel
     public NowPlayingPanel getNowPlayingPanel()
     {
         return mNowPlayingPanel;
+    }
+
+    /**
+     * Signal discovery manager (may be null if it failed to initialize).
+     */
+    public io.github.dsheirer.discovery.DiscoveryManager getDiscoveryManager()
+    {
+        return mDiscoveryManager;
     }
 
     private void init()
@@ -104,6 +124,11 @@ public class ControllerPanel extends JPanel
         mTabbedPane.addTab("Now Playing", mNowPlayingPanel);
         mTabbedPane.addTab("Map", mMapPanel);
         mTabbedPane.addTab("Tuners", mTunerManagerPanel);
+
+        if(mDiscoveryPanel != null)
+        {
+            mTabbedPane.addTab("Discovery", mDiscoveryPanel);
+        }
 
         java.awt.Color tabIconColor = javax.swing.UIManager.getColor("TabbedPane.foreground");
         Icon playIcon = IconFontSwing.buildIcon(FontAwesome.PLAY_CIRCLE_O, 20, tabIconColor != null ? tabIconColor : Color.GRAY);

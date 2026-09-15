@@ -227,6 +227,66 @@ public class ChannelProcessingManager implements Listener<ChannelEvent>
     }
 
     /**
+     * Identifies the channels that are currently being processed using a source from the specified tuner.  This is a
+     * read-only query against the running processing chains - it does not modify any channel state.
+     *
+     * @param tuner to query, may be null.
+     * @return list of channels sourced from the tuner, in no particular order.  Empty when the tuner is null, has no
+     * source manager, or is not currently sourcing any channels.
+     */
+    public List<Channel> getChannelsForTuner(io.github.dsheirer.source.tuner.Tuner tuner)
+    {
+        List<Channel> channels = new ArrayList<>();
+
+        if(tuner == null || tuner.getChannelSourceManager() == null)
+        {
+            return channels;
+        }
+
+        java.util.SortedSet<io.github.dsheirer.source.tuner.channel.TunerChannel> tunerChannels;
+
+        try
+        {
+            tunerChannels = tuner.getChannelSourceManager().getTunerChannels();
+        }
+        catch(Exception e)
+        {
+            mLog.error("Error retrieving tuner channels while identifying channels for a tuner", e);
+            return channels;
+        }
+
+        if(tunerChannels == null || tunerChannels.isEmpty())
+        {
+            return channels;
+        }
+
+        mLock.lock();
+
+        try
+        {
+            for(Map.Entry<Channel,ProcessingChain> entry : mProcessingChainsMap.entrySet())
+            {
+                Source source = entry.getValue().getSource();
+
+                //Match on the tuner channel descriptor rather than source identity so that multi-frequency channel
+                //sources, which wrap an inner tuner channel source, are matched correctly.
+                if(source instanceof TunerChannelSource tunerChannelSource &&
+                   tunerChannelSource.getTunerChannel() != null &&
+                   tunerChannels.contains(tunerChannelSource.getTunerChannel()))
+                {
+                    channels.add(entry.getKey());
+                }
+            }
+        }
+        finally
+        {
+            mLock.unlock();
+        }
+
+        return channels;
+    }
+
+    /**
      * Primary method for receiving requests to start and stop a channel
      *
      * @param event that requests either enable/start or disable/stop a channel.
