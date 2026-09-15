@@ -81,6 +81,14 @@ public class MessageItem
             try
             {
                 mText = getMessage().toString();
+
+                //Tag bursts that the channel's color code filter rejected so that they are identifiable in the
+                //message activity view, in the same way that a sync loss is.
+                if(getMessage() instanceof io.github.dsheirer.module.decode.dmr.message.DMRBurst burst &&
+                   burst.isColorCodeRejected())
+                {
+                    mText = "CC REJECT " + mText;
+                }
             }
             catch(Throwable t)
             {

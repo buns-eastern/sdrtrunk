@@ -38,6 +38,7 @@ import io.github.dsheirer.module.decode.dmr.message.data.header.VoiceHeader;
 import io.github.dsheirer.module.decode.dmr.message.data.lc.full.AbstractVoiceChannelUser;
 import io.github.dsheirer.module.decode.dmr.message.data.lc.full.EncryptionParameters;
 import io.github.dsheirer.module.decode.dmr.message.data.terminator.Terminator;
+import io.github.dsheirer.module.decode.dmr.message.DMRBurst;
 import io.github.dsheirer.module.decode.dmr.message.voice.VoiceEMBMessage;
 import io.github.dsheirer.module.decode.dmr.message.voice.VoiceMessage;
 import io.github.dsheirer.module.decode.dmr.message.voice.embedded.EmbeddedEncryptionParameters;
@@ -103,6 +104,13 @@ public class DMRAudioModule extends AmbeAudioModule implements IdentifierUpdateP
      */
     public void receive(IMessage message)
     {
+        //Bursts rejected by the channel's color code filter produce no audio, and therefore no recording, streaming
+        //or call segments.
+        if(message instanceof DMRBurst burst && burst.isColorCodeRejected())
+        {
+            return;
+        }
+
         if(hasAudioCodec() && message.getTimeslot() == getTimeslot())
         {
             //Attempt to set the audio encryption state from certain types of messages
