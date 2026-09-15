@@ -27,7 +27,9 @@ import io.github.dsheirer.module.decode.dmr.channel.TimeslotFrequency;
 import io.github.dsheirer.module.decode.dmr.identifier.DMRTalkgroup;
 import io.github.dsheirer.module.decode.dmr.message.CACH;
 import io.github.dsheirer.module.decode.dmr.message.DMRBurst;
+import io.github.dsheirer.module.decode.dmr.message.data.DataMessage;
 import io.github.dsheirer.module.decode.dmr.message.data.DataMessageWithLinkControl;
+import io.github.dsheirer.module.decode.dmr.message.data.SlotType;
 import io.github.dsheirer.module.decode.dmr.message.data.IDLEMessage;
 import io.github.dsheirer.module.decode.dmr.message.data.block.DataBlock;
 import io.github.dsheirer.module.decode.dmr.message.data.csbk.CSBKMessage;
@@ -47,6 +49,7 @@ import io.github.dsheirer.module.decode.dmr.message.data.mbc.MBCAssembler;
 import io.github.dsheirer.module.decode.dmr.message.data.mbc.MBCContinuationBlock;
 import io.github.dsheirer.module.decode.dmr.message.data.packet.PacketSequenceAssembler;
 import io.github.dsheirer.module.decode.dmr.message.data.terminator.Terminator;
+import io.github.dsheirer.module.decode.dmr.message.voice.EMB;
 import io.github.dsheirer.module.decode.dmr.message.voice.VoiceEMBMessage;
 import io.github.dsheirer.module.decode.dmr.message.voice.VoiceMessage;
 import io.github.dsheirer.module.decode.dmr.message.voice.VoiceSuperFrameProcessor;
@@ -104,6 +107,87 @@ public class DMRMessageProcessor implements Listener<IMessage>
      * @param message to check
      * @return true if ignore CRC checksums or if the message is valid.
      */
+    //Color code filter latch state, indexed by timeslot (1-2).  Index 0 is unused.
+    private static final int CC_UNKNOWN = 0;
+    private static final int CC_ACCEPTED = 1;
+    private static final int CC_REJECTED = 2;
+    private final int[] mColorCodeState = new int[3];
+
+    /**
+     * Resets the color code filter decision for both timeslots so that the next burst is evaluated fresh.  Called on
+     * sync loss - resetting to unknown always errs toward allowing traffic through.
+     */
+    private void resetColorCodeFilter()
+    {
+        mColorCodeState[1] = CC_UNKNOWN;
+        mColorCodeState[2] = CC_UNKNOWN;
+    }
+
+    /**
+     * Extracts the color code from a burst when it carries one that passed its CRC check.  Data bursts carry the
+     * color code in the slot type and voice frames B-F carry it in the EMB.  Voice frame A carries no color code.
+     *
+     * @param burst to inspect.
+     * @return color code, or null when this burst carries no readable color code.
+     */
+    private Integer getColorCode(DMRBurst burst)
+    {
+        if(burst instanceof DataMessage dataMessage)
+        {
+            SlotType slotType = dataMessage.getSlotType();
+
+            if(slotType != null && slotType.isValid())
+            {
+                return slotType.getColorCode();
+            }
+        }
+        else if(burst instanceof VoiceEMBMessage voiceMessage)
+        {
+            EMB emb = voiceMessage.getEMB();
+
+            if(emb != null && emb.isValid())
+            {
+                return emb.getColorCode();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Applies the channel's color code filter to a burst.
+     *
+     * A burst carrying a readable color code sets the decision for its timeslot: allowed color codes accept the
+     * timeslot and any other color code rejects it.  A burst with no readable color code, such as voice frame A,
+     * inherits the current decision for its timeslot, so a rejected call stays rejected for its whole duration
+     * rather than leaking one voice frame in every six.  The decision resets on sync loss, and any allowed color
+     * code immediately clears a rejection so that recovery is instant when the foreign traffic stops.
+     *
+     * @param burst to evaluate.
+     * @return true when the burst should be rejected.
+     */
+    private boolean isColorCodeRejected(DMRBurst burst)
+    {
+        int timeslot = burst.getTimeslot();
+
+        if(timeslot < 1 || timeslot > 2)
+        {
+            //Can't track a decision for this burst - allow it through.
+            return false;
+        }
+
+        Integer colorCode = getColorCode(burst);
+
+        if(colorCode != null)
+        {
+            boolean allowed = mConfigDMR.isColorCodeAllowed(colorCode);
+            mColorCodeState[timeslot] = allowed ? CC_ACCEPTED : CC_REJECTED;
+            return !allowed;
+        }
+
+        return mColorCodeState[timeslot] == CC_REJECTED;
+    }
+
     private boolean isValid(IMessage message)
     {
         return mCrcMaskManager.isIgnoreCRCChecksums() || message.isValid();
@@ -125,6 +209,18 @@ public class DMRMessageProcessor implements Listener<IMessage>
             mSLCAssembler.reset();
             mFLCAssemblerTimeslot1.reset();
             mFLCAssemblerTimeslot2.reset();
+            resetColorCodeFilter();
+        }
+
+        //Color code filter.  A rejected burst is still dispatched so that it stays visible in the message activity
+        //view, but it is not fed to the link control assemblers or superframe processors here, and the decoder state
+        //and audio modules ignore it, so it produces no decode events, no audio, and no recording or streaming.
+        if(message instanceof DMRBurst colorCodeCandidate && mConfigDMR.hasColorCodeFilter() &&
+           isColorCodeRejected(colorCodeCandidate))
+        {
+            colorCodeCandidate.setColorCodeRejected(true);
+            dispatch(colorCodeCandidate);
+            return;
         }
 
         //Detect and correct messages employing an alternate CRC mask pattern (ie RAS) when ignore CRC is disabled
