@@ -47,6 +47,7 @@ import io.github.dsheirer.module.decode.dmr.channel.DMRAbsoluteChannel;
 import io.github.dsheirer.module.decode.dmr.channel.DMRChannel;
 import io.github.dsheirer.module.decode.dmr.channel.DMRLsn;
 import io.github.dsheirer.module.decode.dmr.event.DMRDecodeEvent;
+import io.github.dsheirer.module.decode.dmr.message.DMRBurst;
 import io.github.dsheirer.module.decode.dmr.message.DMRMessage;
 import io.github.dsheirer.module.decode.dmr.message.data.DataMessage;
 import io.github.dsheirer.module.decode.dmr.message.data.csbk.CSBKMessage;
@@ -306,6 +307,13 @@ public class DMRDecoderState extends TimeslotDecoderState
     @Override
     public void receive(IMessage message)
     {
+        //Bursts rejected by the channel's color code filter are ignored here so that they produce no decode events.
+        //They are still visible in the message activity view.
+        if(message instanceof DMRBurst burst && burst.isColorCodeRejected())
+        {
+            return;
+        }
+
         if(message.getTimeslot() == getTimeslot())
         {
             if(mRawStreamListener != null

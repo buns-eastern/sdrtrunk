@@ -621,7 +621,9 @@ public class TunerManager implements IDiscoveredTunerStatusListener
             {
                 discoveredTuner = getDiscoveredTuner(preferredTuner);
 
-                if(discoveredTuner != null)
+                //Skip a preferred tuner that the user has taken out of service so that the channel falls through to
+                //the search below, exactly as it would if the preferred tuner couldn't cover the channel.
+                if(discoveredTuner != null && discoveredTuner.isInService())
                 {
                     try
                     {
@@ -649,7 +651,9 @@ public class TunerManager implements IDiscoveredTunerStatusListener
             {
                 discoveredTuner = it.next();
 
-                if(discoveredTuner.hasTuner())
+                //Tuners that the user has taken out of service are never allocated a channel.  They remain fully
+                //running for spectrum viewing and are still listed everywhere else in the application.
+                if(discoveredTuner.hasTuner() && discoveredTuner.isInService())
                 {
                     try
                     {
