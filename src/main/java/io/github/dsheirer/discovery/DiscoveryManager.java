@@ -27,6 +27,7 @@ import io.github.dsheirer.controller.channel.ChannelEvent;
 import io.github.dsheirer.dsp.filter.channelizer.PolyphaseChannelManager;
 import io.github.dsheirer.playlist.PlaylistManager;
 import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.preference.source.ChannelizerType;
 import io.github.dsheirer.source.config.SourceConfigTuner;
 import io.github.dsheirer.source.config.SourceConfigTunerMultipleFrequency;
 import io.github.dsheirer.source.config.SourceConfiguration;
@@ -162,6 +163,25 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
         for(HitListener listener : mListeners)
         {
             listener.statusChanged(tunerId, status);
+        }
+    }
+
+    /**
+     * Indicates if the application is configured to use the polyphase channelizer.  Discovery taps the polyphase
+     * channelizer's per-bin output, so it cannot operate when the heterodyne channelizer is selected - heterodyne
+     * creates a single tuned down-converter per channel on demand and never produces full-spectrum bin results.
+     *
+     * @return true when polyphase is selected, and true as a safe default if the preference can't be read.
+     */
+    public boolean isPolyphaseChannelizer()
+    {
+        try
+        {
+            return mUserPreferences.getTunerPreference().getChannelizerType() == ChannelizerType.POLYPHASE;
+        }
+        catch(Throwable t)
+        {
+            return true;
         }
     }
 
