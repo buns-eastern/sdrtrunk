@@ -23,6 +23,9 @@ import io.github.dsheirer.discovery.DiscoveryHit;
 import io.github.dsheirer.discovery.DiscoveryManager;
 import io.github.dsheirer.discovery.DiscoveryMonitor;
 import io.github.dsheirer.discovery.DiscoverySettings;
+import io.github.dsheirer.eventbus.MyEventBus;
+import io.github.dsheirer.gui.preference.PreferenceEditorType;
+import io.github.dsheirer.gui.preference.ViewUserPreferenceEditorRequest;
 import io.github.dsheirer.source.tuner.manager.DiscoveredTuner;
 import net.miginfocom.swing.MigLayout;
 import org.slf4j.Logger;
@@ -48,6 +51,9 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableRowSorter;
+import java.awt.CardLayout;
+import java.awt.Color;
+import java.awt.Font;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
@@ -69,6 +75,8 @@ public class DiscoveryPanel extends JPanel
     private static final Logger mLog = LoggerFactory.getLogger(DiscoveryPanel.class);
     private static final DecimalFormat MHZ = new DecimalFormat("0.000000");
     private static final SimpleDateFormat TIME = new SimpleDateFormat("MM/dd HH:mm:ss");
+    private static final String CARD_CONTENT = "content";
+    private static final String CARD_NOTICE = "notice";
 
     private final DiscoveryManager mManager;
     private final HitTableModel mTableModel = new HitTableModel();
@@ -92,11 +100,17 @@ public class DiscoveryPanel extends JPanel
     private boolean mLoadingSettings = false;
     private final Timer mRefreshTimer;
     private volatile boolean mRefreshPending = false;
+    private final CardLayout mCards = new CardLayout();
+    private final JPanel mContent = new JPanel();
 
     public DiscoveryPanel(DiscoveryManager manager)
     {
         mManager = manager;
+        setLayout(mCards);
         init();
+        add(mContent, CARD_CONTENT);
+        add(createChannelizerNotice(), CARD_NOTICE);
+        updateCard();
 
         mRefreshTimer = new Timer(500, e -> {
             if(mRefreshPending)
@@ -124,20 +138,75 @@ public class DiscoveryPanel extends JPanel
             }
         });
 
-        //Tuners may not be fully started when this panel is constructed - refresh the list a few times
+        //Tuners can be started, stopped, or hot-plugged at any time, so keep rescanning for the life of the panel.
+        //This only rebuilds a small combo box and costs nothing measurable.
         Timer tunerRefresh = new Timer(5000, e -> {
+            updateCard();
             refreshTuners();
             mManager.autoStart();
             updateToggle();
         });
         tunerRefresh.setRepeats(true);
         tunerRefresh.start();
-        new Timer(60000, e -> tunerRefresh.stop()) {{ setRepeats(false); }}.start();
+    }
+
+    /**
+     * Shows either the discovery controls or the heterodyne notice, depending on the channelizer preference.
+     */
+    private void updateCard()
+    {
+        mCards.show(this, mManager.isPolyphaseChannelizer() ? CARD_CONTENT : CARD_NOTICE);
+    }
+
+    /**
+     * Full-panel notice shown when the application is configured for the heterodyne channelizer.  Discovery reads the
+     * polyphase channelizer's per-bin output, which heterodyne does not produce.
+     */
+    private JPanel createChannelizerNotice()
+    {
+        JPanel panel = new JPanel(new MigLayout("insets 40, fill", "[grow,center]", "push[]12[]20[]16[]push"));
+        panel.setBackground(Color.WHITE);
+
+        JLabel headline = new JLabel("Discovery requires the Polyphase channelizer");
+        headline.setFont(headline.getFont().deriveFont(Font.BOLD, 22f));
+        headline.setForeground(new Color(150, 30, 30));
+        panel.add(headline, "wrap");
+
+        JLabel detail = new JLabel("<html><div style='text-align:center; width:560px;'>" +
+            "This application is currently set to the <b>Heterodyne</b> channelizer, which creates one tuned " +
+            "down-converter per channel on demand and never produces a full-spectrum view.  Discovery watches every " +
+            "bin of the Polyphase channelizer at once, so it has nothing to listen to in Heterodyne mode." +
+            "</div></html>");
+        detail.setFont(detail.getFont().deriveFont(Font.PLAIN, 14f));
+        panel.add(detail, "wrap");
+
+        JLabel how = new JLabel("<html><div style='text-align:center; width:560px;'>" +
+            "To use Discovery: open <b>Preferences &gt; Source &gt; Tuners</b>, set <b>Channelizer Type</b> to " +
+            "<b>Polyphase</b>, then restart the application.  This tab enables itself automatically." +
+            "</div></html>");
+        how.setFont(how.getFont().deriveFont(Font.PLAIN, 14f));
+        panel.add(how, "wrap");
+
+        JButton preferences = new JButton("Open Tuner Preferences");
+        preferences.addActionListener(e -> {
+            try
+            {
+                MyEventBus.getGlobalEventBus()
+                    .post(new ViewUserPreferenceEditorRequest(PreferenceEditorType.SOURCE_TUNERS));
+            }
+            catch(Throwable t)
+            {
+                mLog.error("Error opening tuner preferences from the discovery tab", t);
+            }
+        });
+        panel.add(preferences);
+
+        return panel;
     }
 
     private void init()
     {
-        setLayout(new MigLayout("insets 4 4 4 4, fill", "[grow,fill]", "[][][][grow,fill]"));
+        mContent.setLayout(new MigLayout("insets 4 4 4 4, fill", "[grow,fill]", "[][][][grow,fill]"));
 
         //Row 1: tuner selection and monitor toggle
         JPanel row1 = new JPanel(new MigLayout("insets 0", "[][][][grow][]", "[]"));
@@ -156,7 +225,7 @@ public class DiscoveryPanel extends JPanel
         JButton refresh = new JButton("Refresh Tuners");
         refresh.addActionListener(e -> refreshTuners());
         row1.add(refresh);
-        add(row1, "wrap");
+        mContent.add(row1, "wrap");
 
         //Row 2: detection thresholds (per tuner)
         JPanel row2 = new JPanel(new MigLayout("insets 0", "[][][][][][][][][][][]", "[]"));
@@ -179,7 +248,7 @@ public class DiscoveryPanel extends JPanel
         row2.add(mCooldownSpinner, "w 80");
         row2.add(new JLabel("s"));
         row2.add(mIgnoreDcCheck, "gapleft 12");
-        add(row2, "wrap");
+        mContent.add(row2, "wrap");
 
         for(JSpinner spinner : new JSpinner[]{mSnrSpinner, mLevelSpinner, mDwellSpinner, mClipSpinner, mCooldownSpinner})
         {
@@ -245,7 +314,7 @@ public class DiscoveryPanel extends JPanel
         row3.add(delete);
         row3.add(clear);
         row3.add(export);
-        add(row3, "wrap");
+        mContent.add(row3, "wrap");
 
         //Table
         mTable = new JTable(mTableModel);
@@ -328,7 +397,7 @@ public class DiscoveryPanel extends JPanel
             }
         });
 
-        add(new JScrollPane(mTable), "grow");
+        mContent.add(new JScrollPane(mTable), "grow");
 
         refreshTuners();
         loadSettings();
@@ -545,7 +614,7 @@ public class DiscoveryPanel extends JPanel
 
         if(tuner == null)
         {
-            mStatusLabel.setText("No discovery-capable tuners");
+            mStatusLabel.setText("No tuners available yet - if a tuner is started, click Refresh Tuners");
             return;
         }
 
