@@ -430,6 +430,7 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
                     hit.getBinFrequency());
                 hit.setProtocol(result.protocol());
                 hit.setDetails(result.details());
+                hit.setMessageCount(result.messageCount());
 
                 if(result.carrierFrequency() > 0)
                 {
@@ -443,6 +444,7 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
                 mLog.error("Error analyzing discovery clip [" + hit.getClipPath() + "]", t);
                 hit.setProtocol("");
                 hit.setDetails("Analysis error: " + t.getMessage());
+                hit.setMessageCount(0);
                 hit.setStatus(DiscoveryHit.Status.UNIDENTIFIED);
             }
 
@@ -684,7 +686,7 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
     {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         StringBuilder sb = new StringBuilder();
-        sb.append("Tuner,Bin Frequency (Hz),Carrier Frequency (Hz),First Heard,Last Heard,Hits,Active Seconds,Peak Level (dB),Peak SNR (dB),Protocol,Details,Status,Clip\n");
+        sb.append("Tuner,Bin Frequency (Hz),Carrier Frequency (Hz),First Heard,Last Heard,Hits,Active Seconds,Peak Level (dB),Peak SNR (dB),Protocol,Messages,Details,Status,Clip\n");
 
         List<DiscoveryHit> hits = getHits();
         hits.sort((a, b) -> Long.compare(a.getBinFrequency(), b.getBinFrequency()));
@@ -701,6 +703,7 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
             sb.append(String.format("%.1f", hit.getPeakLevelDb())).append(',');
             sb.append(String.format("%.1f", hit.getPeakSnrDb())).append(',');
             sb.append(csv(hit.getProtocol())).append(',');
+            sb.append(hit.getMessageCount()).append(',');
             sb.append(csv(hit.getDetails())).append(',');
             sb.append(hit.getStatus()).append(',');
             sb.append(csv(hit.getClipPath() == null ? "" : hit.getClipPath())).append('\n');
