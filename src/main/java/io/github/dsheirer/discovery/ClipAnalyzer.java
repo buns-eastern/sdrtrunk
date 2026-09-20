@@ -334,7 +334,7 @@ public class ClipAnalyzer
         double peakDb = db[peak];
         double threshold = Math.max(floor + 6.0, peakDb - 20.0);
 
-        //Contiguous region around the peak above threshold defines the occupied bandwidth and power centroid
+        //Contiguous region around the peak above threshold defines the occupied bandwidth
         int left = peak;
         int right = peak;
 
@@ -348,12 +348,19 @@ public class ClipAnalyzer
             right++;
         }
 
+        //Remove the channelizer bin's own filter response before locating the carrier.  A signal sitting near the
+        //edge of its bin has one side of its spectrum attenuated by the bin filter rolloff, and a power centroid over
+        //that lopsided shape is pulled toward the surviving side - reporting the carrier up to a kilohertz closer to
+        //bin center than it really is.  The response is symmetric about bin center and shapes the noise floor too, so
+        //it can be estimated from the bins that hold only noise and divided back out.
+        double[] shaped = deshape(db, left, right);
+
         double weight = 0;
         double centroid = 0;
 
         for(int k = left; k <= right; k++)
         {
-            double linear = Math.pow(10.0, db[k] / 10.0);
+            double linear = Math.pow(10.0, shaped[k] / 10.0);
             weight += linear;
             centroid += linear * k;
         }
@@ -364,6 +371,112 @@ public class ClipAnalyzer
         double bandwidthHz = (right - left + 1) * binHz;
 
         return new Spectrum(offsetHz, bandwidthHz, peakDb, floor);
+    }
+
+    /**
+     * Estimates the channelizer bin's filter response from the noise-only part of the spectrum and removes it, so the
+     * carrier centroid measures the signal rather than the filter shape.  White noise entering the bin leaves it
+     * carrying the filter's response, so the noise floor as a function of distance from bin center IS that response.
+     *
+     * @param db averaged power spectrum, dB, index 0 = most negative frequency.
+     * @param left first bin of the occupied region, excluded from the noise estimate.
+     * @param right last bin of the occupied region, excluded from the noise estimate.
+     * @return a copy of db with the filter response divided out, or the original if too little noise is available.
+     */
+    private static double[] deshape(double[] db, int left, int right)
+    {
+        final int bands = 16;
+        final int guard = 12;
+        int excludeLow = Math.max(0, left - guard);
+        int excludeHigh = Math.min(FFT_SIZE - 1, right + guard);
+
+        double[] bandCenter = new double[bands];
+        double[] bandLevel = new double[bands];
+        int used = 0;
+        double bandWidth = (FFT_SIZE / 2.0) / bands;
+
+        for(int band = 0; band < bands; band++)
+        {
+            double low = band * bandWidth;
+            double high = low + bandWidth;
+            List<Double> values = new ArrayList<>();
+
+            for(int k = 0; k < FFT_SIZE; k++)
+            {
+                if(k >= excludeLow && k <= excludeHigh)
+                {
+                    continue;
+                }
+
+                double distance = Math.abs(k - FFT_SIZE / 2.0);
+
+                if(distance >= low && distance < high)
+                {
+                    values.add(db[k]);
+                }
+            }
+
+            //A band needs enough noise bins for a stable median.
+            if(values.size() > 3)
+            {
+                java.util.Collections.sort(values);
+                bandCenter[used] = (low + high) / 2.0;
+                bandLevel[used] = values.get(values.size() / 2);
+                used++;
+            }
+        }
+
+        //Without at least two bands there is nothing to interpolate - leave the spectrum alone.
+        if(used < 2)
+        {
+            return db;
+        }
+
+        double reference = 0;
+
+        for(int band = 0; band < used; band++)
+        {
+            reference += bandLevel[band];
+        }
+
+        reference /= used;
+
+        double[] result = new double[FFT_SIZE];
+
+        for(int k = 0; k < FFT_SIZE; k++)
+        {
+            result[k] = db[k] - interpolate(bandCenter, bandLevel, used, Math.abs(k - FFT_SIZE / 2.0)) + reference;
+        }
+
+        return result;
+    }
+
+    /**
+     * Linear interpolation over the sampled response curve, clamped at both ends.
+     */
+    private static double interpolate(double[] x, double[] y, int count, double at)
+    {
+        if(at <= x[0])
+        {
+            return y[0];
+        }
+
+        if(at >= x[count - 1])
+        {
+            return y[count - 1];
+        }
+
+        for(int i = 1; i < count; i++)
+        {
+            if(at <= x[i])
+            {
+                double span = x[i] - x[i - 1];
+                double fraction = span > 0 ? (at - x[i - 1]) / span : 0;
+                return y[i - 1] + fraction * (y[i] - y[i - 1]);
+            }
+        }
+
+        return y[count - 1];
     }
 
     private static long snap(long frequency)
