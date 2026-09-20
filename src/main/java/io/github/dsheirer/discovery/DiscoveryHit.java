@@ -20,6 +20,7 @@
 package io.github.dsheirer.discovery;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
@@ -44,6 +45,7 @@ public class DiscoveryHit
     @JsonProperty("protocol") private String mProtocol = "";
     @JsonProperty("details") private String mDetails = "";
     @JsonProperty("messageCount") private int mMessageCount;
+    @JsonProperty("activeSince") private long mActiveSince;
     @JsonProperty("clipPath") private String mClipPath;
     @JsonProperty("status") private Status mStatus = Status.NEW;
     @JsonProperty("active") private boolean mActive;
@@ -90,6 +92,26 @@ public class DiscoveryHit
     public void setDetails(String v) { mDetails = v == null ? "" : v; }
     public int getMessageCount() { return mMessageCount; }
     public void setMessageCount(int v) { mMessageCount = v; }
+    public long getActiveSince() { return mActiveSince; }
+    public void setActiveSince(long v) { mActiveSince = v; }
+
+    /**
+     * Total time this signal has been heard, including the current transmission when it is still active.  Completed
+     * time only lands in totalActiveMs when a hit ends, so a continuously-transmitting signal - a control channel,
+     * say - would otherwise report zero forever.
+     */
+    @JsonIgnore
+    public long getActiveMs(long now)
+    {
+        long total = mTotalActiveMs;
+
+        if(mActive && mActiveSince > 0 && now > mActiveSince)
+        {
+            total += (now - mActiveSince);
+        }
+
+        return total;
+    }
     public String getClipPath() { return mClipPath; }
     public void setClipPath(String v) { mClipPath = v; }
     public Status getStatus() { return mStatus; }
