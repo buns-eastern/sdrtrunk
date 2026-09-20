@@ -329,6 +329,7 @@ public class DiscoveryPanel extends JPanel
         mTable.getColumnModel().getColumn(HitTableModel.COL_FREQUENCY).setPreferredWidth(90);
         mTable.getColumnModel().getColumn(HitTableModel.COL_CARRIER).setPreferredWidth(90);
         mTable.getColumnModel().getColumn(HitTableModel.COL_DETAILS).setPreferredWidth(320);
+        mTable.getColumnModel().getColumn(HitTableModel.COL_CONFIDENCE).setMaxWidth(60);
 
         javax.swing.table.DefaultTableCellRenderer dateRenderer = new javax.swing.table.DefaultTableCellRenderer()
         {
@@ -747,10 +748,11 @@ public class DiscoveryPanel extends JPanel
         static final int COL_PEAK_LEVEL = 8;
         static final int COL_PEAK_SNR = 9;
         static final int COL_PROTOCOL = 10;
-        static final int COL_DETAILS = 11;
-        static final int COL_STATUS = 12;
+        static final int COL_CONFIDENCE = 11;
+        static final int COL_DETAILS = 12;
+        static final int COL_STATUS = 13;
         private final String[] mColumns = {"", "Bin (MHz)", "Carrier (MHz)", "Tuner", "First Heard", "Last Heard",
-            "Hits", "Active (s)", "Peak dB", "Peak SNR", "Protocol", "Details", "Status"};
+            "Hits", "Active (s)", "Peak dB", "Peak SNR", "Protocol", "Msgs", "Details", "Status"};
         private List<DiscoveryHit> mRows = new ArrayList<>();
 
         void refresh()
@@ -787,7 +789,7 @@ public class DiscoveryPanel extends JPanel
         {
             return switch(column)
             {
-                case COL_HITS, COL_ACTIVE_SECONDS -> Integer.class;
+                case COL_HITS, COL_ACTIVE_SECONDS, COL_CONFIDENCE -> Integer.class;
                 case COL_PEAK_LEVEL, COL_PEAK_SNR -> Double.class;
                 case COL_FIRST, COL_LAST -> Date.class;
                 case COL_FREQUENCY, COL_CARRIER -> Double.class;
@@ -818,6 +820,7 @@ public class DiscoveryPanel extends JPanel
                 case COL_PEAK_LEVEL -> Math.round(hit.getPeakLevelDb() * 10.0) / 10.0;
                 case COL_PEAK_SNR -> Math.round(hit.getPeakSnrDb() * 10.0) / 10.0;
                 case COL_PROTOCOL -> hit.getProtocol();
+                case COL_CONFIDENCE -> hit.getMessageCount();
                 case COL_DETAILS -> hit.getDetails();
                 case COL_STATUS -> hit.getStatus().toString();
                 default -> "";

@@ -43,6 +43,7 @@ public class DiscoveryHit
     @JsonProperty("totalActiveMs") private long mTotalActiveMs;
     @JsonProperty("protocol") private String mProtocol = "";
     @JsonProperty("details") private String mDetails = "";
+    @JsonProperty("messageCount") private int mMessageCount;
     @JsonProperty("clipPath") private String mClipPath;
     @JsonProperty("status") private Status mStatus = Status.NEW;
     @JsonProperty("active") private boolean mActive;
@@ -87,6 +88,8 @@ public class DiscoveryHit
     public void setProtocol(String v) { mProtocol = v == null ? "" : v; }
     public String getDetails() { return mDetails; }
     public void setDetails(String v) { mDetails = v == null ? "" : v; }
+    public int getMessageCount() { return mMessageCount; }
+    public void setMessageCount(int v) { mMessageCount = v; }
     public String getClipPath() { return mClipPath; }
     public void setClipPath(String v) { mClipPath = v; }
     public Status getStatus() { return mStatus; }

@@ -45,7 +45,11 @@ import io.github.dsheirer.module.decode.nxdn.DecodeConfigNXDN;
 import io.github.dsheirer.module.decode.nxdn.NXDNDecoder;
 import io.github.dsheirer.module.decode.nxdn.NXDNMessage;
 import io.github.dsheirer.module.decode.nxdn.layer3.type.TransmissionMode;
+import io.github.dsheirer.dsp.symbol.ISyncDetectListener;
 import io.github.dsheirer.module.decode.p25.phase1.P25P1DecoderC4FM;
+import io.github.dsheirer.module.decode.p25.phase1.P25P1DecoderLSM;
+import io.github.dsheirer.module.decode.p25.phase2.DecodeConfigP25Phase2;
+import io.github.dsheirer.module.decode.p25.phase2.P25P2DecoderHDQPSK;
 import io.github.dsheirer.module.decode.p25.phase1.message.P25P1Message;
 import io.github.dsheirer.sample.complex.ComplexSamples;
 import io.github.dsheirer.source.wave.ComplexWaveSource;
@@ -73,10 +77,35 @@ public class ClipAnalyzer
     private static final Logger mLog = LoggerFactory.getLogger(ClipAnalyzer.class);
     private static final int FFT_SIZE = 1024;
     private static final int CHUNK = 2048;
-    private static final int MINIMUM_VALID_MESSAGES = 3;
-    private static final long RASTER_HZ = 6250;
+    /**
+     * Valid messages required before a decoder is allowed to claim the clip.  Front-end overload and strong adjacent
+     * signals can produce a handful of accidentally-valid frames, so this bar is deliberately well above the noise.
+     */
+    private static final int MINIMUM_VALID_MESSAGES = 8;
 
-    public record Result(boolean identified, String protocol, String details, long carrierFrequency, double bandwidthHz) {}
+    /**
+     * A real signal repeats the same color code / RAN / NAC on every frame.  Decoded noise scatters them.  An
+     * identification must observe at least this many keyed values, and the most common one must hold the share below.
+     */
+    private static final int MINIMUM_KEYED_OBSERVATIONS = 4;
+    private static final double MINIMUM_KEY_DOMINANCE = 0.6;
+
+    /**
+     * P25 Phase 2 traffic cannot be message-decoded without the system's scramble parameters, which a standalone clip
+     * does not carry.  Its sync pattern is not scrambled though, so sync detections identify the waveform.  A Phase 2
+     * channel transmits a sync roughly every 180ms per timeslot, so a few seconds of signal yields dozens.
+     */
+    private static final int MINIMUM_P25P2_SYNC_DETECTS = 10;
+
+    /**
+     * Channel raster used to clean up the measured carrier.  1.25 kHz is a common divisor of the 2.5/6.25/7.5/12.5/25
+     * kHz channel spacings in land mobile use, so narrowband VHF channels such as 154.9725 land exactly.  The carrier
+     * measurement itself is good to well under 100 Hz, so this only removes measurement jitter.
+     */
+    private static final long RASTER_HZ = 1250;
+
+    public record Result(boolean identified, String protocol, String details, long carrierFrequency, double bandwidthHz,
+                         int messageCount) {}
 
     private final boolean mIncludeP25;
 
@@ -91,7 +120,7 @@ public class ClipAnalyzer
 
         if(loaded.count < FFT_SIZE * 4)
         {
-            return new Result(false, "", "Clip too short", 0, 0);
+            return new Result(false, "", "Clip too short", 0, 0, 0);
         }
 
         Spectrum spectrum = measure(loaded);
@@ -107,7 +136,11 @@ public class ClipAnalyzer
 
         if(mIncludeP25)
         {
-            candidates.add(new Candidate("P25 Phase 1", new P25P1DecoderC4FM()));
+            //C4FM and LSM are different waveforms for the same Phase 1 protocol - a simulcast system will not decode
+            //with the C4FM demodulator and vice versa, so both are offered and the better score wins.
+            candidates.add(new Candidate("P25 Phase 1 C4FM", new P25P1DecoderC4FM()));
+            candidates.add(new Candidate("P25 Phase 1 LSM", new P25P1DecoderLSM()));
+            candidates.add(new Candidate("P25 Phase 2", new P25P2Probe(phase2Config())));
         }
 
         Candidate best = null;
@@ -123,7 +156,7 @@ public class ClipAnalyzer
                 mLog.debug("Decoder [" + candidate.mName + "] failed on clip", t);
             }
 
-            if(candidate.mValid >= MINIMUM_VALID_MESSAGES && (best == null || candidate.mValid > best.mValid))
+            if(candidate.isIdentified() && (best == null || candidate.score() > best.score()))
             {
                 best = candidate;
             }
@@ -135,13 +168,26 @@ public class ClipAnalyzer
         {
             String details = best.describe();
             return new Result(true, best.mName, (details.isEmpty() ? "" : details + " ") + bandwidth, carrier,
-                spectrum.bandwidthHz);
+                spectrum.bandwidthHz, best.score());
         }
 
-        //Analog fallback
+        //Analog fallback.  Report the best digital near-miss so a decode that fell short of the confidence bar is
+        //visible rather than silently becoming "analog".
         String analog = analyzeAnalog(loaded);
         String protocol = spectrum.bandwidthHz > 0 ? "Analog / Unknown" : "Unknown";
-        return new Result(false, protocol, (analog.isEmpty() ? "" : analog + " ") + bandwidth, carrier, spectrum.bandwidthHz);
+        Candidate nearest = null;
+
+        for(Candidate candidate : candidates)
+        {
+            if(candidate.score() > 0 && (nearest == null || candidate.score() > nearest.score()))
+            {
+                nearest = candidate;
+            }
+        }
+
+        String nearMiss = nearest != null ? " (" + nearest.mName + " " + nearest.score() + " partial)" : "";
+        return new Result(false, protocol, (analog.isEmpty() ? "" : analog + " ") + bandwidth + nearMiss, carrier,
+            spectrum.bandwidthHz, nearest != null ? nearest.score() : 0);
     }
 
     //---------------------------------------------------------------------------------------------------------------
@@ -460,6 +506,38 @@ public class ClipAnalyzer
     //---------------------------------------------------------------------------------------------------------------
 
     /**
+     * Scramble parameter configuration for the Phase 2 probe.  Auto-detect is enabled so the decoder does not apply a
+     * fixed sequence; identification relies on sync detection rather than message decoding.
+     */
+    private static DecodeConfigP25Phase2 phase2Config()
+    {
+        DecodeConfigP25Phase2 config = new DecodeConfigP25Phase2();
+        config.setAutoDetectScrambleParameters(true);
+        return config;
+    }
+
+    /**
+     * Phase 2 decoder that exposes its message framer's sync detect callback.  A standalone clip has no control
+     * channel to supply WACN/SYSTEM/NAC, so Phase 2 payloads cannot be descrambled offline - but the sync pattern is
+     * not scrambled, so counting sync detections reliably identifies the waveform.
+     */
+    private static class P25P2Probe extends P25P2DecoderHDQPSK
+    {
+        P25P2Probe(DecodeConfigP25Phase2 config)
+        {
+            super(config);
+        }
+
+        void countSyncDetects(ISyncDetectListener listener)
+        {
+            if(mMessageFramer != null)
+            {
+                mMessageFramer.setSyncDetectListener(listener);
+            }
+        }
+    }
+
+    /**
      * One decoder run against the clip, collecting valid messages and identifiers.
      */
     private static class Candidate
@@ -473,6 +551,7 @@ public class ClipAnalyzer
         private int mDirectModeBursts = 0;
         private int mMobileBursts = 0;
         private int mBaseBursts = 0;
+        private int mSyncDetects = 0;
 
         Candidate(String name, Decoder decoder)
         {
@@ -480,9 +559,65 @@ public class ClipAnalyzer
             mDecoder = decoder;
         }
 
+        /**
+         * Evidence count used both to rank candidates and to show the user how solid an identification is.
+         */
+        int score()
+        {
+            return mDecoder instanceof P25P2Probe ? mSyncDetects : mValid;
+        }
+
+        /**
+         * A candidate may claim the clip only with enough evidence AND a consistent identifying parameter.  Decoded
+         * noise produces a few valid-looking frames carrying scattered color codes / RANs / NACs; a real signal
+         * repeats one value.
+         */
+        boolean isIdentified()
+        {
+            if(mDecoder instanceof P25P2Probe)
+            {
+                return mSyncDetects >= MINIMUM_P25P2_SYNC_DETECTS;
+            }
+
+            if(mValid < MINIMUM_VALID_MESSAGES)
+            {
+                return false;
+            }
+
+            int total = 0;
+            int dominant = 0;
+
+            for(Integer count : mExtras.values())
+            {
+                total += count;
+                dominant = Math.max(dominant, count);
+            }
+
+            //No keyed parameter was observed at all - fall back to the message count alone.
+            if(total == 0)
+            {
+                return true;
+            }
+
+            return total >= MINIMUM_KEYED_OBSERVATIONS && (double)dominant / total >= MINIMUM_KEY_DOMINANCE;
+        }
+
         void run(Loaded loaded)
         {
             mDecoder.setMessageListener(this::receive);
+
+            //Phase 2 rebuilds its demodulator and message framer inside setSampleRate, so the sample rate must be set
+            //and the sync listener installed before start() - otherwise start() primes objects that are thrown away.
+            if(mDecoder instanceof P25P2Probe p2)
+            {
+                p2.setSampleRate(loaded.sampleRate);
+                p2.countSyncDetects(bitErrors -> mSyncDetects++);
+                p2.start();
+                feed(loaded, p2::receive);
+                p2.stop();
+                return;
+            }
+
             mDecoder.start();
 
             if(mDecoder instanceof DMRDecoder dmr)
@@ -499,6 +634,11 @@ public class ClipAnalyzer
             {
                 p25.setSampleRate(loaded.sampleRate);
                 feed(loaded, p25::receive);
+            }
+            else if(mDecoder instanceof P25P1DecoderLSM lsm)
+            {
+                lsm.setSampleRate(loaded.sampleRate);
+                feed(loaded, lsm::receive);
             }
 
             mDecoder.stop();
