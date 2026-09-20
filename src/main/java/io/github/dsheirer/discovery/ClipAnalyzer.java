@@ -611,7 +611,20 @@ public class ClipAnalyzer
             if(mDecoder instanceof P25P2Probe p2)
             {
                 p2.setSampleRate(loaded.sampleRate);
-                p2.countSyncDetects(bitErrors -> mSyncDetects++);
+                p2.countSyncDetects(new ISyncDetectListener()
+                {
+                    @Override
+                    public void syncDetected(int bitErrors)
+                    {
+                        mSyncDetects++;
+                    }
+
+                    @Override
+                    public void syncLost(int bitsProcessed)
+                    {
+                        //No action - only detections are counted.
+                    }
+                });
                 p2.start();
                 feed(loaded, p2::receive);
                 p2.stop();
