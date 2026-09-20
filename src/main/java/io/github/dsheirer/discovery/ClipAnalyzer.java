@@ -98,6 +98,12 @@ public class ClipAnalyzer
     private static final int MINIMUM_P25P2_SYNC_DETECTS = 10;
 
     /**
+     * Evidence count beyond which a candidate is treated as certain and the remaining decoders are skipped.  A real
+     * control channel produces hundreds of frames in a few seconds, so this is only reached on unambiguous signals.
+     */
+    private static final int DECISIVE_SCORE = 60;
+
+    /**
      * Channel raster used to clean up the measured carrier.  1.25 kHz is a common divisor of the 2.5/6.25/7.5/12.5/25
      * kHz channel spacings in land mobile use, so narrowband VHF channels such as 154.9725 land exactly.  The carrier
      * measurement itself is good to well under 100 Hz, so this only removes measurement jitter.
@@ -159,6 +165,13 @@ public class ClipAnalyzer
             if(candidate.isIdentified() && (best == null || candidate.score() > best.score()))
             {
                 best = candidate;
+            }
+
+            //A decisive result means no other waveform is going to beat it.  Skipping the remaining decoders saves
+            //most of the analysis cost on the clips that matter, which keeps low-powered machines usable.
+            if(best != null && best.score() >= DECISIVE_SCORE)
+            {
+                break;
             }
         }
 

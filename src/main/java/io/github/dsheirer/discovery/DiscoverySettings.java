@@ -29,7 +29,17 @@ public class DiscoverySettings
     private volatile double mLevelThresholdDb = -150.0;
     private volatile int mDwellMs = 200;
     private volatile int mClipSeconds = 5;
-    private volatile int mMaxConcurrentCaptures = 8;
+    private volatile int mMaxConcurrentCaptures = defaultConcurrentCaptures();
+
+    /**
+     * Concurrent clip captures scaled to the machine.  Each capture is an open wave recorder writing continuously, so
+     * a low-core machine gets a smaller pool rather than thrashing the disk and heap.
+     */
+    private static int defaultConcurrentCaptures()
+    {
+        int cores = Runtime.getRuntime().availableProcessors();
+        return Math.max(2, Math.min(8, cores / 2));
+    }
     private volatile int mCaptureCooldownSeconds = 60;
     private volatile boolean mIgnoreDcBin = true;
 
