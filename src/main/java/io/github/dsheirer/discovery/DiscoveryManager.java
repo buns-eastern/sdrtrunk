@@ -84,11 +84,17 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
         t.setDaemon(true);
         return t;
     });
+    //Single analysis thread at low priority - identification is never more important than decoding live audio, so
+    //it yields to the decoder and audio threads on a busy or low-core machine.
     private final ScheduledExecutorService mAnalyzer = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "sdrtrunk discovery analyzer");
         t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
         return t;
     });
+    private final java.util.concurrent.atomic.AtomicInteger mPendingAnalysis = new java.util.concurrent.atomic.AtomicInteger();
+    private static final int MAX_ANALYSIS_BACKLOG =
+        Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors() / 2));
     private final ObjectMapper mMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
     private final Path mDirectory;
     private final Path mClipDirectory;
@@ -422,6 +428,7 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
 
         hit.setStatus(DiscoveryHit.Status.ANALYZING);
         notifyHitsChanged();
+        mPendingAnalysis.incrementAndGet();
 
         mAnalyzer.execute(() -> {
             try
@@ -448,8 +455,17 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
                 hit.setStatus(DiscoveryHit.Status.UNIDENTIFIED);
             }
 
+            mPendingAnalysis.decrementAndGet();
             notifyHitsChanged();
         });
+    }
+
+    /**
+     * Number of clips waiting on or undergoing identification.
+     */
+    public int getPendingAnalysisCount()
+    {
+        return mPendingAnalysis.get();
     }
 
     //---------------------------------------------------------------------------------------------------------------
@@ -545,9 +561,19 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
 
             notifyHitsChanged();
 
+            //Auto-analysis is best effort.  When the machine can't keep up, leave the clip at CAPTURED rather than
+            //queueing without limit - the clip is on disk and the Analyze button still works on demand.
             if(mPreference.isAutoAnalyze() && hit.getStatus() != DiscoveryHit.Status.IGNORED)
             {
-                analyze(hit);
+                if(mPendingAnalysis.get() < MAX_ANALYSIS_BACKLOG)
+                {
+                    analyze(hit);
+                }
+                else
+                {
+                    hit.setDetails("Not analyzed - analysis backlog; use Analyze");
+                    notifyHitsChanged();
+                }
             }
         }, ANALYSIS_DELAY_MS, TimeUnit.MILLISECONDS);
     }

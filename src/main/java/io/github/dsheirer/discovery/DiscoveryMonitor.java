@@ -73,6 +73,8 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
     private final Set<Long> mExcludedFrequencies = new CopyOnWriteArraySet<>();
     private volatile boolean mRunning = false;
     private volatile boolean mResetRequested = false;
+    private volatile boolean mRemapRequested = false;
+    private final java.util.concurrent.atomic.AtomicLong mCaptureSequence = new java.util.concurrent.atomic.AtomicLong();
 
     //Per-bin state - (re)allocated whenever the channel count changes
     private int mBinCount = 0;
@@ -135,7 +137,8 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
     {
         mExcludedFrequencies.clear();
         mExcludedFrequencies.addAll(frequencies);
-        mResetRequested = true;
+        //Only the exclusion mask changed - the bins still cover the same spectrum, so clips in progress stay valid.
+        mRemapRequested = true;
     }
 
     public void start()
@@ -178,8 +181,14 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
         {
             case NOTIFICATION_FREQUENCY_CHANGE:
             case NOTIFICATION_SAMPLE_RATE_CHANGE:
-            case NOTIFICATION_FREQUENCY_CORRECTION_CHANGE:
+                //The bins now cover different spectrum - captures in progress are no longer what they claim to be.
                 mResetRequested = true;
+                break;
+            case NOTIFICATION_FREQUENCY_CORRECTION_CHANGE:
+                //A PPM correction shifts the bin map by a few Hz against a bin that is tens of kHz wide.  Re-map the
+                //frequencies but leave captures alone - auto-PPM fires about every 5 seconds, which would otherwise
+                //abort every clip before it could finish.
+                mRemapRequested = true;
                 break;
             default:
                 break;
@@ -199,6 +208,10 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
         if(binCount != mBinCount || mResetRequested || channelSampleRate != mChannelSampleRate)
         {
             reset(binCount, channelSampleRate);
+        }
+        else if(mRemapRequested)
+        {
+            remapFrequencies();
         }
 
         mLastTimestamp = timestamp;
@@ -240,6 +253,10 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
         }
     }
 
+    /**
+     * Full reset for a genuine bin layout change - the bin count, sample rate or tuner center frequency changed, so
+     * every bin now represents a different frequency and any clip in progress is no longer what it claims to be.
+     */
     private void reset(int binCount, double channelSampleRate)
     {
         mResetRequested = false;
@@ -252,9 +269,44 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
         mBelowCount = new int[binCount];
         mActive = new boolean[binCount];
         mActiveSince = new long[binCount];
-        mLastCaptureTime = new long[binCount];
         mExcluded = new boolean[binCount];
         mBinFrequency = new long[binCount];
+
+        //Preserve the per-bin capture cooldown across a reset when the bin layout is unchanged in size.  Discarding
+        //it lets every active bin immediately re-capture, which produces a storm of same-second clip file names.
+        if(mLastCaptureTime == null || mLastCaptureTime.length != binCount)
+        {
+            mLastCaptureTime = new long[binCount];
+        }
+
+        synchronized(mCaptures)
+        {
+            for(Capture capture : mCaptures)
+            {
+                capture.abort();
+            }
+            mCaptures.clear();
+        }
+
+        remapFrequencies();
+    }
+
+    /**
+     * Recomputes the bin center frequencies and the exclusion mask without disturbing captures in progress.  Used for
+     * small changes - a PPM/frequency-correction nudge, or a playlist edit changing which frequencies are excluded -
+     * where the bins still cover the same spectrum and an in-flight clip is still valid.
+     */
+    private void remapFrequencies()
+    {
+        mRemapRequested = false;
+
+        if(mBinCount <= 0 || mBinFrequency == null || mExcluded == null)
+        {
+            return;
+        }
+
+        int binCount = mBinCount;
+        java.util.Arrays.fill(mExcluded, false);
 
         ChannelCalculator calculator = mChannelManager.getChannelCalculator();
         int wrapAround = calculator.getWrapAroundIndex();
@@ -286,15 +338,6 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
                     break;
                 }
             }
-        }
-
-        synchronized(mCaptures)
-        {
-            for(Capture capture : mCaptures)
-            {
-                capture.abort();
-            }
-            mCaptures.clear();
         }
     }
 
@@ -411,8 +454,11 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
 
             try
             {
+                //Millisecond precision plus a monotonic sequence - a one-second granularity name collides with the
+                //file still being closed from a previous capture on the same bin, and the wave writer gives up after
+                //20 versioning attempts.
                 String name = FILE_TIMESTAMP.format(new Date(timestamp)) + "_" + mBinFrequency[bin] + "_discovery_" +
-                    sanitize(mTunerId) + "_baseband";
+                    sanitize(mTunerId) + "_" + mCaptureSequence.incrementAndGet() + "_baseband";
                 Path prefix = mClipDirectory.resolve(name);
                 long samples = (long)(mSettings.getClipSeconds() * mChannelSampleRate);
                 //Channelizer output amplitudes are tiny (tens of micro-units); scale so the signal RMS lands near
@@ -422,12 +468,27 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
                 Capture capture = new Capture(bin, mBinFrequency[bin], prefix.toString(), samples, gain);
                 capture.start();
                 mCaptures.add(capture);
-                mLastCaptureTime[bin] = timestamp;
+                //Cooldown is stamped when the capture COMPLETES, not here - stamping at start means an aborted
+                //capture still locks the bin out for the full re-capture interval and no clip is ever produced.
             }
             catch(Exception e)
             {
                 mLog.error("Error starting discovery capture", e);
             }
+        }
+    }
+
+    /**
+     * Records that a bin produced a completed clip, starting its re-capture cooldown.  An aborted capture never gets
+     * here, so the bin is free to try again immediately.
+     */
+    private void markCaptured(int bin, long timestamp)
+    {
+        long[] lastCapture = mLastCaptureTime;
+
+        if(lastCapture != null && bin >= 0 && bin < lastCapture.length)
+        {
+            lastCapture[bin] = timestamp;
         }
     }
 
@@ -523,6 +584,7 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
         {
             flush(timestamp);
             mComplete = true;
+            markCaptured(mBin, timestamp);
             final Path file = mRecorder.getFile();
             mRecorder.flushAndStop();
             mListener.clipCompleted(mTunerId, mFrequency, file, mChannelSampleRate);
