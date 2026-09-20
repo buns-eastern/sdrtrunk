@@ -64,6 +64,9 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
 {
     private static final Logger mLog = LoggerFactory.getLogger(DiscoveryManager.class);
     private static final long ANALYSIS_DELAY_MS = 2000;
+    //An interrupted recording leaves a .tmp behind.  The longest capture the UI allows is 60 seconds, so anything
+    //older than this is certainly abandoned.
+    private static final long TEMPORARY_FILE_MAX_AGE_MS = 3600000L;
 
     public interface HitListener
     {
@@ -398,7 +401,38 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
         }
 
         mHits.clear();
+
+        //Sweep the whole clip directory, not only the files a hit still points at.  A capture that was interrupted
+        //never records its path against a hit, so those files would otherwise survive a "delete everything".
+        try(Stream<Path> files = Files.list(mClipDirectory))
+        {
+            files.filter(DiscoveryManager::isClipFile).forEach(path -> {
+                try
+                {
+                    Files.deleteIfExists(path);
+                }
+                catch(IOException e)
+                {
+                    //In use, or gone already - nothing useful to do.
+                }
+            });
+        }
+        catch(IOException e)
+        {
+            mLog.warn("Couldn't sweep discovery clip directory [" + mClipDirectory + "]");
+        }
+
         notifyHitsChanged();
+    }
+
+    /**
+     * Recording files this feature owns: finished clips and the temporary files the wave writer creates before it
+     * renames them on close.
+     */
+    private static boolean isClipFile(Path path)
+    {
+        String name = path.toString();
+        return name.endsWith(".wav") || name.endsWith(".tmp");
     }
 
     private void deleteClip(String clipPath)
@@ -484,6 +518,7 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
             hit.setPeakLevelDb(Math.max(hit.getPeakLevelDb(), levelDb));
             hit.setPeakSnrDb(Math.max(hit.getPeakSnrDb(), snrDb));
             hit.setActive(true);
+            hit.setActiveSince(timestamp);
             notifyHitsChanged();
         });
     }
@@ -658,10 +693,45 @@ public class DiscoveryManager implements DiscoveryMonitor.Listener
                         });
                 }
             }
+
+            sweepTemporaryFiles();
         }
         catch(Throwable t)
         {
             mLog.error("Discovery housekeeping error", t);
+        }
+    }
+
+    /**
+     * Deletes stale temporary recording files.  The wave writer creates a .tmp and renames it on close, so a capture
+     * that was interrupted leaves one behind - and unlike a finished clip, it is never referenced by a hit and is of
+     * no use to anyone.  This runs regardless of the clip retention setting, because "keep clips forever" is a choice
+     * about recordings, not about debris.  The age floor is far longer than the longest possible capture, so a file
+     * still being written is never touched.
+     */
+    private void sweepTemporaryFiles()
+    {
+        long cutoff = System.currentTimeMillis() - TEMPORARY_FILE_MAX_AGE_MS;
+
+        try(Stream<Path> files = Files.list(mClipDirectory))
+        {
+            files.filter(path -> path.toString().endsWith(".tmp")).forEach(path -> {
+                try
+                {
+                    if(Files.getLastModifiedTime(path).toMillis() < cutoff)
+                    {
+                        Files.deleteIfExists(path);
+                    }
+                }
+                catch(IOException e)
+                {
+                    //In use, or gone already.
+                }
+            });
+        }
+        catch(IOException e)
+        {
+            //Directory unreadable - nothing to do.
         }
     }
 

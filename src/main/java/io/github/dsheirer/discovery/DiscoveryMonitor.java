@@ -50,7 +50,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventProcessor
 {
     private static final Logger mLog = LoggerFactory.getLogger(DiscoveryMonitor.class);
-    private static final SimpleDateFormat FILE_TIMESTAMP = new SimpleDateFormat("yyyyMMdd_HHmmss");
+    private static final SimpleDateFormat FILE_TIMESTAMP = new SimpleDateFormat("yyyyMMdd_HHmmss_SSS");
     private static final int EVALUATION_INTERVAL_MS = 100;
     private static final int CAPTURE_BUFFER_SAMPLES = 2048;
     private static final int HOLDOFF_EVALUATIONS = 5; //500 ms below threshold before a hit is considered ended
@@ -454,9 +454,9 @@ public class DiscoveryMonitor implements IChannelResultsListener, ISourceEventPr
 
             try
             {
-                //Millisecond precision plus a monotonic sequence - a one-second granularity name collides with the
-                //file still being closed from a previous capture on the same bin, and the wave writer gives up after
-                //20 versioning attempts.
+                //Millisecond timestamp plus a per-run sequence number.  A one-second granularity name collides with
+                //the file still being closed from a previous capture on the same bin, and the wave writer gives up
+                //after 20 versioning attempts.
                 String name = FILE_TIMESTAMP.format(new Date(timestamp)) + "_" + mBinFrequency[bin] + "_discovery_" +
                     sanitize(mTunerId) + "_" + mCaptureSequence.incrementAndGet() + "_baseband";
                 Path prefix = mClipDirectory.resolve(name);

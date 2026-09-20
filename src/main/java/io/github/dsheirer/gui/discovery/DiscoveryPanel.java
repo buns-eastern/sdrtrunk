@@ -816,7 +816,7 @@ public class DiscoveryPanel extends JPanel
                 case COL_FIRST -> new Date(hit.getFirstHeard());
                 case COL_LAST -> new Date(hit.getLastHeard());
                 case COL_HITS -> hit.getHitCount();
-                case COL_ACTIVE_SECONDS -> (int)(hit.getTotalActiveMs() / 1000);
+                case COL_ACTIVE_SECONDS -> (int)(hit.getActiveMs(System.currentTimeMillis()) / 1000);
                 case COL_PEAK_LEVEL -> Math.round(hit.getPeakLevelDb() * 10.0) / 10.0;
                 case COL_PEAK_SNR -> Math.round(hit.getPeakSnrDb() * 10.0) / 10.0;
                 case COL_PROTOCOL -> hit.getProtocol();
