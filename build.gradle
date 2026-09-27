@@ -59,10 +59,10 @@ repositories {
 //Version is defined in gradle.properties so that we can CLI override it for nightly builds.
 version = project.findProperty('projectVersion')
 
-//Java 24 is required for this version of the Project Panama preview/incubator feature
+//Java 26 is required for this version of the Project Panama preview/incubator feature
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(26)
         vendor = JvmVendorSpec.BELLSOFT
     }
 }
@@ -429,7 +429,7 @@ String jdk_windows_aarch64 = jdk_base + 'windows-arm64/jdk-25.0.1-full'
 /**
  * Download URLs to download the JDK as part of the gradle build packaging process
  */
-def jdk_download_base = "https://download.bell-sw.com/java/25.0.1+11/bellsoft-jdk25.0.1+11-"
+def jdk_download_base = "https://download.bell-sw.com/java/26.0.2+13/bellsoft-jdk26.0.2+13-"
 def jdk_download_suffix = "-full.tar.gz"
 def jdk_download_linux_aarch64 = jdk_download_base + "linux-aarch64" + jdk_download_suffix
 def jdk_download_linux_x86_64 = jdk_download_base + "linux-amd64" + jdk_download_suffix
