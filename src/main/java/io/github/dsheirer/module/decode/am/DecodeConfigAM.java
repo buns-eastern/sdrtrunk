@@ -20,6 +20,7 @@ package io.github.dsheirer.module.decode.am;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+import io.github.dsheirer.dsp.am.AmAudioLeveler;
 import io.github.dsheirer.dsp.squelch.ISquelchConfiguration;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.analog.DecodeConfigAnalog;
@@ -32,6 +33,8 @@ public class DecodeConfigAM extends DecodeConfigAnalog implements ISquelchConfig
 {
     private int mSquelchThreshold = -78;
     private boolean mSquelchAutoTrack = true;
+    private boolean mAudioAutoLevel = true;
+    private float mAudioOutputGain = AmAudioLeveler.DEFAULT_OUTPUT_GAIN;
 
 	public DecodeConfigAM()
     {
@@ -113,5 +116,43 @@ public class DecodeConfigAM extends DecodeConfigAnalog implements ISquelchConfig
     public boolean isSquelchAutoTrack()
     {
         return mSquelchAutoTrack;
+    }
+
+    /**
+     * Indicates if audio auto level is enabled so that weak and strong transmissions have the same loudness.
+     * @return true if enabled (default).
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "audioAutoLevel")
+    public boolean isAudioAutoLevel()
+    {
+        return mAudioAutoLevel;
+    }
+
+    /**
+     * Enables or disables audio auto level.
+     * @param autoLevel true to enable.
+     */
+    public void setAudioAutoLevel(boolean autoLevel)
+    {
+        mAudioAutoLevel = autoLevel;
+    }
+
+    /**
+     * Linear output gain applied to the channel audio where 1.0 is unity.
+     * @return output gain
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "audioOutputGain")
+    public float getAudioOutputGain()
+    {
+        return mAudioOutputGain;
+    }
+
+    /**
+     * Sets the linear output gain applied to the channel audio.  Out of range values are constrained.
+     * @param gain where 1.0 is unity.
+     */
+    public void setAudioOutputGain(float gain)
+    {
+        mAudioOutputGain = AmAudioLeveler.constrain(gain);
     }
 }

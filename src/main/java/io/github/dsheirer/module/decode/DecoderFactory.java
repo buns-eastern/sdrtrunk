@@ -923,6 +923,8 @@ public class DecoderFactory
                     copyAM.setTalkgroup(origAM.getTalkgroup());
                     copyAM.setSquelchThreshold(origAM.getSquelchThreshold());
                     copyAM.setSquelchAutoTrack(origAM.isSquelchAutoTrack());
+                    copyAM.setAudioAutoLevel(origAM.isAudioAutoLevel());
+                    copyAM.setAudioOutputGain(origAM.getAudioOutputGain());
                     return copyAM;
                 case DMR:
                     return new DecodeConfigDMR();

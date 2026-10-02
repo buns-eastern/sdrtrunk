@@ -21,6 +21,7 @@ package io.github.dsheirer.module.decode.am;
 import io.github.dsheirer.channel.state.DecoderStateEvent;
 import io.github.dsheirer.channel.state.IDecoderStateEventProvider;
 import io.github.dsheirer.channel.state.State;
+import io.github.dsheirer.dsp.am.AmAudioLeveler;
 import io.github.dsheirer.dsp.am.SquelchingAMDemodulator;
 import io.github.dsheirer.dsp.filter.FilterFactory;
 import io.github.dsheirer.dsp.filter.decimate.DecimationFilterFactory;
@@ -30,7 +31,6 @@ import io.github.dsheirer.dsp.filter.fir.FIRFilterSpecification;
 import io.github.dsheirer.dsp.filter.fir.real.IRealFilter;
 import io.github.dsheirer.dsp.filter.resample.RealResampler;
 import io.github.dsheirer.dsp.fm.ISquelchingDemodulator;
-import io.github.dsheirer.dsp.gain.AudioGainAndDcFilter;
 import io.github.dsheirer.dsp.squelch.INoiseSquelchController;
 import io.github.dsheirer.dsp.squelch.NoiseSquelch;
 import io.github.dsheirer.dsp.squelch.NoiseSquelchState;
@@ -57,16 +57,13 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
     private final static Logger mLog = LoggerFactory.getLogger(AMDecoder.class);
     private static final float DEMODULATOR_GAIN = 150.0f;
     private static final float SQUELCH_ALPHA_DECAY = 0.0004f;
-    private static final float MINIMUM_GAIN = 0.5f;
-    private static final float MAXIMUM_GAIN = 16.0f;
-    private static final float OBJECTIVE_AUDIO_AMPLITUDE = 0.75f;
-    private AudioGainAndDcFilter mAGC = new AudioGainAndDcFilter(MINIMUM_GAIN, MAXIMUM_GAIN, OBJECTIVE_AUDIO_AMPLITUDE);
     private static final double DEMODULATED_AUDIO_SAMPLE_RATE = 8000.0;
     private IRealFilter mIBasebandFilter;
     private IRealFilter mQBasebandFilter;
     private IRealDecimationFilter mIDecimationFilter;
     private IRealDecimationFilter mQDecimationFilter;
     private final ISquelchingDemodulator mDemodulator;
+    private final AmAudioLeveler mAudioLeveler;
     private RealResampler mResampler;
     private final SourceEventProcessor mSourceEventProcessor = new SourceEventProcessor();
     private Listener<float[]> mResampledBufferListener;
@@ -85,6 +82,7 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
         super(config);
         mDemodulator = new SquelchingAMDemodulator(DEMODULATOR_GAIN, SQUELCH_ALPHA_DECAY, config.getSquelchThreshold(),
                 config.isSquelchAutoTrack());
+        mAudioLeveler = new AmAudioLeveler(config.isAudioAutoLevel(), config.getAudioOutputGain());
 		mChannelBandwidth = config.getBandwidth().getValue();
     }
 
@@ -154,8 +152,6 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
         if(mResampledBufferListener != null)
         {
             mResampledBufferListener.receive(demodulatedSamples);
-//            //Apply audio gain and rebroadcast
-//            super.broadcast(mAGC.process(demodulatedSamples));
         }
     }
 
@@ -210,6 +206,9 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
 
         mNoiseSquelch.process(demodulated);
 
+        //Level the audio and apply the channel's output gain.  Squelched samples are zero and pass through as silence.
+        float[] audio = mAudioLeveler.process(demodulated);
+
         if(mResampler != null)
         {
             //Squelch changed while processing this audio buffer
@@ -243,7 +242,7 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
                         notifyCallContinuation();
                     }
 
-                    mResampler.resample(demodulated);
+                    mResampler.resample(audio);
                 }
             }
             else
@@ -257,7 +256,7 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
                 else
                 {
                     notifyCallContinuation();
-                    mResampler.resample(demodulated);
+                    mResampler.resample(audio);
                 }
             }
         }
@@ -275,7 +274,6 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
      */
     protected void notifyCallStart()
     {
-        mAGC.reset();
         broadcast(new DecoderStateEvent(this, DecoderStateEvent.Event.START, State.CALL, 0));
     }
 
@@ -406,6 +404,7 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
                     }
 
                     mDemodulator.setSampleRate((int) decimatedSampleRate);
+                    mAudioLeveler.setSampleRate(decimatedSampleRate);
 
                     mNoiseSquelch.setSampleRate(decimatedSampleRate);
 
