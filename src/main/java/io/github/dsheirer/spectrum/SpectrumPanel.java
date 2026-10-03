@@ -83,6 +83,9 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
     //Reference dB value set according to the source sample size
     private float mDBScale;
 
+    //Correction in dB added to incoming DFT bin values.  Zero leaves the values as provided.
+    private float mLevelCorrection = 0.0f;
+
     //When true, draws a horizontal dBFS amplitude reference grid.  Enabled by the channel spectrum view via
     //setDbReferenceVisible(true) so the user has a vertical reference for relative signal strength.
     private boolean mShowDbReference = false;
@@ -132,6 +135,18 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
         {
             currentFFTBins = new float[currentFFTBins.length];
         }
+        else if(mLevelCorrection != 0.0f)
+        {
+            //Correct a copy so that other listeners sharing this result set are unaffected
+            float[] corrected = new float[currentFFTBins.length];
+
+            for(int x = 0; x < currentFFTBins.length; x++)
+            {
+                corrected[x] = currentFFTBins[x] + mLevelCorrection;
+            }
+
+            currentFFTBins = corrected;
+        }
 
         //Construct and/or resize our DFT results variables
         if(mDisplayFFTBins == null ||
@@ -177,7 +192,18 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
     }
 
     /**
-     * Peak (maximum) amplitude across the currently displayed spectrum bins, in relative dBFS.  This reflects
+     * Sets a correction that is added to every incoming DFT bin value before it is displayed.  Use this to
+     * calibrate the trace, the dBFS reference grid and the peak readout together, for example with
+     * ComplexDftProcessor.getCarrierLevelCorrection() so that a steady carrier reads its true level.
+     * @param decibels to add, where zero applies no correction.
+     */
+    public void setLevelCorrection(float decibels)
+    {
+        mLevelCorrection = Float.isFinite(decibels) ? decibels : 0.0f;
+    }
+
+    /**
+     * Peak (maximum) amplitude across the currently displayed spectrum bins, in dBFS.  This reflects
      * the smoothed/averaged trace that is actually drawn, so it aligns with the dBFS reference grid.
      * @return peak amplitude in dBFS.
      */
@@ -352,16 +378,24 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
         //Top of panel = 0 dBFS, bottom = -mDBScale dBFS
         float pixelsPerDb = insideHeight / mDBScale;
 
-        //Pick a label interval that keeps the grid readable across the current dB span
+        //Pick grid line and label intervals that keep the grid readable across the current dB span.  Between 120
+        //and 160 dB the lines stay at 10 dB and only every other line is labelled so the labels don't crowd.
         int interval = 10;
+        int labelInterval = 10;
 
-        if(mDBScale > 120)
+        if(mDBScale > 160)
         {
             interval = 20;
+            labelInterval = 20;
+        }
+        else if(mDBScale > 120)
+        {
+            labelInterval = 20;
         }
         else if(mDBScale < 40)
         {
             interval = 5;
+            labelInterval = 5;
         }
 
         //Grid lines and dBFS labels adapt to the spectrum background luminance so they stay easy to read and
@@ -382,8 +416,11 @@ public class SpectrumPanel extends JPanel implements DFTResultsListener, Setting
             graphics.draw(new Line2D.Float(0, y, size.width, y));
 
             //dBFS label near the left edge
-            graphics.setColor(labelColor);
-            graphics.drawString("-" + db, 2, y - 1);
+            if(db % labelInterval == 0)
+            {
+                graphics.setColor(labelColor);
+                graphics.drawString("-" + db, 2, y - 1);
+            }
         }
     }
 
