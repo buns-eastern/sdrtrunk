@@ -52,6 +52,16 @@ public class SquelchingAMDemodulator implements ISquelchingDemodulator, Listener
     }
 
     /**
+     * Enables or disables fast squelch close, where the squelch closes as soon as the signal is gone instead of
+     * waiting for the slow power average to decay below the threshold.
+     * @param fastClose true to enable
+     */
+    public void setFastSquelchClose(boolean fastClose)
+    {
+        mAdaptiveSquelch.setFastClose(fastClose);
+    }
+
+    /**
      * Set or update the sample rate for the squelch to adjust the power level notification rate.
      * @param sampleRate in hertz
      */

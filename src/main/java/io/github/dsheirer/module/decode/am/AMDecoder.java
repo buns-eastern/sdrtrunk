@@ -64,6 +64,7 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
     private IRealDecimationFilter mQDecimationFilter;
     private final ISquelchingDemodulator mDemodulator;
     private final AmAudioLeveler mAudioLeveler;
+    private boolean mResamplerHasAudio = false;
     private RealResampler mResampler;
     private final SourceEventProcessor mSourceEventProcessor = new SourceEventProcessor();
     private Listener<float[]> mResampledBufferListener;
@@ -80,9 +81,12 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
     public AMDecoder(DecodeConfigAM config)
     {
         super(config);
-        mDemodulator = new SquelchingAMDemodulator(DEMODULATOR_GAIN, SQUELCH_ALPHA_DECAY, config.getSquelchThreshold(),
-                config.isSquelchAutoTrack());
+        SquelchingAMDemodulator demodulator = new SquelchingAMDemodulator(DEMODULATOR_GAIN, SQUELCH_ALPHA_DECAY,
+                config.getSquelchThreshold(), config.isSquelchAutoTrack());
         mAudioLeveler = new AmAudioLeveler(config.isAudioAutoLevel(), config.getAudioOutputGain());
+        //Levelled audio makes the squelch tail audible, so close the squelch quickly once the signal is gone.
+        demodulator.setFastSquelchClose(mAudioLeveler.isTrimmingTail());
+        mDemodulator = demodulator;
 		mChannelBandwidth = config.getBandwidth().getValue();
     }
 
@@ -206,7 +210,8 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
 
         mNoiseSquelch.process(demodulated);
 
-        //Level the audio and apply the channel's output gain.  Squelched samples are zero and pass through as silence.
+        //Level the audio and apply the channel's output gain.  When the leveler is trimming the squelch tail this is
+        //only the audio it has released, which is empty while squelched and at the start of a transmission.
         float[] audio = mAudioLeveler.process(demodulated);
 
         if(mResampler != null)
@@ -225,6 +230,15 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
                     else
                     {
                         mSquelch = true;
+
+                        //When trimming the squelch tail, finish with the audio released ahead of the trimmed tail and
+                        //flush the resampler so the end of this call isn't carried into the start of the next call.
+                        if(mAudioLeveler.isTrimmingTail() && (mResamplerHasAudio || audio.length > 0))
+                        {
+                            mResampler.resample(audio, true);
+                        }
+
+                        mResamplerHasAudio = false;
                         notifyCallEnd();
                     }
                 }
@@ -242,7 +256,7 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
                         notifyCallContinuation();
                     }
 
-                    mResampler.resample(audio);
+                    resample(audio);
                 }
             }
             else
@@ -256,7 +270,7 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
                 else
                 {
                     notifyCallContinuation();
-                    mResampler.resample(audio);
+                    resample(audio);
                 }
             }
         }
@@ -267,6 +281,19 @@ public class AMDecoder extends SquelchControlDecoder implements ISourceEventList
         }
 
 
+    }
+
+    /**
+     * Resamples the audio, when there is any.
+     * @param audio to resample
+     */
+    private void resample(float[] audio)
+    {
+        if(audio.length > 0)
+        {
+            mResampler.resample(audio);
+            mResamplerHasAudio = true;
+        }
     }
 
     /**

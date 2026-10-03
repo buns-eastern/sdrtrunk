@@ -18,6 +18,8 @@
  */
 package io.github.dsheirer.dsp.am;
 
+import java.util.Arrays;
+
 /**
  * Levels demodulated AM audio so that weak and strong transmissions come out at the same loudness, and applies a
  * user output gain.
@@ -28,8 +30,13 @@ package io.github.dsheirer.dsp.am;
  * the modulation alone, where full (100%) modulation is full scale regardless of how strong the signal was received.
  * The output gain is then applied and peaks are soft limited so that boosted audio saturates smoothly.
  *
- * Samples that were muted (zeroed) by the squelch are passed through as silence and re-arm the carrier tracker so
- * that each transmission is levelled independently.
+ * Samples that were muted (zeroed) by the squelch re-arm the carrier tracker so that each transmission is levelled
+ * independently.
+ *
+ * Levelling also raises the noise that follows the end of a transmission, between the moment the signal drops and
+ * the moment the squelch closes, to full loudness.  When auto level is enabled the most recent audio is held back
+ * and is discarded when the squelch closes, which trims that squelch tail.  In this mode squelched samples produce
+ * no output, so the returned array holds only the audio that has been released and can be shorter than the input.
  *
  * When auto level is disabled the envelope is only scaled by the output gain, and with unity gain the samples are
  * passed through untouched.
@@ -47,6 +54,9 @@ public class AmAudioLeveler
     private static final double SETTLE_DURATION_SECONDS = 0.020;
     private static final float MINIMUM_CARRIER = 1.0e-6f;
 
+    //Length of audio that is held back and discarded when the squelch closes.
+    private static final double TAIL_TRIM_SECONDS = 0.100;
+
     //Soft limiter: linear below the knee, smoothly saturating toward the ceiling above it.
     private static final float LIMITER_KNEE = 0.6f;
     private static final float LIMITER_CEILING = 0.95f;
@@ -60,6 +70,9 @@ public class AmAudioLeveler
     private int mSettleRemaining;
     private float mCarrier;
     private boolean mActive;
+    private float[] mHeld = new float[1];
+    private int mHeldCount;
+    private int mHeldIndex;
 
     /**
      * Constructs an instance
@@ -97,6 +110,7 @@ public class AmAudioLeveler
             mSettleAlpha = (float)(1.0 - Math.exp(-1.0 / (SETTLE_TIME_CONSTANT_SECONDS * sampleRate)));
             mTrackAlpha = (float)(1.0 - Math.exp(-1.0 / (TRACK_TIME_CONSTANT_SECONDS * sampleRate)));
             mSettleSampleCount = (int)(SETTLE_DURATION_SECONDS * sampleRate);
+            mHeld = new float[Math.max(1, (int)(TAIL_TRIM_SECONDS * sampleRate))];
         }
 
         reset();
@@ -110,6 +124,17 @@ public class AmAudioLeveler
         mActive = false;
         mCarrier = 0.0f;
         mSettleRemaining = 0;
+        mHeldCount = 0;
+        mHeldIndex = 0;
+    }
+
+    /**
+     * Indicates if the squelch tail is being trimmed.  When true, the audio returned from process() excludes
+     * squelched samples and the trimmed tail and can be shorter than the input, including empty.
+     */
+    public boolean isTrimmingTail()
+    {
+        return mAutoLevel;
     }
 
     /**
@@ -123,7 +148,8 @@ public class AmAudioLeveler
     /**
      * Processes a buffer of demodulated AM (envelope) samples.
      * @param envelope samples from the demodulator, where squelched samples are zero
-     * @return processed audio samples.  The original array is returned when there is nothing to do.
+     * @return processed audio samples.  The original array is returned when there is nothing to do.  When the
+     * squelch tail is being trimmed this is only the audio that has been released, which can be an empty array.
      */
     public float[] process(float[] envelope)
     {
@@ -145,15 +171,20 @@ public class AmAudioLeveler
         }
 
         float sample;
+        float levelled;
+        int released = 0;
 
         for(int x = 0; x < envelope.length; x++)
         {
             sample = envelope[x];
 
-            //Squelched (muted) or unusable sample - output silence and re-arm for the next transmission
+            //Squelched (muted) or unusable sample - the transmission has ended.  Discard the held audio, which is
+            //the squelch tail, and re-arm for the next transmission.
             if(!(sample > 0.0f) || Float.isInfinite(sample))
             {
                 mActive = false;
+                mHeldCount = 0;
+                mHeldIndex = 0;
                 continue;
             }
 
@@ -176,10 +207,22 @@ public class AmAudioLeveler
                 mSettleRemaining = mSettleSampleCount;
             }
 
-            audio[x] = limit(((sample / Math.max(mCarrier, MINIMUM_CARRIER)) - 1.0f) * mOutputGain);
+            levelled = limit(((sample / Math.max(mCarrier, MINIMUM_CARRIER)) - 1.0f) * mOutputGain);
+
+            //Hold back the most recent audio and release the oldest once the hold is full.
+            if(mHeldCount < mHeld.length)
+            {
+                mHeld[mHeldCount++] = levelled;
+            }
+            else
+            {
+                audio[released++] = mHeld[mHeldIndex];
+                mHeld[mHeldIndex] = levelled;
+                mHeldIndex = (mHeldIndex + 1) % mHeld.length;
+            }
         }
 
-        return audio;
+        return released == audio.length ? audio : Arrays.copyOf(audio, released);
     }
 
     /**
