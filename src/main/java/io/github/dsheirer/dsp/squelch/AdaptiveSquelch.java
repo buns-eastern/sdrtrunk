@@ -36,6 +36,12 @@ public class AdaptiveSquelch implements Listener<SourceEvent>
 {
     private static final Logger mLog = LoggerFactory.getLogger(AdaptiveSquelch.class);
     private static final long AUTO_ADJUST_PERIOD_MS = Duration.ofSeconds(5).toMillis();
+    private static final int DEFAULT_SAMPLE_RATE = 50000;
+    //Fast close: a quick power average that detects the loss of the signal well before the slow power average has
+    //decayed below the threshold.  The quick average must stay below the threshold by the margin for the hold period.
+    private static final double FAST_CLOSE_TIME_CONSTANT_SECONDS = 0.004;
+    private static final double FAST_CLOSE_HOLD_SECONDS = 0.015;
+    private static final float FAST_CLOSE_THRESHOLD_RATIO = 0.5f; //3 dB below the squelch threshold
     private SinglePoleIirFilter mFilter;
     private float mPower = 0.0f;
     private boolean mSquelch;
@@ -48,6 +54,11 @@ public class AdaptiveSquelch implements Listener<SourceEvent>
     private boolean mAutoTrackNoiseFloor;
     private long mLastAutoAdjustTimestamp;
     private Listener<SourceEvent> mSourceEventListener;
+    private boolean mFastClose = false;
+    private float mFastAlpha;
+    private float mFastPower = 0.0f;
+    private int mFastCloseHoldSamples;
+    private int mFastCloseCount = 0;
 
     /**
      * Constructs an instance
@@ -69,6 +80,7 @@ public class AdaptiveSquelch implements Listener<SourceEvent>
         mAutoTrackNoiseFloor = autoTrack;
         mLastAutoAdjustTimestamp = System.currentTimeMillis();
         mPowerLevelBroadcastThreshold = 25000; //Based on a default sample rate of 50 kHz, so 2x/second
+        updateFastCloseTiming(DEFAULT_SAMPLE_RATE);
     }
 
     /**
@@ -79,6 +91,33 @@ public class AdaptiveSquelch implements Listener<SourceEvent>
     public void setSampleRate(int sampleRate)
     {
         mPowerLevelBroadcastThreshold = sampleRate / 2;
+        updateFastCloseTiming(sampleRate);
+    }
+
+    /**
+     * Updates the fast close timing for the sample rate.
+     * @param sampleRate in hertz
+     */
+    private void updateFastCloseTiming(int sampleRate)
+    {
+        if(sampleRate > 0)
+        {
+            mFastAlpha = (float)(1.0 - Math.exp(-1.0 / (FAST_CLOSE_TIME_CONSTANT_SECONDS * sampleRate)));
+            mFastCloseHoldSamples = Math.max(1, (int)(FAST_CLOSE_HOLD_SECONDS * sampleRate));
+        }
+    }
+
+    /**
+     * Enables or disables fast close.  The squelch normally closes once the slow power average decays below the
+     * threshold, which takes longer the stronger the signal was.  With fast close enabled the squelch also closes as
+     * soon as a quick power average shows that the signal is gone, so the closing delay is short and does not grow
+     * with signal strength.  Disabled by default.
+     * @param fastClose true to enable
+     */
+    public void setFastClose(boolean fastClose)
+    {
+        mFastClose = fastClose;
+        mFastCloseCount = 0;
     }
 
     /**
@@ -191,13 +230,39 @@ public class AdaptiveSquelch implements Listener<SourceEvent>
     {
         mPower = mFilter.filter(magnitude);
 
+        if(mFastClose)
+        {
+            mFastPower += (magnitude - mFastPower) * mFastAlpha;
+        }
+
         if(mSquelch && mPower >= mSquelchThreshold)
         {
             setSquelch(false);
+            mFastCloseCount = 0;
         }
         else if(!mSquelch && mPower < mSquelchThreshold)
         {
             setSquelch(true);
+        }
+        else if(!mSquelch && mFastClose)
+        {
+            if(mFastPower < (mSquelchThreshold * FAST_CLOSE_THRESHOLD_RATIO))
+            {
+                mFastCloseCount++;
+
+                if(mFastCloseCount >= mFastCloseHoldSamples)
+                {
+                    //The signal is gone.  Close now and restart the slow average from the current level so that it
+                    //doesn't reopen the squelch while still decaying from the departed signal.
+                    mFilter.setValue(mFastPower);
+                    mPower = mFastPower;
+                    setSquelch(true);
+                }
+            }
+            else
+            {
+                mFastCloseCount = 0;
+            }
         }
 
         mPowerLevelBroadcastCount++;

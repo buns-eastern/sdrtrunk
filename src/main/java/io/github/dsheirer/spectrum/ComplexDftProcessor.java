@@ -104,6 +104,38 @@ public class ComplexDftProcessor<T extends INativeBuffer> implements Listener<T>
         return mDFTSize;
     }
 
+    /**
+     * Correction, in decibels, to add to the decibel values that the complex decibel converter produces from this
+     * processor's results so that a steady carrier reads its true level relative to full scale.
+     *
+     * The converter normalizes each bin's power by the DFT size once, which leaves a carrier reading high by the
+     * DFT size (in decibels) less the loss from the window's coherent gain.  This is the inverse of that amount for
+     * the current DFT size and window.
+     * @return correction in decibels (a negative value)
+     */
+    public float getCarrierLevelCorrection()
+    {
+        float[] window = mWindow;
+        double coherentGain = 1.0;
+
+        if(window != null && window.length > 0)
+        {
+            double sum = 0.0;
+
+            for(float coefficient : window)
+            {
+                sum += coefficient;
+            }
+
+            if(sum > 0.0)
+            {
+                coherentGain = sum / window.length;
+            }
+        }
+
+        return (float)-((10.0 * Math.log10(mDFTSize.getSize())) + (20.0 * Math.log10(coherentGain)));
+    }
+
     public int getFrameRate()
     {
         return mFrameRate;

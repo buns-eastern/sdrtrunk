@@ -90,18 +90,18 @@ public class AudioSegmentRecorder
     }
 
     /**
-     * Indicates if the identifier collection was produced by the NBFM (analog) protocol.  Used to bypass
-     * MP3 peak-normalization for NBFM audio so the channel's configured output gain is preserved.
+     * Indicates if the identifier collection was produced by an analog (NBFM or AM) protocol.  Used to bypass
+     * MP3 peak-normalization for analog audio so the channel's configured output gain is preserved.
      * @param identifierCollection to inspect (may be null)
-     * @return true if any identifier reports Protocol.NBFM
+     * @return true if any identifier reports Protocol.NBFM or Protocol.AM
      */
-    private static boolean isNBFM(IdentifierCollection identifierCollection)
+    private static boolean isAnalog(IdentifierCollection identifierCollection)
     {
         if(identifierCollection != null)
         {
             for(Identifier identifier: identifierCollection.getIdentifiers())
             {
-                if(identifier.getProtocol() == Protocol.NBFM)
+                if(identifier.getProtocol() == Protocol.NBFM || identifier.getProtocol() == Protocol.AM)
                 {
                     return true;
                 }
@@ -139,10 +139,10 @@ public class AudioSegmentRecorder
 
             boolean normalizeAudio = userPreferences.getMP3Preference().isNormalizeAudioBeforeEncode();
 
-            //Skip peak-normalization for NBFM (analog) audio so the channel's configured output gain is
+            //Skip peak-normalization for analog (NBFM and AM) audio so the channel's configured output gain is
             //preserved in the MP3.  Normalization resets every clip to a fixed peak, which would discard
-            //NBFM gain staging.  Digital protocols are unaffected and still normalize.
-            if(normalizeAudio && (isNBFM(identifierCollection) || isNBFM(audioSegment.getIdentifierCollection())))
+            //the channel's gain staging.  Digital protocols are unaffected and still normalize.
+            if(normalizeAudio && (isAnalog(identifierCollection) || isAnalog(audioSegment.getIdentifierCollection())))
             {
                 normalizeAudio = false;
             }

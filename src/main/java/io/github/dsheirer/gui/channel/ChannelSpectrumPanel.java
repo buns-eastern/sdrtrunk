@@ -140,7 +140,7 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
 
         labelPanel.add(mDummyLabel);
 
-        mNoiseFloorSpinnerModel = new SpinnerNumberModel(18, 8, 36, 1);
+        mNoiseFloorSpinnerModel = new SpinnerNumberModel(22, 8, 36, 1);
         mNoiseFloorSpinnerModel.addChangeListener(e -> {
             Number number = mNoiseFloorSpinnerModel.getNumber();
             mSpectrumPanel.setSampleSize(number.doubleValue());
@@ -195,7 +195,10 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
 
         mFrequencyOverlayPanel = new FrequencyOverlayPanel(settingsManager);
         mSpectrumPanel = new SpectrumPanel(settingsManager);
-        mSpectrumPanel.setSampleSize(18.0);
+        mSpectrumPanel.setSampleSize(22.0);
+        //Calibrate the trace, dBFS grid and peak readout so that a steady carrier reads its true level relative to
+        //full scale.  The display scale above is deeper to keep the noise floor on screen at its corrected level.
+        mSpectrumPanel.setLevelCorrection(mComplexDftProcessor.getCarrierLevelCorrection());
         //Show the vertical dBFS amplitude reference grid on the channel spectrum
         mSpectrumPanel.setDbReferenceVisible(true);
 

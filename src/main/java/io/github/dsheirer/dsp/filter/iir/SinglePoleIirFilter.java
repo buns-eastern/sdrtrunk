@@ -66,6 +66,15 @@ public class SinglePoleIirFilter
     }
 
     /**
+     * Sets the current filter output value, restarting the filter from this value.
+     * @param value to apply
+     */
+    public void setValue(float value)
+    {
+        mOutput = value;
+    }
+
+    /**
      * Current output value
      */
     public float getValue()
