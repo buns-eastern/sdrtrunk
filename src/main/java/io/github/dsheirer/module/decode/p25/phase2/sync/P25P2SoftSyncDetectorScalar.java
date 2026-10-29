@@ -17,12 +17,29 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.nxdn.layer1.sync;
+package io.github.dsheirer.module.decode.p25.phase2.sync;
 
 /**
- * Waveform representing the ideal sync pattern, resampled at the sample rate.
- * @param samples in samples
- * @param idealCorrelationScore as dot-product of the ideal multiplied by itself.
- * @param maxSample maximum allowable sample value
+ * Scalar implementation of P25 Phase 2 Soft Sync Detector.
  */
-public record ReferenceSyncWaveform(float[] samples, float idealCorrelationScore, float maxSample){};
+public class P25P2SoftSyncDetectorScalar extends P25P2SoftSyncDetector
+{
+    /**
+     * Calculates the correlation of the preceding 20 soft symbols against the sync pattern.
+     *
+     * @return correlation score.
+     */
+    @Override
+    public float calculate()
+    {
+        float[] patternSymbols = getPatternSymbols();
+        float score = 0;
+
+        for(int x = 0; x < SYNC_DIBIT_LENGTH; x++)
+        {
+            score += patternSymbols[x] * mSymbols[mSymbolPointer + x];
+        }
+
+        return score;
+    }
+}
