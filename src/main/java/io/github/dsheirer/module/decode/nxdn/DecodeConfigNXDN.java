@@ -22,7 +22,7 @@ package io.github.dsheirer.module.decode.nxdn;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.module.decode.DecoderType;
-import io.github.dsheirer.module.decode.config.DecodeConfiguration;
+import io.github.dsheirer.module.decode.config.DecodeConfigJMBE;
 import io.github.dsheirer.module.decode.nxdn.channel.ChannelFrequency;
 import io.github.dsheirer.module.decode.nxdn.layer3.proprietary.Encoding;
 import io.github.dsheirer.module.decode.nxdn.layer3.type.TransmissionMode;
@@ -33,7 +33,7 @@ import java.util.List;
 /**
  * NXDN decoder configuration
  */
-public class DecodeConfigNXDN extends DecodeConfiguration
+public class DecodeConfigNXDN extends DecodeConfigJMBE
 {
     private int mTrafficChannelPoolSize = TRAFFIC_CHANNEL_LIMIT_DEFAULT;
     private boolean mIgnoreDataCalls = false;

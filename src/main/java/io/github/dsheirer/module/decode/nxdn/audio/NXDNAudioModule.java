@@ -41,7 +41,8 @@ import java.util.List;
 public class NXDNAudioModule extends AmbeAudioModule
 {
     private final SquelchStateListener mSquelchStateListener = new SquelchStateListener();
-    private final NonClippingGain mGain = new NonClippingGain(5.0f, 0.95f);
+    //Fixed output gain used only with JMBE 1.x libraries.  JMBE 2.x applies its own automatic gain control.
+    private final NonClippingGain mLegacyGain = new NonClippingGain(5.0f, 0.95f);
     private final List<Audio> mCachedAudioMessages = new ArrayList<>();
     private boolean mEncryptedCall = false;
     private boolean mEncryptedCallStateEstablished = false;
@@ -143,7 +144,12 @@ public class NXDNAudioModule extends AmbeAudioModule
             for(byte[] frame : audio.getAudioFrames())
             {
                 float[] generatedAudio = getAudioCodec().getAudio(frame);
-                generatedAudio = mGain.apply(generatedAudio);
+
+                if(!isJmbeVersion2())
+                {
+                    generatedAudio = mLegacyGain.apply(generatedAudio);
+                }
+
                 addAudio(generatedAudio);
             }
         }

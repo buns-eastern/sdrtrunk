@@ -38,6 +38,7 @@ import io.github.dsheirer.identifier.talkgroup.TalkgroupIdentifier;
 import io.github.dsheirer.log.LoggingSuppressor;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.message.IMessageListener;
+import io.github.dsheirer.module.decode.DecoderFactory;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
 import io.github.dsheirer.module.decode.event.DecodeEvent;
 import io.github.dsheirer.module.decode.event.DecodeEventDuplicateDetector;
@@ -118,14 +119,14 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
     private Map<Integer, IFrequencyBand> mFrequencyBandMap = new ConcurrentHashMap<>();
     private Listener<ChannelEvent> mChannelEventListener;
     private Listener<IDecodeEvent> mDecodeEventListener;
-    private TrafficChannelTeardownMonitor mTrafficChannelTeardownMonitor = new TrafficChannelTeardownMonitor();
-    private Channel mParentChannel;
+    private final TrafficChannelTeardownMonitor mTrafficChannelTeardownMonitor = new TrafficChannelTeardownMonitor();
+    private final Channel mParentChannel;
     private ScrambleParameters mPhase2ScrambleParameters;
     private Listener<IMessage> mMessageListener;
     private boolean mIgnoreDataCalls;
     //Used only for data calls
-    private DecodeEventDuplicateDetector mDuplicateDetector = new DecodeEventDuplicateDetector();
-    private TalkerAliasManager mTalkerAliasManager = new TalkerAliasManager();
+    private final DecodeEventDuplicateDetector mDuplicateDetector = new DecodeEventDuplicateDetector();
+    private final TalkerAliasManager mTalkerAliasManager = new TalkerAliasManager();
 
     /**
      * Constructs an instance.
@@ -141,6 +142,7 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
             createPhase1TrafficChannels(phase1.getTrafficChannelPoolSize(), phase1);
             DecodeConfigP25Phase2 phase2TrafficConfig = new DecodeConfigP25Phase2();
             phase1.copyIdentityFiltersTo(phase2TrafficConfig);
+            DecoderFactory.transferJMBESettings(phase1, phase2TrafficConfig);
             createPhase2TrafficChannels(phase1.getTrafficChannelPoolSize(), phase2TrafficConfig);
         }
         else if(parentChannel.getDecodeConfiguration() instanceof DecodeConfigP25Phase2 phase2)
@@ -148,6 +150,7 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
             mIgnoreDataCalls = phase2.getIgnoreDataCalls();
             DecodeConfigP25Phase1 phase1TrafficConfig = new DecodeConfigP25Phase1();
             phase2.copyIdentityFiltersTo(phase1TrafficConfig);
+            DecoderFactory.transferJMBESettings(phase2, phase1TrafficConfig);
             createPhase1TrafficChannels(phase2.getTrafficChannelPoolSize(), phase1TrafficConfig);
             createPhase2TrafficChannels(phase2.getTrafficChannelPoolSize(), phase2);
         }
