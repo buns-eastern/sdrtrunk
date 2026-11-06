@@ -24,6 +24,7 @@ package io.github.dsheirer.audio.codec.mbe;
 
 import io.github.dsheirer.alias.AliasList;
 import io.github.dsheirer.preference.UserPreferences;
+import java.nio.file.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,5 +57,14 @@ public abstract class AmbeAudioModule extends JmbeAudioModule
     protected String getCodecName()
     {
         return AMBE_CODEC;
+    }
+
+    /**
+     * AMBE audio uses the optional AMBE JMBE library when one is set, otherwise the main JMBE library.
+     */
+    @Override
+    protected Path getJmbeLibraryPath()
+    {
+        return getUserPreferences().getJmbeLibraryPreference().getEffectivePathJmbeAmbeLibrary();
     }
 }

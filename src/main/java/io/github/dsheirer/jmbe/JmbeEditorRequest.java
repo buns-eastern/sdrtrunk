@@ -28,6 +28,7 @@ public class JmbeEditorRequest
 {
     private Release mCurrentRelease;
     private boolean mCloseEditor = false;
+    private boolean mAmbeLibrary = false;
 
     /**
      * Constructs an instance to request an edit of the specified release
@@ -36,6 +37,26 @@ public class JmbeEditorRequest
     public JmbeEditorRequest(Release release)
     {
         mCurrentRelease = release;
+    }
+
+    /**
+     * Constructs an instance to request an edit of the specified release for either the IMBE (main) library or the
+     * optional AMBE library.
+     * @param release available on GitHub
+     * @param ambeLibrary true to set the created library as the AMBE library, false for the IMBE (main) library.
+     */
+    public JmbeEditorRequest(Release release, boolean ambeLibrary)
+    {
+        mCurrentRelease = release;
+        mAmbeLibrary = ambeLibrary;
+    }
+
+    /**
+     * Indicates if the created library should be set as the optional AMBE library instead of the main library.
+     */
+    public boolean isAmbeLibrary()
+    {
+        return mAmbeLibrary;
     }
 
     /**

@@ -38,6 +38,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 import jmbe.iface.IAudioCodec;
 import jmbe.iface.IAudioCodecLibrary;
 import jmbe.iface.IAudioCodecLibraryV2;
@@ -56,7 +58,8 @@ public abstract class JmbeAudioModule extends AbstractAudioModule implements Lis
     private static final List<String> mLibraryLoadStatusLogged = new ArrayList<>();
     private IAudioCodec mAudioCodec;
     private final UserPreferences mUserPreferences;
-    private static Class sLoadedJmbeAudioConverterClass;
+    //Loaded JMBE library classes, keyed by library path, so that IMBE and AMBE audio can use different libraries.
+    private static final Map<Path,Class> sLoadedJmbeAudioConverterClasses = new ConcurrentHashMap<>();
 
     public JmbeAudioModule(UserPreferences userPreferences, AliasList aliasList, int timeslot)
     {
@@ -170,6 +173,24 @@ public abstract class JmbeAudioModule extends AbstractAudioModule implements Lis
     }
 
     /**
+     * Path to the JMBE library used by this audio module.  AMBE audio modules override this to use the optional AMBE
+     * library.
+     * @return library path or null if not set.
+     */
+    protected Path getJmbeLibraryPath()
+    {
+        return mUserPreferences.getJmbeLibraryPreference().getPathJmbeLibrary();
+    }
+
+    /**
+     * User preferences
+     */
+    protected UserPreferences getUserPreferences()
+    {
+        return mUserPreferences;
+    }
+
+    /**
      * Name of the CODEC to use from the JMBE library
      */
     protected abstract String getCodecName();
@@ -181,15 +202,17 @@ public abstract class JmbeAudioModule extends AbstractAudioModule implements Lis
     {
         IAudioCodec audioConverter = null;
 
-        if(sLoadedJmbeAudioConverterClass == null)
-        {
-            Path path = mUserPreferences.getJmbeLibraryPreference().getPathJmbeLibrary();
+        Path path = getJmbeLibraryPath();
+        String logKey = JMBE_AUDIO_LIBRARY + ":" + getCodecName();
+        Class loadedClass = path != null ? sLoadedJmbeAudioConverterClasses.get(path) : null;
 
+        if(loadedClass == null)
+        {
             if(path != null)
             {
-                if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                if(!mLibraryLoadStatusLogged.contains(logKey))
                 {
-                    LOG.info("Loading JMBE library from [" + path + "]");
+                    LOG.info("Loading JMBE library for [" + getCodecName() + "] from [" + path + "]");
                 }
 
                 try
@@ -199,50 +222,55 @@ public abstract class JmbeAudioModule extends AbstractAudioModule implements Lis
 
                     try
                     {
-                        sLoadedJmbeAudioConverterClass = Class.forName("jmbe.JMBEAudioLibraryV2", true, childClassLoader);
+                        loadedClass = Class.forName("jmbe.JMBEAudioLibraryV2", true, childClassLoader);
                     }
                     catch(ClassNotFoundException legacyLibrary)
                     {
                         try
                         {
-                            sLoadedJmbeAudioConverterClass = Class.forName("jmbe.JMBEAudioLibrary", true, childClassLoader);
+                            loadedClass = Class.forName("jmbe.JMBEAudioLibrary", true, childClassLoader);
                         }
                         catch(ClassNotFoundException missingLibrary)
                         {
-                            if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                            if(!mLibraryLoadStatusLogged.contains(logKey))
                             {
                                 LOG.error("Couldn't load JMBE audio conversion library from [" + path +
                                     "] - neither V2 nor V1 library class was found");
-                                mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                                mLibraryLoadStatusLogged.add(logKey);
                             }
                         }
                     }
                 }
                 catch(IllegalArgumentException iae)
                 {
-                    if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY + getCodecName()))
+                    if(!mLibraryLoadStatusLogged.contains(logKey))
                     {
                         LOG.error("Couldn't load JMBE audio conversion library - " + iae.getMessage());
-                        mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY + getCodecName());
+                        mLibraryLoadStatusLogged.add(logKey);
                     }
                 }
                 catch(MalformedURLException mue)
                 {
-                    if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                    if(!mLibraryLoadStatusLogged.contains(logKey))
                     {
                         LOG.error("Couldn't load JMBE audio conversion library from path [" + path + "]");
-                        mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                        mLibraryLoadStatusLogged.add(logKey);
                     }
                 }
 
             }
         }
 
-        if(sLoadedJmbeAudioConverterClass != null)
+        if(loadedClass != null && path != null)
+        {
+            sLoadedJmbeAudioConverterClasses.putIfAbsent(path, loadedClass);
+        }
+
+        if(loadedClass != null)
         {
             try
             {
-                Object instance = sLoadedJmbeAudioConverterClass.getDeclaredConstructor().newInstance();
+                Object instance = loadedClass.getDeclaredConstructor().newInstance();
 
                 if(instance instanceof IAudioCodecLibrary library)
                 {
@@ -263,69 +291,69 @@ public abstract class JmbeAudioModule extends AbstractAudioModule implements Lis
                             mLibraryLoadStatusLogged.add(codecStatusKey);
                         }
 
-                        if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                        if(!mLibraryLoadStatusLogged.contains(logKey))
                         {
-                            LOG.info("JMBE audio conversion library loaded: " + library.getVersion());
-                            mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                            LOG.info("JMBE audio conversion library loaded for [" + getCodecName() + "]: " + library.getVersion());
+                            mLibraryLoadStatusLogged.add(logKey);
                         }
                     }
                     else
                     {
-                        if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                        if(!mLibraryLoadStatusLogged.contains(logKey))
                         {
                             LOG.warn("JMBE library version 1.0.0 or higher is required - found: " + library.getVersion());
-                            mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                            mLibraryLoadStatusLogged.add(logKey);
                         }
                     }
                 }
                 else
                 {
-                    if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                    if(!mLibraryLoadStatusLogged.contains(logKey))
                     {
                         LOG.info("JMBE audio conversion library NOT FOUND");
-                        mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                        mLibraryLoadStatusLogged.add(logKey);
                     }
                 }
             }
             catch(InvocationTargetException ite)
             {
-                if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                if(!mLibraryLoadStatusLogged.contains(logKey))
                 {
                     LOG.error("Couldn't load JMBE audio conversion library - invocation target exception", ite);
-                    mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                    mLibraryLoadStatusLogged.add(logKey);
                 }
             }
             catch(InstantiationException e1)
             {
-                if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                if(!mLibraryLoadStatusLogged.contains(logKey))
                 {
                     LOG.error("Couldn't load JMBE audio conversion library - instantiation exception", e1);
-                    mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                    mLibraryLoadStatusLogged.add(logKey);
                 }
             }
             catch(IllegalAccessException e1)
             {
-                if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                if(!mLibraryLoadStatusLogged.contains(logKey))
                 {
                     LOG.error("Couldn't load JMBE audio conversion library - security restrictions");
-                    mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                    mLibraryLoadStatusLogged.add(logKey);
                 }
             }
             catch(NoSuchMethodException nsme)
             {
-                if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+                if(!mLibraryLoadStatusLogged.contains(logKey))
                 {
                     LOG.error("Couldn't load JMBE audio conversion library - no such method exception");
-                    mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                    mLibraryLoadStatusLogged.add(logKey);
                 }
             }
         }
         else
         {
-            if(!mLibraryLoadStatusLogged.contains(JMBE_AUDIO_LIBRARY))
+            if(!mLibraryLoadStatusLogged.contains(logKey))
             {
                 LOG.warn("JMBE audio library path is NOT SET in your User Preferences.");
-                mLibraryLoadStatusLogged.add(JMBE_AUDIO_LIBRARY);
+                mLibraryLoadStatusLogged.add(logKey);
             }
         }
 

@@ -16,7 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  * ****************************************************************************
  */
-
 package io.github.dsheirer.gui.preference.decoder;
 
 import com.google.common.eventbus.Subscribe;
@@ -28,10 +27,9 @@ import io.github.dsheirer.jmbe.github.Release;
 import io.github.dsheirer.jmbe.github.Version;
 import io.github.dsheirer.preference.PreferenceType;
 import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.preference.decoder.JmbeLibraryPreference;
 import io.github.dsheirer.util.ThreadPool;
 import javafx.application.Platform;
-import javafx.event.ActionEvent;
-import javafx.event.EventHandler;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.scene.control.Alert;
@@ -39,6 +37,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
@@ -54,7 +53,9 @@ import java.nio.file.Path;
 
 
 /**
- * Preference settings for decoders
+ * JMBE audio library preference settings.  The IMBE library (P25 Phase 1) is the main JMBE library.  An optional,
+ * separate AMBE library can be set for DMR, NXDN and P25 Phase 2 audio.  When the AMBE library is not set, those
+ * protocols use the IMBE library.
  */
 public class JmbeLibraryPreferenceEditor extends VBox
 {
@@ -66,15 +67,9 @@ public class JmbeLibraryPreferenceEditor extends VBox
     private static final String LIBRARY_NOT_SETUP = "None.  Click Select or Create Library button to setup.";
 
     private UserPreferences mUserPreferences;
-    private GridPane mEditorPane;
-    private Label mJmbeLibraryLabel;
-    private Label mJmbeVersionLabel;
-    private Label mPathToJmbeLibraryLabel;
-    private Button mSelectButton;
-    private Button mResetButton;
-    private Button mCreateButton;
-    private HBox mButtonsBox;
     private CheckBox mAlertUserWhenMissingCheckBox;
+    private LibrarySection mImbeSection;
+    private LibrarySection mAmbeSection;
 
     public JmbeLibraryPreferenceEditor(UserPreferences userPreferences)
     {
@@ -83,9 +78,15 @@ public class JmbeLibraryPreferenceEditor extends VBox
         //Register to receive directory preference update notifications so we can update the path labels
         MyEventBus.getGlobalEventBus().register(this);
 
+        mImbeSection = new LibrarySection(false);
+        mAmbeSection = new LibrarySection(true);
+
+        Label restartLabel = new Label("Changes take effect after restarting SDRTrunk.");
+
         setPadding(new Insets(10,10,10,10));
         setSpacing(10);
-        getChildren().addAll(getEditorPane(), getButtonsBox(), getAlertUserWhenMissingCheckBox());
+        getChildren().addAll(new Label("JMBE Audio Libraries"), getAlertUserWhenMissingCheckBox(), new Separator(),
+            mImbeSection, new Separator(), mAmbeSection, new Separator(), restartLabel);
     }
 
     public void dispose()
@@ -93,111 +94,197 @@ public class JmbeLibraryPreferenceEditor extends VBox
         MyEventBus.getGlobalEventBus().unregister(this);
     }
 
+    private JmbeLibraryPreference getPreference()
+    {
+        return mUserPreferences.getJmbeLibraryPreference();
+    }
+
     private CheckBox getAlertUserWhenMissingCheckBox()
     {
         if(mAlertUserWhenMissingCheckBox == null)
         {
             mAlertUserWhenMissingCheckBox = new CheckBox("Alert when decoder requires missing JMBE library");
-            mAlertUserWhenMissingCheckBox.setSelected(mUserPreferences.getJmbeLibraryPreference()
-                .getAlertIfMissingLibraryRequired());
+            mAlertUserWhenMissingCheckBox.setSelected(getPreference().getAlertIfMissingLibraryRequired());
             mAlertUserWhenMissingCheckBox.setOnAction(event -> {
                 boolean alert = mAlertUserWhenMissingCheckBox.isSelected();
-                mUserPreferences.getJmbeLibraryPreference().setAlertIfMissingLibraryRequired(alert);
+                getPreference().setAlertIfMissingLibraryRequired(alert);
             });
         }
 
         return mAlertUserWhenMissingCheckBox;
     }
 
-    private HBox getButtonsBox()
+    @Subscribe
+    public void preferenceUpdated(PreferenceType preferenceType)
     {
-        if(mButtonsBox == null)
+        if(preferenceType != null && preferenceType == PreferenceType.JMBE_LIBRARY)
         {
-            mButtonsBox = new HBox();
-            mButtonsBox.setSpacing(10);
-            mButtonsBox.getChildren().addAll(getCreateButton(), getSelectButton(), getResetButton());
+            Platform.runLater(() -> {
+                mImbeSection.refresh();
+                mAmbeSection.refresh();
+                getAlertUserWhenMissingCheckBox().setSelected(getPreference().getAlertIfMissingLibraryRequired());
+            });
         }
-
-        return mButtonsBox;
-    }
-
-    private GridPane getEditorPane()
-    {
-        if(mEditorPane == null)
-        {
-            mEditorPane = new GridPane();
-            mEditorPane.setVgap(10);
-            mEditorPane.setHgap(10);
-
-            int row = 0;
-
-            mEditorPane.add(getJmbeLibraryLabel(), 0, row, 2, 1);
-
-            Label versionLabel = new Label("Current Version:");
-            GridPane.setHalignment(versionLabel, HPos.RIGHT);
-            mEditorPane.add(versionLabel, 0, ++row);
-
-            mEditorPane.add(getJmbeVersionLabel(), 1, row);
-
-            Label fileLabel = new Label("File:");
-            GridPane.setHalignment(fileLabel, HPos.RIGHT);
-            mEditorPane.add(fileLabel, 0, ++row);
-
-            mEditorPane.add(getPathToJmbeLibraryLabel(), 1, row);
-        }
-
-        return mEditorPane;
-    }
-
-    private Button getCreateButton()
-    {
-        if(mCreateButton == null)
-        {
-            mCreateButton = new Button();
-            mCreateButton.setText(mUserPreferences.getJmbeLibraryPreference()
-                .getPathJmbeLibrary() != null ? CHECK_FOR_UPDATE : CREATE_LIBRARY);
-            mCreateButton.setOnAction(event -> checkForUpdatedLibrary());
-        }
-
-        return mCreateButton;
     }
 
     /**
-     * Checks for availability of an updated JMBE library
+     * Library settings section for either the IMBE (main) library or the optional AMBE library.
      */
-    private void checkForUpdatedLibrary()
+    private class LibrarySection extends VBox
     {
-        ThreadPool.CACHED.execute(() -> {
-            try
-            {
-                Version current = mUserPreferences.getJmbeLibraryPreference().getCurrentVersion();
-                final Release release = GitHub.getLatestRelease(JmbeCreator.GITHUB_JMBE_RELEASES_URL);
+        private final boolean mAmbe;
+        private final Label mVersionLabel = new Label();
+        private final Label mPathLabel = new Label();
+        private final Button mCreateButton = new Button();
+        private final Button mSelectButton = new Button("Select...");
+        private final Button mResetButton = new Button("Reset");
 
-                mLog.info("Checking for JMBE Library Updates ...");
-                mLog.info("Current: " + (current != null ? current.toString() : "empty"));
+        /**
+         * Constructs an instance
+         * @param ambe true for the optional AMBE library section or false for the IMBE (main) library section.
+         */
+        LibrarySection(boolean ambe)
+        {
+            mAmbe = ambe;
+            setSpacing(10);
 
-                final boolean canUpdate = (release != null) && ((current == null) ||
-                    (release.getVersion().compareTo(current) > 0));
+            GridPane gridPane = new GridPane();
+            gridPane.setVgap(10);
+            gridPane.setHgap(10);
 
-                if(release != null)
+            int row = 0;
+            gridPane.add(new Label(mAmbe ? "AMBE Audio Library (DMR, NXDN, P25 Phase 2)" :
+                "IMBE Audio Library (P25 Phase 1)"), 0, row, 2, 1);
+
+            Label versionLabel = new Label("Current Version:");
+            GridPane.setHalignment(versionLabel, HPos.RIGHT);
+            gridPane.add(versionLabel, 0, ++row);
+            gridPane.add(mVersionLabel, 1, row);
+
+            Label fileLabel = new Label("File:");
+            GridPane.setHalignment(fileLabel, HPos.RIGHT);
+            gridPane.add(fileLabel, 0, ++row);
+            gridPane.add(mPathLabel, 1, row);
+
+            mCreateButton.setOnAction(event -> checkForUpdatedLibrary());
+            mSelectButton.setOnAction(event -> selectLibrary());
+            mResetButton.setOnAction(event -> {
+                if(mAmbe)
                 {
-                    mLog.info("Available: " + release.getVersion().toString());
-                }
-
-                if(canUpdate)
-                {
-                    mLog.info("JMBE Library update is available");
+                    getPreference().resetPathJmbeAmbeLibrary();
                 }
                 else
                 {
-                    mLog.info("No JMBE library update is available at this time");
+                    getPreference().resetPathJmbeLibrary();
                 }
+            });
 
-                Platform.runLater(new Runnable()
+            HBox buttonsBox = new HBox();
+            buttonsBox.setSpacing(10);
+            buttonsBox.getChildren().addAll(mCreateButton, mSelectButton, mResetButton);
+
+            getChildren().addAll(gridPane, buttonsBox);
+
+            if(mAmbe)
+            {
+                getChildren().add(new Label("If not set, these protocols use the IMBE library above."));
+            }
+
+            refresh();
+        }
+
+        private Path getLibraryPath()
+        {
+            return mAmbe ? getPreference().getPathJmbeAmbeLibrary() : getPreference().getPathJmbeLibrary();
+        }
+
+        private Version getLibraryVersion()
+        {
+            return mAmbe ? getPreference().getCurrentAmbeVersion() : getPreference().getCurrentVersion();
+        }
+
+        /**
+         * Updates the labels and button text from the current preference values.
+         */
+        void refresh()
+        {
+            Path path = getLibraryPath();
+            mPathLabel.setText(path != null ? path.toString() : PATH_NOT_SET);
+
+            Version version = getLibraryVersion();
+
+            if(version != null)
+            {
+                mVersionLabel.setText(version.toString());
+            }
+            else
+            {
+                mVersionLabel.setText(mAmbe ? PATH_NOT_SET : LIBRARY_NOT_SETUP);
+            }
+
+            mCreateButton.setText(path != null ? CHECK_FOR_UPDATE : CREATE_LIBRARY);
+        }
+
+        private void selectLibrary()
+        {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Select JMBE Audio Library Location");
+
+            Path path = mUserPreferences.getDirectoryPreference().getDefaultJmbeDirectory();
+
+            if(Files.exists(path))
+            {
+                fileChooser.setInitialDirectory(path.toFile());
+            }
+
+            Stage stage = (Stage)mSelectButton.getScene().getWindow();
+            File selected = fileChooser.showOpenDialog(stage);
+
+            if(selected != null)
+            {
+                if(mAmbe)
                 {
-                    @Override
-                    public void run()
+                    getPreference().setPathJmbeAmbeLibrary(selected.toPath());
+                }
+                else
+                {
+                    getPreference().setPathJmbeLibrary(selected.toPath());
+                }
+            }
+        }
+
+        /**
+         * Checks for availability of an updated JMBE library for this section.
+         */
+        private void checkForUpdatedLibrary()
+        {
+            ThreadPool.CACHED.execute(() -> {
+                try
+                {
+                    Version current = getLibraryVersion();
+                    final Release release = GitHub.getLatestRelease(JmbeCreator.GITHUB_JMBE_RELEASES_URL);
+
+                    mLog.info("Checking for JMBE Library Updates (" + (mAmbe ? "AMBE" : "IMBE") + ") ...");
+                    mLog.info("Current: " + (current != null ? current.toString() : "empty"));
+
+                    final boolean canUpdate = (release != null) && ((current == null) ||
+                        (release.getVersion().compareTo(current) > 0));
+
+                    if(release != null)
                     {
+                        mLog.info("Available: " + release.getVersion().toString());
+                    }
+
+                    if(canUpdate)
+                    {
+                        mLog.info("JMBE Library update is available");
+                    }
+                    else
+                    {
+                        mLog.info("No JMBE library update is available at this time");
+                    }
+
+                    Platform.runLater(() -> {
                         try
                         {
                             if(canUpdate)
@@ -213,12 +300,12 @@ public class JmbeLibraryPreferenceEditor extends VBox
 
                                 alert.setTitle("JMBE Library Update Check");
                                 alert.setHeaderText("Update is available");
-                                alert.initOwner(getCreateButton().getScene().getWindow());
+                                alert.initOwner(mCreateButton.getScene().getWindow());
                                 alert.showAndWait().ifPresent(buttonType -> {
                                     if(buttonType == ButtonType.YES)
                                     {
                                         mLog.info("Posting JMBE editor request to event bus");
-                                        MyEventBus.getGlobalEventBus().post(new JmbeEditorRequest(release));
+                                        MyEventBus.getGlobalEventBus().post(new JmbeEditorRequest(release, mAmbe));
                                     }
                                 });
                             }
@@ -235,7 +322,7 @@ public class JmbeLibraryPreferenceEditor extends VBox
                                 {
                                     alert.setHeaderText("Unable to determine latest release version.  Check network connection");
                                 }
-                                alert.initOwner(getCreateButton().getScene().getWindow());
+                                alert.initOwner(mCreateButton.getScene().getWindow());
                                 alert.showAndWait();
                             }
                         }
@@ -243,115 +330,13 @@ public class JmbeLibraryPreferenceEditor extends VBox
                         {
                             mLog.error("Error during JavaFX portion of create library");
                         }
-                    }
-                });
-            }
-            catch(Throwable t)
-            {
-                mLog.error("Error during create library", t);
-            }
-        });
-    }
-
-    private Label getJmbeLibraryLabel()
-    {
-        if(mJmbeLibraryLabel == null)
-        {
-            mJmbeLibraryLabel = new Label("JMBE Audio Library");
-        }
-
-        return mJmbeLibraryLabel;
-    }
-
-    private Label getJmbeVersionLabel()
-    {
-        if(mJmbeVersionLabel == null)
-        {
-            mJmbeVersionLabel = new Label();
-            Version version = mUserPreferences.getJmbeLibraryPreference().getCurrentVersion();
-
-            if(version != null)
-            {
-                mJmbeVersionLabel.setText(version.toString());
-            }
-            else
-            {
-                mJmbeVersionLabel.setText(LIBRARY_NOT_SETUP);
-            }
-        }
-
-        return mJmbeVersionLabel;
-    }
-
-    private Button getSelectButton()
-    {
-        if(mSelectButton == null)
-        {
-            mSelectButton = new Button("Select...");
-            mSelectButton.setOnAction(new EventHandler<ActionEvent>()
-            {
-                @Override
-                public void handle(ActionEvent event)
+                    });
+                }
+                catch(Throwable t)
                 {
-                    FileChooser fileChooser = new FileChooser();
-                    fileChooser.setTitle("Select JMBE Audio Library Location");
-
-                    Path path = mUserPreferences.getDirectoryPreference().getDefaultJmbeDirectory();
-
-                    if(Files.exists(path))
-                    {
-                        fileChooser.setInitialDirectory(path.toFile());
-                    }
-
-                    Stage stage = (Stage)getSelectButton().getScene().getWindow();
-                    File selected = fileChooser.showOpenDialog(stage);
-
-                    if(selected != null)
-                    {
-                        mUserPreferences.getJmbeLibraryPreference().setPathJmbeLibrary(selected.toPath());
-                    }
+                    mLog.error("Error during create library", t);
                 }
             });
-        }
-
-        return mSelectButton;
-    }
-
-    private Button getResetButton()
-    {
-        if(mResetButton == null)
-        {
-            mResetButton = new Button("Reset");
-            mResetButton.setOnAction(event -> mUserPreferences.getJmbeLibraryPreference().resetPathJmbeLibrary());
-        }
-
-        return mResetButton;
-    }
-
-    private Label getPathToJmbeLibraryLabel()
-    {
-        if(mPathToJmbeLibraryLabel == null)
-        {
-            Path path = mUserPreferences.getJmbeLibraryPreference().getPathJmbeLibrary();
-            mPathToJmbeLibraryLabel = new Label(path != null ? path.toString() : PATH_NOT_SET);
-        }
-
-        return mPathToJmbeLibraryLabel;
-    }
-
-    @Subscribe
-    public void preferenceUpdated(PreferenceType preferenceType)
-    {
-        if(preferenceType != null && preferenceType == PreferenceType.JMBE_LIBRARY)
-        {
-            Path path = mUserPreferences.getJmbeLibraryPreference().getPathJmbeLibrary();
-            getPathToJmbeLibraryLabel().setText(path != null ? path.toString() : PATH_NOT_SET);
-            Version version = mUserPreferences.getJmbeLibraryPreference().getCurrentVersion();
-            getJmbeVersionLabel().setText(version != null ? version.toString() : LIBRARY_NOT_SETUP);
-            getCreateButton().setText(mUserPreferences.getJmbeLibraryPreference()
-                .getPathJmbeLibrary() != null ? CHECK_FOR_UPDATE : CREATE_LIBRARY);
-            getAlertUserWhenMissingCheckBox().setSelected(mUserPreferences.getJmbeLibraryPreference()
-                .getAlertIfMissingLibraryRequired());
         }
     }
 }
