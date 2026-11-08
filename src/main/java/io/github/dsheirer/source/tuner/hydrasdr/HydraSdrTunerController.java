@@ -1,7 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
- * Copyright (C) 2026 Benjamin Vernoux
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,819 +16,774 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  * ****************************************************************************
  */
+
 package io.github.dsheirer.source.tuner.hydrasdr;
 
+import io.github.dsheirer.buffer.FloatNativeBuffer;
 import io.github.dsheirer.buffer.INativeBuffer;
+import io.github.dsheirer.hydrasdr.DecimationMode;
+import io.github.dsheirer.hydrasdr.GainType;
+import io.github.dsheirer.hydrasdr.HydraSdr;
+import io.github.dsheirer.hydrasdr.HydraSdrDevice;
+import io.github.dsheirer.hydrasdr.HydraSdrException;
+import io.github.dsheirer.hydrasdr.SampleBuffer;
+import io.github.dsheirer.hydrasdr.SampleType;
 import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.source.SourceException;
 import io.github.dsheirer.source.tuner.ITunerErrorListener;
 import io.github.dsheirer.source.tuner.TunerController;
 import io.github.dsheirer.source.tuner.TunerType;
 import io.github.dsheirer.source.tuner.configuration.TunerConfiguration;
-import io.github.dsheirer.util.ThreadPool;
+import io.github.dsheirer.source.tuner.manager.UsbDeviceLookup;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * HydraSDR native tuner controller using libhydrasdr via JNI.
+ * HydraSDR tuner controller, implemented with the jHydraSDR library (libhydrasdr).
  *
- * Extends TunerController directly (not USBTunerController) because libhydrasdr
- * manages USB internally through its own HAL layer.
+ * The tuner is discovered with LibUsb at a USB bus and port, like all other USB tuners, however libhydrasdr owns the
+ * USB device, its transfers, and the conversion of real samples to complex samples.
  */
-public class HydraSdrTunerController extends TunerController implements HydraSdrNative.SampleCallback
+public class HydraSdrTunerController extends TunerController
 {
-	private static final Logger mLog = LoggerFactory.getLogger(HydraSdrTunerController.class);
-
-	/* Pre-open frequency bounds used only to seed the TunerController base class
-	 * before the device is opened. Once start() runs, the authoritative min/max
-	 * are read from HydraSdrDeviceInfo (libhydrasdr-reported capabilities) and
-	 * override these values. Do not rely on these constants for any tuner logic. */
-	public static final long FALLBACK_MIN_FREQUENCY_HZ = 1_000_000;
-	public static final long FALLBACK_MAX_FREQUENCY_HZ = 6_000_000_000L;
-	public static final long FREQUENCY_DEFAULT = 101_100_000;
-	public static final int DEFAULT_SAMPLE_RATE = 10_000_000;
-	public static final double USABLE_BANDWIDTH_PERCENT = 0.90;
-
-	/* Gain mode constants matching HydraSdrTunerConfiguration.gainMode */
-	public static final int GAIN_MODE_LINEARITY = 0;
-	public static final int GAIN_MODE_SENSITIVITY = 1;
-	public static final int GAIN_MODE_CUSTOM = 2;
-
-	/* Gain defaults (used when device doesn't report ranges) */
-	public static final int LNA_GAIN_DEFAULT = 7;
-	public static final int MIXER_GAIN_DEFAULT = 9;
-	public static final int VGA_GAIN_DEFAULT = 9;
-
-	private long mDeviceHandle;
-	private long mSerialNumber;
-	private HydraSdrDeviceInfo mDeviceInfo;
-	private HydraSdrNativeBufferFactory mNativeBufferFactory;
-	private int mSampleRate = DEFAULT_SAMPLE_RATE;
-	private volatile boolean mStreaming = false;
-	private List<HydraSdrSampleRate> mSampleRates = new ArrayList<>();
-	private volatile long mLastDroppedSamples = 0;
-
-	/* Streaming performance counters */
-	private volatile long mCallbackCount = 0;
-	private volatile long mTotalSamples = 0;
-	private volatile long mCallbackTimeNs = 0;
-	private volatile long mFactoryTimeNs = 0;
-	private volatile long mBroadcastTimeNs = 0;
-	private volatile long mStatsStartTime = 0;
-	private volatile long mLastCallbackTime = 0;
-	private static final long WATCHDOG_TIMEOUT_MS = 5_000;
-	private ScheduledFuture<?> mWatchdogFuture;
-
-	/**
-	 * Constructs an instance.
-	 * @param serialNumber device serial number (0 to open first available)
-	 * @param tunerErrorListener to receive error notifications
-	 */
-	public HydraSdrTunerController(long serialNumber, ITunerErrorListener tunerErrorListener)
-	{
-		super(tunerErrorListener);
-		mSerialNumber = serialNumber;
-		mNativeBufferFactory = new HydraSdrNativeBufferFactory(DEFAULT_SAMPLE_RATE);
-
-		setMinimumFrequency(FALLBACK_MIN_FREQUENCY_HZ);
-		setMaximumFrequency(FALLBACK_MAX_FREQUENCY_HZ);
-		setMiddleUnusableHalfBandwidth(0);
-		setUsableBandwidthPercentage(USABLE_BANDWIDTH_PERCENT);
-	}
-
-	@Override
-	public TunerType getTunerType()
-	{
-		return TunerType.HYDRASDR;
-	}
-
-	@Override
-	public int getBufferSampleCount()
-	{
-		return 65536;
-	}
-
-	@Override
-	public void start() throws SourceException
-	{
-		if(!HydraSdrNative.isLoaded())
-		{
-			throw new SourceException("HydraSDR native library (hydrasdr_jni) is not loaded");
-		}
-
-		if(mSerialNumber != 0)
-		{
-			mDeviceHandle = HydraSdrNative.open(mSerialNumber);
-		}
-		else
-		{
-			mDeviceHandle = HydraSdrNative.openAny();
-		}
-
-		if(mDeviceHandle == 0)
-		{
-			throw new SourceException("Unable to open HydraSDR device" +
-				(mSerialNumber != 0 ? " serial=" + Long.toHexString(mSerialNumber) : ""));
-		}
-
-		mLog.info("Opened HydraSDR device, handle=0x" + Long.toHexString(mDeviceHandle));
-
-		/* Query device info and update frequency limits */
-		mDeviceInfo = HydraSdrNative.getDeviceInfo(mDeviceHandle);
-		if(mDeviceInfo != null)
-		{
-			mLog.info("HydraSDR device: " + mDeviceInfo.getBoardName() +
-				" serial=" + mDeviceInfo.getSerialNumber() +
-				" fw=" + mDeviceInfo.getFirmwareVersion() +
-				" freq=" + mDeviceInfo.getMinFrequency() + "-" + mDeviceInfo.getMaxFrequency() + " Hz" +
-				" caps=0x" + Integer.toHexString(mDeviceInfo.getCapabilities()));
-
-			if(mDeviceInfo.getMinFrequency() > 0)
-			{
-				setMinimumFrequency(mDeviceInfo.getMinFrequency());
-			}
-			if(mDeviceInfo.getMaxFrequency() > 0)
-			{
-				setMaximumFrequency(mDeviceInfo.getMaxFrequency());
-			}
-		}
-		else
-		{
-			mLog.warn("Failed to query HydraSDR device info");
-		}
-
-		/* Request float32 IQ samples from the library. The streaming callback path
-		 * (JNI deinterleave + onSamples float[]) assumes FLOAT32_IQ — any other
-		 * sample type would deliver garbage to downstream DSP. Fail fast. */
-		int result = HydraSdrNative.setSampleType(mDeviceHandle, HydraSdrNative.SAMPLE_FLOAT32_IQ);
-		if(result != HydraSdrNative.SUCCESS)
-		{
-			HydraSdrNative.close(mDeviceHandle);
-			mDeviceHandle = 0;
-			throw new SourceException("HydraSDR rejected FLOAT32_IQ sample type: " +
-				HydraSdrNative.errorName(result));
-		}
-
-		/* Query available sample rates */
-		determineAvailableSampleRates();
-
-		/* Set default frequency */
-		setFrequency(FREQUENCY_DEFAULT);
-
-		/* Set default sample rate */
-		if(!mSampleRates.isEmpty())
-		{
-			setSampleRate(mSampleRates.get(0));
-		}
-		else
-		{
-			setSampleRateHz(DEFAULT_SAMPLE_RATE);
-		}
-	}
-
-	@Override
-	public void stop()
-	{
-		if(mStreaming)
-		{
-			stopStreaming();
-		}
-
-		if(mDeviceHandle != 0)
-		{
-			HydraSdrNative.close(mDeviceHandle);
-			mLog.info("Closed HydraSDR device");
-			mDeviceHandle = 0;
-		}
-	}
-
-	/**
-	 * Starts streaming. Called when the first buffer listener is added.
-	 */
-	private void startStreaming()
-	{
-		if(!mStreaming && mDeviceHandle != 0)
-		{
-			int result = HydraSdrNative.startRx(mDeviceHandle, this);
-			if(result == HydraSdrNative.SUCCESS)
-			{
-				mStreaming = true;
-				mLastDroppedSamples = 0;
-				resetPerformanceStats();
-				startWatchdog();
-				mLog.info("HydraSDR streaming started");
-			}
-			else
-			{
-				mLog.error("Failed to start HydraSDR streaming: " + HydraSdrNative.errorName(result));
-			}
-		}
-	}
-
-	/**
-	 * Stops streaming. Called when the last buffer listener is removed.
-	 */
-	private void stopStreaming()
-	{
-		stopWatchdog();
-		if(mStreaming && mDeviceHandle != 0)
-		{
-			int result = HydraSdrNative.stopRx(mDeviceHandle);
-			if(result == HydraSdrNative.SUCCESS)
-			{
-				mLog.info("HydraSDR streaming stopped");
-			}
-			else
-			{
-				mLog.error("Failed to stop HydraSDR streaming: " + HydraSdrNative.errorName(result));
-			}
-			mStreaming = false;
-		}
-	}
-
-	/**
-	 * Native sample callback from libhydrasdr.
-	 * Called on the native USB streaming thread.
-	 */
-	@Override
-	public void onSamples(float[] iSamples, float[] qSamples, int sampleCount, long droppedSamples)
-	{
-		mLastCallbackTime = System.currentTimeMillis();
-		long t0 = System.nanoTime();
-
-		if(droppedSamples > mLastDroppedSamples)
-		{
-			mLog.warn("HydraSDR dropped samples: " + (droppedSamples - mLastDroppedSamples) +
-				" (total: " + droppedSamples + ")");
-			mLastDroppedSamples = droppedSamples;
-		}
-
-		long tFactory = System.nanoTime();
-		List<HydraSdrNativeBuffer> buffers = mNativeBufferFactory.get(iSamples, qSamples,
-			sampleCount, System.currentTimeMillis());
-		mFactoryTimeNs += (System.nanoTime() - tFactory);
-
-		long tBroadcast = System.nanoTime();
-		for(HydraSdrNativeBuffer buffer : buffers)
-		{
-			mNativeBufferBroadcaster.broadcast(buffer);
-		}
-		mBroadcastTimeNs += (System.nanoTime() - tBroadcast);
-
-		mCallbackCount++;
-		mTotalSamples += sampleCount;
-		mCallbackTimeNs += (System.nanoTime() - t0);
-	}
-
-	/**
-	 * Starts a watchdog timer that runs independently of the native callback
-	 * thread. If no callback arrives within WATCHDOG_TIMEOUT_MS, the device
-	 * is considered disconnected or in error. Uses a heartbeat timestamp
-	 * set by onSamples() — no JNI call overhead.
-	 */
-	private void startWatchdog()
-	{
-		stopWatchdog();
-		mLastCallbackTime = System.currentTimeMillis();
-		mWatchdogFuture = ThreadPool.SCHEDULED.scheduleAtFixedRate(() ->
-		{
-			if(mStreaming && (System.currentTimeMillis() - mLastCallbackTime) > WATCHDOG_TIMEOUT_MS)
-			{
-				mLog.error("HydraSDR streaming stopped unexpectedly (device error or USB disconnect)");
-				mStreaming = false;
-				stopWatchdog();
-				setErrorMessage("HydraSDR streaming stopped unexpectedly (device error or USB disconnect)");
-			}
-		}, WATCHDOG_TIMEOUT_MS, WATCHDOG_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-	}
-
-	/**
-	 * Stops the watchdog timer.
-	 */
-	private void stopWatchdog()
-	{
-		if(mWatchdogFuture != null)
-		{
-			mWatchdogFuture.cancel(false);
-			mWatchdogFuture = null;
-		}
-	}
-
-	/**
-	 * Returns streaming performance statistics.
-	 * @return formatted string with throughput, callback rate, and timing
-	 */
-	public String getPerformanceStats()
-	{
-		long callbacks = mCallbackCount;
-		long samples = mTotalSamples;
-		long timeNs = mCallbackTimeNs;
-		long factoryNs = mFactoryTimeNs;
-		long broadcastNs = mBroadcastTimeNs;
-		long elapsed = System.currentTimeMillis() - mStatsStartTime;
-
-		if(callbacks == 0 || elapsed == 0)
-		{
-			return "No streaming data yet";
-		}
-
-		double elapsedSec = elapsed / 1000.0;
-		double msps = samples / elapsedSec / 1e6;
-		double callbacksPerSec = callbacks / elapsedSec;
-		double avgCallbackUs = (timeNs / callbacks) / 1000.0;
-		double avgFactoryUs = (factoryNs / callbacks) / 1000.0;
-		double avgBroadcastUs = (broadcastNs / callbacks) / 1000.0;
-		double avgSamplesPerCallback = (double)samples / callbacks;
-		double javaOverheadPercent = (timeNs / 1e6) / elapsed * 100.0;
-
-		return String.format(
-			"Throughput: %.2f MSps\n" +
-			"Callbacks: %.0f/sec (%.0f samples/cb)\n" +
-			"Java total: %.1f us [factory: %.1f us, broadcast: %.1f us]\n" +
-			"Java overhead: %.2f%%\n" +
-			"Duration: %.1f sec\n" +
-			"Total: %,d samples, %,d callbacks",
-			msps, callbacksPerSec, avgSamplesPerCallback,
-			avgCallbackUs, avgFactoryUs, avgBroadcastUs,
-			javaOverheadPercent,
-			elapsedSec, samples, callbacks);
-	}
-
-	/**
-	 * Resets the performance counters.
-	 */
-	public void resetPerformanceStats()
-	{
-		mCallbackCount = 0;
-		mTotalSamples = 0;
-		mCallbackTimeNs = 0;
-		mFactoryTimeNs = 0;
-		mBroadcastTimeNs = 0;
-		mStatsStartTime = System.currentTimeMillis();
-	}
-
-	@Override
-	public void addBufferListener(Listener<INativeBuffer> listener)
-	{
-		getLock().lock();
-		try
-		{
-			if(!hasBufferListeners())
-			{
-				startStreaming();
-			}
-			super.addBufferListener(listener);
-		}
-		finally
-		{
-			getLock().unlock();
-		}
-	}
-
-	@Override
-	public void removeBufferListener(Listener<INativeBuffer> listener)
-	{
-		getLock().lock();
-		try
-		{
-			super.removeBufferListener(listener);
-			if(!hasBufferListeners())
-			{
-				stopStreaming();
-			}
-		}
-		finally
-		{
-			getLock().unlock();
-		}
-	}
-
-	@Override
-	public long getTunedFrequency() throws SourceException
-	{
-		return mFrequencyController.getTunedFrequency();
-	}
-
-	@Override
-	public synchronized void setTunedFrequency(long frequency) throws SourceException
-	{
-		if(mDeviceHandle == 0)
-		{
-			throw new SourceException("Device not open");
-		}
-
-		int result = HydraSdrNative.setFrequency(mDeviceHandle, frequency);
-		if(result != HydraSdrNative.SUCCESS)
-		{
-			throw new SourceException("Error setting frequency [" + frequency + "]: " +
-				HydraSdrNative.errorName(result));
-		}
-	}
-
-	@Override
-	public double getCurrentSampleRate()
-	{
-		return mSampleRate;
-	}
-
-	@Override
-	public void apply(TunerConfiguration tunerConfiguration) throws SourceException
-	{
-		super.apply(tunerConfiguration);
-
-		if(tunerConfiguration instanceof HydraSdrTunerConfiguration config)
-		{
-			int sampleRate = config.getSampleRate();
-			HydraSdrSampleRate rate = getSampleRate(sampleRate);
-
-			if(rate == null)
-			{
-				if(!mSampleRates.isEmpty())
-				{
-					rate = mSampleRates.get(0);
-				}
-			}
-
-			try
-			{
-				if(rate != null)
-				{
-					setSampleRate(rate);
-				}
-				else
-				{
-					setSampleRateHz(sampleRate > 0 ? sampleRate : DEFAULT_SAMPLE_RATE);
-				}
-			}
-			catch(Exception e)
-			{
-				throw new SourceException("Couldn't set sample rate", e);
-			}
-
-			try
-			{
-				setBiasT(config.isBiasT());
-
-				int gainMode = config.getGainMode();
-
-				if(gainMode == GAIN_MODE_CUSTOM)
-				{
-					/* Custom mode: apply individual gains */
-					setGain(HydraSdrNative.GAIN_TYPE_LNA_AGC, config.isLnaAgc() ? 1 : 0);
-					setGain(HydraSdrNative.GAIN_TYPE_MIXER_AGC, config.isMixerAgc() ? 1 : 0);
-
-					if(config.getLnaGain() >= 0)
-					{
-						setGain(HydraSdrNative.GAIN_TYPE_LNA, config.getLnaGain());
-					}
-					if(config.getMixerGain() >= 0)
-					{
-						setGain(HydraSdrNative.GAIN_TYPE_MIXER, config.getMixerGain());
-					}
-					if(config.getVgaGain() >= 0)
-					{
-						setGain(HydraSdrNative.GAIN_TYPE_VGA, config.getVgaGain());
-					}
-				}
-				else if(gainMode == GAIN_MODE_SENSITIVITY && config.getSensitivityGain() > 0)
-				{
-					/* Sensitivity mode: single preset value sets all gains */
-					setGain(HydraSdrNative.GAIN_TYPE_SENSITIVITY, config.getSensitivityGain());
-				}
-				else
-				{
-					/* Linearity mode (default): single preset value sets all gains */
-					int lin = config.getLinearityGain();
-					setGain(HydraSdrNative.GAIN_TYPE_LINEARITY, lin > 0 ? lin : 14);
-				}
-			}
-			catch(Exception e)
-			{
-				throw new SourceException("Couldn't apply HydraSDR gain settings", e);
-			}
-		}
-	}
-
-	/* ==================== Sample Rate ==================== */
-
-	/**
-	 * Sets sample rate from a HydraSdrSampleRate descriptor.
-	 */
-	public void setSampleRate(HydraSdrSampleRate rate) throws SourceException
-	{
-		setSampleRateHz(rate.getRate());
-	}
-
-	/**
-	 * Sets sample rate in Hz.
-	 */
-	public void setSampleRateHz(int rateHz) throws SourceException
-	{
-		if(mDeviceHandle == 0)
-		{
-			throw new SourceException("Device not open");
-		}
-
-		int result = HydraSdrNative.setSampleRate(mDeviceHandle, rateHz);
-		if(result != HydraSdrNative.SUCCESS)
-		{
-			throw new SourceException("Error setting sample rate [" + rateHz + "]: " +
-				HydraSdrNative.errorName(result));
-		}
-
-		mSampleRate = rateHz;
-		mFrequencyController.setSampleRate(mSampleRate);
-		mNativeBufferFactory.setSampleRate(mSampleRate);
-
-		updateUsableBandwidthForRate(mSampleRate);
-	}
-
-	/**
-	 * Updates usable bandwidth percentage based on sample rate.
-	 */
-	private void updateUsableBandwidthForRate(int rateHz)
-	{
-		if(rateHz >= 10_000_000)
-		{
-			setUsableBandwidthPercentage(0.90);
-		}
-		else if(rateHz >= 6_000_000)
-		{
-			setUsableBandwidthPercentage(0.83);
-		}
-		else if(rateHz >= 3_000_000)
-		{
-			setUsableBandwidthPercentage(0.66);
-		}
-		else
-		{
-			setUsableBandwidthPercentage(0.60);
-		}
-	}
-
-	/**
-	 * Returns available sample rates.
-	 */
-	public List<HydraSdrSampleRate> getSampleRates()
-	{
-		return mSampleRates;
-	}
-
-	/**
-	 * Returns the sample rate matching the given Hz value, or null.
-	 */
-	public HydraSdrSampleRate getSampleRate(int rateHz)
-	{
-		for(HydraSdrSampleRate rate : mSampleRates)
-		{
-			if(rate.getRate() == rateHz)
-			{
-				return rate;
-			}
-		}
-		return null;
-	}
-
-	/**
-	 * Queries the device for available sample rates.
-	 */
-	private void determineAvailableSampleRates()
-	{
-		mSampleRates.clear();
-
-		if(mDeviceHandle != 0)
-		{
-			int[] rates = HydraSdrNative.getSampleRates(mDeviceHandle);
-			if(rates != null)
-			{
-				for(int i = 0; i < rates.length; i++)
-				{
-					mSampleRates.add(new HydraSdrSampleRate(i, rates[i],
-						formatSampleRate(rates[i])));
-				}
-			}
-		}
-
-		if(mSampleRates.isEmpty())
-		{
-			mSampleRates.add(new HydraSdrSampleRate(0, DEFAULT_SAMPLE_RATE,
-				formatSampleRate(DEFAULT_SAMPLE_RATE)));
-		}
-	}
-
-	/* ==================== Gain Control ==================== */
-
-	/**
-	 * Sets a gain value using the unified gain API.
-	 * @param gainType one of HydraSdrNative.GAIN_TYPE_*
-	 * @param value gain value
-	 */
-	public void setGain(int gainType, int value) throws SourceException
-	{
-		if(mDeviceHandle == 0)
-		{
-			throw new SourceException("Device not open");
-		}
-
-		int result = HydraSdrNative.setGain(mDeviceHandle, gainType, value);
-		if(result != HydraSdrNative.SUCCESS)
-		{
-			mLog.warn("Failed to set gain type " + gainType + " to " + value + ": " +
-				HydraSdrNative.errorName(result));
-		}
-	}
-
-	/**
-	 * Queries gain information for a specific type.
-	 * @param gainType one of HydraSdrNative.GAIN_TYPE_*
-	 * @return int[6] = {value, min, max, step, default, flags}, or null
-	 */
-	public int[] getGainInfo(int gainType)
-	{
-		if(mDeviceHandle == 0)
-		{
-			return null;
-		}
-		return HydraSdrNative.getGainInfo(mDeviceHandle, gainType);
-	}
-
-	/**
-	 * Returns the device capability bitmask.
-	 */
-	public int getCapabilities()
-	{
-		if(mDeviceHandle == 0)
-		{
-			return 0;
-		}
-		return HydraSdrNative.getCapabilities(mDeviceHandle);
-	}
-
-	/* ==================== RF Control ==================== */
-
-	/**
-	 * Enables/disables Bias-T.
-	 */
-	public void setBiasT(boolean enabled) throws SourceException
-	{
-		if(mDeviceHandle == 0)
-		{
-			throw new SourceException("Device not open");
-		}
-
-		int result = HydraSdrNative.setBiasT(mDeviceHandle, enabled);
-		if(result != HydraSdrNative.SUCCESS)
-		{
-			mLog.warn("Failed to set Bias-T: " + HydraSdrNative.errorName(result));
-		}
-	}
-
-	/**
-	 * Reads the device temperature.
-	 * @return temperature in Celsius, or Float.NaN if not available
-	 */
-	public float getTemperature()
-	{
-		if(mDeviceHandle == 0)
-		{
-			return Float.NaN;
-		}
-		return HydraSdrNative.getTemperature(mDeviceHandle);
-	}
-
-	/**
-	 * Sets bandwidth in Hz (0 for auto).
-	 */
-	public void setBandwidth(int bandwidthHz) throws SourceException
-	{
-		if(mDeviceHandle == 0)
-		{
-			throw new SourceException("Device not open");
-		}
-
-		int result = HydraSdrNative.setBandwidth(mDeviceHandle, bandwidthHz);
-		if(result != HydraSdrNative.SUCCESS)
-		{
-			mLog.warn("Failed to set bandwidth: " + HydraSdrNative.errorName(result));
-		}
-	}
-
-	/**
-	 * Sets the decimation mode.
-	 */
-	public void setDecimationMode(int mode) throws SourceException
-	{
-		if(mDeviceHandle == 0)
-		{
-			throw new SourceException("Device not open");
-		}
-
-		int result = HydraSdrNative.setDecimationMode(mDeviceHandle, mode);
-		if(result != HydraSdrNative.SUCCESS)
-		{
-			mLog.warn("Failed to set decimation mode: " + HydraSdrNative.errorName(result));
-		}
-	}
-
-	/* ==================== Device Info ==================== */
-
-	/**
-	 * Returns device information.
-	 */
-	public HydraSdrDeviceInfo getDeviceInfo()
-	{
-		if(mDeviceInfo == null && mDeviceHandle != 0)
-		{
-			mDeviceInfo = HydraSdrNative.getDeviceInfo(mDeviceHandle);
-		}
-		return mDeviceInfo;
-	}
-
-	/**
-	 * Indicates if the native library is available.
-	 */
-	public static boolean isNativeAvailable()
-	{
-		return HydraSdrNative.isLoaded();
-	}
-
-	/**
-	 * Lists available HydraSDR device serial numbers.
-	 */
-	public static long[] listDevices()
-	{
-		if(!HydraSdrNative.isLoaded())
-		{
-			return new long[0];
-		}
-		long[] serials = HydraSdrNative.listDevices();
-		return serials != null ? serials : new long[0];
-	}
-
-	/* Track which serial numbers have been assigned to controllers */
-	private static final AtomicInteger sNextDeviceIndex = new AtomicInteger(0);
-
-	/**
-	 * Finds the serial number for a HydraSDR device at the given USB bus/port.
-	 *
-	 * Since libhydrasdr enumerates devices via libusb internally, the discovery
-	 * order matches the USB enumeration order. Multiple HydraSDR devices are
-	 * assigned serial numbers in the order they are discovered by TunerManager.
-	 *
-	 * @param bus USB bus number (from sdrtrunk discovery)
-	 * @param portAddress USB port address (from sdrtrunk discovery)
-	 * @return serial number for this device, or 0 to open first available
-	 */
-	public static long findSerialForUsbPort(int bus, String portAddress)
-	{
-		long[] serials = listDevices();
-
-		if(serials.length == 0)
-		{
-			return 0;
-		}
-
-		/* Single device: return its serial directly */
-		if(serials.length == 1)
-		{
-			return serials[0];
-		}
-
-		/* Multiple devices: assign by discovery order.
-		 * Both sdrtrunk USB enum and libhydrasdr libusb enum iterate in the
-		 * same bus/port order, so index N in sdrtrunk maps to index N here. */
-		int idx = sNextDeviceIndex.getAndIncrement();
-		if(idx < serials.length)
-		{
-			mLog.info("Multi-device: assigned serial 0x" + Long.toHexString(serials[idx]) +
-				" to USB Bus " + bus + " Port " + portAddress +
-				" (device " + (idx + 1) + "/" + serials.length + ")");
-			return serials[idx];
-		}
-
-		/* Fallback: more sdrtrunk discoveries than native devices */
-		mLog.warn("More HydraSDR USB devices discovered than native library reports");
-		return 0;
-	}
-
-	/**
-	 * Resets the device assignment counter. Called at the start of USB enumeration.
-	 */
-	public static void resetDeviceAssignment()
-	{
-		sNextDeviceIndex.set(0);
-	}
-
-	/**
-	 * Formats a sample rate value in Hz for display.
-	 */
-	public static String formatSampleRate(int rateHz)
-	{
-		return new java.text.DecimalFormat("#.00 MHz").format((double)rateHz / 1E6d);
-	}
+    private final static Logger mLog = LoggerFactory.getLogger(HydraSdrTunerController.class);
+    public static final Gain LINEARITY_GAIN_DEFAULT = Gain.LINEARITY_14;
+    public static final Gain SENSITIVITY_GAIN_DEFAULT = Gain.SENSITIVITY_10;
+    public static final int GAIN_MIN = 1;
+    public static final int GAIN_MAX = 22;
+    public static final int LNA_GAIN_MIN = 0;
+    public static final int LNA_GAIN_MAX = 14;
+    public static final int LNA_GAIN_DEFAULT = 7;
+    public static final int MIXER_GAIN_MIN = 0;
+    public static final int MIXER_GAIN_MAX = 15;
+    public static final int MIXER_GAIN_DEFAULT = 9;
+    public static final int IF_GAIN_MIN = 0;
+    public static final int IF_GAIN_MAX = 15;
+    public static final int IF_GAIN_DEFAULT = 9;
+    public static final long MINIMUM_TUNABLE_FREQUENCY_HZ = 24000000l;
+    public static final long MAXIMUM_TUNABLE_FREQUENCY_HZ = 1800000000l;
+    public static final long FREQUENCY_DEFAULT = 101100000;
+    public static final double USABLE_BANDWIDTH_PERCENT = 0.90;
+    public static final DecimalFormat MHZ_FORMATTER = new DecimalFormat("#.00 MHz");
+    public static final HydraSdrSampleRate DEFAULT_SAMPLE_RATE = new HydraSdrSampleRate(0, 10000000, "10.00 MHz");
+    //Lower rates from libhydrasdr don't divide into whole 25 kHz polyphase channels, and the lowest give none at all.
+    private static final long MINIMUM_SAMPLE_RATE = 1250000;
+    //Power-of-2 sample count of an undecimated buffer, used until buffers arrive from the device.  libhydrasdr divides
+    //this by the software decimation factor, which is also a power of 2.
+    private static final int UNDECIMATED_BUFFER_SAMPLE_COUNT = 65536;
+    //Complex samples from libhydrasdr are half the amplitude (-6 dB) of the analytic signal for a real input.  Restoring
+    //this keeps spectrum levels and squelch thresholds consistent with the other tuners.
+    private static final float SAMPLE_SCALE = 2.0f;
+    private final int mBus;
+    private final String mPortAddress;
+    private HydraSdrDevice mDevice;
+    private HydraSdrDeviceInformation mDeviceInfo;
+    private List<HydraSdrSampleRate> mSampleRates = new ArrayList<>();
+    private int mSampleRate = 0;
+    private volatile float mSamplesPerMillisecond = 0.0f;
+    private volatile int mBufferSampleCount = UNDECIMATED_BUFFER_SAMPLE_COUNT;
+    private boolean mStreaming = false;
+
+    /**
+     * Constructs an instance
+     * @param bus usb
+     * @param portAddress usb
+     * @param tunerErrorListener to receive error notifications from this controller
+     */
+    public HydraSdrTunerController(int bus, String portAddress, ITunerErrorListener tunerErrorListener)
+    {
+        super(tunerErrorListener);
+        mBus = bus;
+        mPortAddress = portAddress;
+        setMinimumFrequency(MINIMUM_TUNABLE_FREQUENCY_HZ);
+        setMaximumFrequency(MAXIMUM_TUNABLE_FREQUENCY_HZ);
+        setMiddleUnusableHalfBandwidth(0);
+        setUsableBandwidthPercentage(USABLE_BANDWIDTH_PERCENT);
+    }
+
+    @Override
+    public TunerType getTunerType()
+    {
+        return TunerType.HYDRASDR_R828D;
+    }
+
+    @Override
+    public int getBufferSampleCount()
+    {
+        return mBufferSampleCount;
+    }
+
+    @Override
+    public void start() throws SourceException
+    {
+        long serialNumber = readSerialNumber();
+
+        getLock().lock();
+
+        try
+        {
+            mDevice = HydraSdr.open(serialNumber);
+            mDevice.setSampleType(SampleType.FLOAT32_IQ);
+            mDevice.setDecimationMode(DecimationMode.HIGH_DEFINITION);
+            mDeviceInfo = new HydraSdrDeviceInformation(mDevice.deviceInfo());
+            mSampleRates.clear();
+
+            for(long rate : mDevice.sampleRates())
+            {
+                if(rate >= MINIMUM_SAMPLE_RATE)
+                {
+                    mSampleRates.add(new HydraSdrSampleRate(mSampleRates.size(), (int)rate, formatSampleRate((int)rate)));
+                }
+            }
+
+            if(mSampleRates.isEmpty())
+            {
+                mSampleRates.add(DEFAULT_SAMPLE_RATE);
+            }
+
+            setFrequency(FREQUENCY_DEFAULT);
+            setSampleRate(mSampleRates.get(0));
+        }
+        catch(HydraSdrException | SourceException | LinkageError e)
+        {
+            closeDevice(mDevice);
+            mDevice = null;
+            throw new SourceException("Can't start HydraSDR tuner - " + e.getMessage(), e);
+        }
+        finally
+        {
+            getLock().unlock();
+        }
+    }
+
+    @Override
+    public void stop()
+    {
+        HydraSdrDevice device;
+
+        getLock().lock();
+
+        try
+        {
+            device = mDevice;
+            mDevice = null;
+            mStreaming = false;
+        }
+        finally
+        {
+            getLock().unlock();
+        }
+
+        mNativeBufferBroadcaster.clear();
+        closeDevice(device);
+    }
+
+    /**
+     * Closes the device, which also stops streaming and turns off the bias-T.
+     * @param device to close, or null
+     */
+    private static void closeDevice(HydraSdrDevice device)
+    {
+        if(device != null)
+        {
+            try
+            {
+                device.close();
+            }
+            catch(HydraSdrException | RuntimeException e)
+            {
+                mLog.error("Error closing HydraSDR device", e);
+            }
+        }
+    }
+
+    /**
+     * Reads the serial number of the device at this controller's USB bus and port, since libhydrasdr opens a specific
+     * device by serial number.  The USB serial string is formatted as: HYDRASDR SN:0123456789ABCDEF
+     * @return serial number
+     * @throws SourceException if the device isn't found or can't be accessed.
+     */
+    private long readSerialNumber() throws SourceException
+    {
+        String serial = UsbDeviceLookup.readSerialNumber(mBus, mPortAddress);
+
+        try
+        {
+            return Long.parseUnsignedLong(serial.substring(serial.lastIndexOf(':') + 1).trim(), 16);
+        }
+        catch(NullPointerException | NumberFormatException e)
+        {
+            throw new SourceException("Can't read HydraSDR serial number from USB serial string [" + serial + "]", e);
+        }
+    }
+
+    /**
+     * Operation that requires the device.
+     */
+    private interface DeviceOperation
+    {
+        void execute(HydraSdrDevice device) throws HydraSdrException;
+    }
+
+    /**
+     * Executes the operation under the controller lock so that the device can't be closed while it is in use.  The
+     * operation is ignored when the device isn't open, which allows for calls that arrive during tuner shutdown.
+     * @param operation to execute
+     * @throws SourceException if the operation fails
+     */
+    private void execute(DeviceOperation operation) throws SourceException
+    {
+        getLock().lock();
+
+        try
+        {
+            if(mDevice != null)
+            {
+                operation.execute(mDevice);
+            }
+        }
+        catch(HydraSdrException e)
+        {
+            throw new SourceException(e.getMessage(), e);
+        }
+        finally
+        {
+            getLock().unlock();
+        }
+    }
+
+    /**
+     * Receives converted samples on the libhydrasdr thread and dispatches them to the buffer listeners.  Exceptions
+     * are contained here since an exception reaching the library would stop the sample stream.
+     * @param buffer from the library, which is only valid until this method returns.
+     * @return true to continue streaming
+     */
+    private boolean receive(SampleBuffer buffer)
+    {
+        try
+        {
+            mBufferSampleCount = buffer.sampleCount();
+            float[] samples = buffer.copyFloats();
+
+            for(int x = 0; x < samples.length; x++)
+            {
+                samples[x] *= SAMPLE_SCALE;
+            }
+
+            broadcast(new FloatNativeBuffer(samples, System.currentTimeMillis(), mSamplesPerMillisecond));
+        }
+        catch(RuntimeException e)
+        {
+            mLog.error("Error dispatching HydraSDR sample buffer", e);
+        }
+
+        return true;
+    }
+
+    /**
+     * Starts the sample stream if it's not already started.
+     */
+    private void startStreaming() throws SourceException
+    {
+        if(!mStreaming)
+        {
+            execute(device -> device.startRx(this::receive));
+            mStreaming = mDevice != null;
+        }
+    }
+
+    /**
+     * Stops the sample stream if it's started.
+     */
+    private void stopStreaming() throws SourceException
+    {
+        if(mStreaming)
+        {
+            mStreaming = false;
+            execute(HydraSdrDevice::stopRx);
+        }
+    }
+
+    /**
+     * Adds the IQ buffer listener and automatically starts streaming, if not already started.
+     */
+    @Override
+    public void addBufferListener(Listener<INativeBuffer> listener)
+    {
+        getLock().lock();
+
+        try
+        {
+            if(mDevice != null)
+            {
+                super.addBufferListener(listener);
+                startStreaming();
+            }
+        }
+        catch(SourceException se)
+        {
+            mLog.error("Error starting streaming on HydraSDR tuner", se);
+        }
+        finally
+        {
+            getLock().unlock();
+        }
+    }
+
+    /**
+     * Removes the IQ buffer listener and stops streaming if there are no more listeners.
+     */
+    @Override
+    public void removeBufferListener(Listener<INativeBuffer> listener)
+    {
+        getLock().lock();
+
+        try
+        {
+            super.removeBufferListener(listener);
+
+            if(!hasBufferListeners())
+            {
+                stopStreaming();
+            }
+        }
+        catch(SourceException se)
+        {
+            mLog.error("Error stopping streaming on HydraSDR tuner", se);
+        }
+        finally
+        {
+            getLock().unlock();
+        }
+    }
+
+    @Override
+    public void apply(TunerConfiguration tunerConfiguration) throws SourceException
+    {
+        //Invoke super for frequency, frequency correction and autoPPM
+        super.apply(tunerConfiguration);
+
+        if(tunerConfiguration instanceof HydraSdrTunerConfiguration config)
+        {
+            HydraSdrSampleRate rate = getSampleRate(config.getSampleRate());
+            setSampleRate(rate != null ? rate : mSampleRates.isEmpty() ? DEFAULT_SAMPLE_RATE : mSampleRates.get(0));
+
+            try
+            {
+                setFrequency(config.getFrequency());
+                setFrequencyCorrection(config.getFrequencyCorrection());
+
+                setIFGain(config.getIFGain());
+                setMixerGain(config.getMixerGain());
+                setLNAGain(config.getLNAGain());
+                setMixerAGC(config.isMixerAGC());
+                setLNAAGC(config.isLNAAGC());
+                setBiasT(config.isBiasT());
+
+                //Set the gain mode last, so custom values are already set, and linearity and sensitivity modes will
+                //automatically override the custom values.
+                setGain(config.getGain());
+            }
+            catch(Exception e)
+            {
+                throw new SourceException("Couldn't apply settings from HydraSDR config", e);
+            }
+        }
+        else
+        {
+            throw new IllegalArgumentException("Invalid tuner config:" + tunerConfiguration.getClass());
+        }
+    }
+
+    @Override
+    public long getTunedFrequency() throws SourceException
+    {
+        return mFrequencyController.getTunedFrequency();
+    }
+
+    @Override
+    public void setTunedFrequency(long frequency) throws SourceException
+    {
+        if(MINIMUM_TUNABLE_FREQUENCY_HZ <= frequency && frequency <= MAXIMUM_TUNABLE_FREQUENCY_HZ)
+        {
+            execute(device -> device.setFrequency(frequency));
+        }
+        else
+        {
+            throw new SourceException("Frequency [" + frequency + "] outside " + "of tunable range " + MINIMUM_TUNABLE_FREQUENCY_HZ + "-" + MAXIMUM_TUNABLE_FREQUENCY_HZ);
+        }
+    }
+
+    @Override
+    public double getCurrentSampleRate()
+    {
+        return mSampleRate;
+    }
+
+    /**
+     * Sets the sample rate.  The sample stream is stopped for the change, because libhydrasdr replaces the sample
+     * converter that its streaming thread is using.
+     *
+     * @param rate to set
+     * @throws SourceException if the rate can't be set
+     */
+    public void setSampleRate(HydraSdrSampleRate rate) throws SourceException
+    {
+        getLock().lock();
+
+        try
+        {
+            mSamplesPerMillisecond = (float)rate.getRate() / 1000.0f;
+
+            if(rate.getRate() != mSampleRate)
+            {
+                boolean streaming = mStreaming;
+                stopStreaming();
+
+                try
+                {
+                    execute(device ->
+                    {
+                        device.setSampleRate(rate.getRate());
+                        mBufferSampleCount = UNDECIMATED_BUFFER_SAMPLE_COUNT /
+                                (int)device.deviceInfo().current().decimationFactor();
+                    });
+                    mSampleRate = rate.getRate();
+                    mFrequencyController.setSampleRate(mSampleRate);
+
+                    // Update the Usable Bandwidth Percentage, as the usable range varies with the sample rate.
+                    switch(mSampleRate)
+                    {
+                        default:
+                        case 10000000:
+                            super.setUsableBandwidthPercentage(0.90);
+                            break;
+                        case 6000000:
+                            super.setUsableBandwidthPercentage(0.83);
+                            break;
+                        case 3000000:
+                            super.setUsableBandwidthPercentage(0.66);
+                            break;
+                        case 2500000:
+                            super.setUsableBandwidthPercentage(0.90);
+                            break;
+                    }
+                }
+                finally
+                {
+                    if(streaming)
+                    {
+                        startStreaming();
+                    }
+                }
+            }
+        }
+        finally
+        {
+            getLock().unlock();
+        }
+    }
+
+    /**
+     * Returns a list of sample rates supported by the device
+     */
+    public List<HydraSdrSampleRate> getSampleRates()
+    {
+        return mSampleRates;
+    }
+
+    /**
+     * HydraSDR sample rate object that matches the current sample rate setting.
+     */
+    public HydraSdrSampleRate getHydraSdrSampleRate()
+    {
+        return getSampleRate(mSampleRate);
+    }
+
+    /**
+     * HydraSDR sample rate object that matches the specified rate in hertz, or
+     * null if there are no available sample rates for the tuner that match the
+     * argument value.
+     */
+    public HydraSdrSampleRate getSampleRate(int rate)
+    {
+        for(HydraSdrSampleRate sampleRate : mSampleRates)
+        {
+            if(sampleRate.getRate() == rate)
+            {
+                return sampleRate;
+            }
+        }
+
+        //We should never get to here ...
+        return null;
+    }
+
+    /**
+     * Enables/disables the mixer automatic gain setting
+     *
+     * @param enabled true to enable
+     * @throws SourceException on error
+     */
+    public void setMixerAGC(boolean enabled) throws SourceException
+    {
+        execute(device -> device.setGain(GainType.MIXER_AGC, enabled ? 1 : 0));
+    }
+
+    /**
+     * Enables/disables the low noise amplifier automatic gain setting
+     *
+     * @param enabled true to enable
+     * @throws SourceException on error
+     */
+    public void setLNAAGC(boolean enabled) throws SourceException
+    {
+        execute(device -> device.setGain(GainType.LNA_AGC, enabled ? 1 : 0));
+    }
+
+    public void setGain(Gain gain) throws SourceException
+    {
+        if(gain != Gain.CUSTOM)
+        {
+            setMixerAGC(false);
+            setLNAAGC(false);
+            setLNAGain(gain.getLNA());
+            setMixerGain(gain.getMixer());
+            setIFGain(gain.getIF());
+        }
+    }
+
+    /**
+     * Sets LNA gain
+     *
+     * @param gain - value within range of LNA_GAIN_MIN to LNA_GAIN_MAX
+     * @throws SourceException          on error
+     * @throws IllegalArgumentException if gain value is invalid
+     */
+    public void setLNAGain(int gain) throws SourceException, IllegalArgumentException
+    {
+        if(LNA_GAIN_MIN <= gain && gain <= LNA_GAIN_MAX)
+        {
+            execute(device -> device.setGain(GainType.LNA, gain));
+        }
+        else
+        {
+            throw new IllegalArgumentException("LNA gain value [" + gain + "] is outside value range: " +
+                    LNA_GAIN_MIN + "-" + LNA_GAIN_MAX);
+        }
+    }
+
+    /**
+     * Sets Mixer gain
+     *
+     * @param gain - value within range of MIXER_GAIN_MIN to MIXER_GAIN_MAX
+     * @throws SourceException          on error
+     * @throws IllegalArgumentException if gain value is invalid
+     */
+    public void setMixerGain(int gain) throws SourceException, IllegalArgumentException
+    {
+        if(MIXER_GAIN_MIN <= gain && gain <= MIXER_GAIN_MAX)
+        {
+            execute(device -> device.setGain(GainType.MIXER, gain));
+        }
+        else
+        {
+            throw new IllegalArgumentException("Mixer gain value [" + gain +
+                    "] is outside value range: " + MIXER_GAIN_MIN + "-" + MIXER_GAIN_MAX);
+        }
+    }
+
+    /**
+     * Sets IF (VGA) gain
+     *
+     * @param gain - value within range of IF_GAIN_MIN to IF_GAIN_MAX
+     * @throws SourceException          on error
+     * @throws IllegalArgumentException if gain value is invalid
+     */
+    public void setIFGain(int gain) throws SourceException, IllegalArgumentException
+    {
+        if(IF_GAIN_MIN <= gain && gain <= IF_GAIN_MAX)
+        {
+            execute(device -> device.setGain(GainType.VGA, gain));
+        }
+        else
+        {
+            throw new IllegalArgumentException("VGA gain value [" + gain +
+                    "] is outside value range: " + IF_GAIN_MIN + "-" + IF_GAIN_MAX);
+        }
+    }
+
+    /**
+     * Enables/disables the Bias-T (RF bias tee) power output for active antennas
+     *
+     * @param enabled true to enable Bias-T, false to disable
+     * @throws SourceException on error
+     */
+    public void setBiasT(boolean enabled) throws SourceException
+    {
+        execute(device -> device.setBiasTee(enabled));
+    }
+
+    /**
+     * Formats the rate in hertz for display as megahertz
+     */
+    private static String formatSampleRate(int rate)
+    {
+        return MHZ_FORMATTER.format((double) rate / 1E6d);
+    }
+
+    /**
+     * Device information, available once the tuner has been started.
+     */
+    public HydraSdrDeviceInformation getDeviceInfo()
+    {
+        return mDeviceInfo;
+    }
+
+    public enum GainMode
+    {
+        LINEARITY,
+        SENSITIVITY,
+        CUSTOM;
+    }
+
+    public enum Gain
+    {
+        LINEARITY_1(1, 4, 0, 0),
+        LINEARITY_2(2, 5, 0, 0),
+        LINEARITY_3(3, 6, 1, 0),
+        LINEARITY_4(4, 7, 1, 0),
+        LINEARITY_5(5, 8, 1, 0),
+        LINEARITY_6(6, 9, 1, 0),
+        LINEARITY_7(7, 10, 2, 0),
+        LINEARITY_8(8, 10, 2, 1),
+        LINEARITY_9(9, 10, 0, 3),
+        LINEARITY_10(10, 10, 0, 5),
+        LINEARITY_11(11, 10, 1, 6),
+        LINEARITY_12(12, 10, 0, 8),
+        LINEARITY_13(13, 10, 0, 9),
+        LINEARITY_14(14, 10, 5, 8),
+        LINEARITY_15(15, 10, 6, 9),
+        LINEARITY_16(16, 11, 6, 9),
+        LINEARITY_17(17, 11, 7, 10),
+        LINEARITY_18(18, 11, 8, 12),
+        LINEARITY_19(19, 11, 9, 13),
+        LINEARITY_20(20, 11, 11, 14),
+        LINEARITY_21(21, 12, 12, 14),
+        LINEARITY_22(22, 13, 12, 14),
+        SENSITIVITY_1(1, 4, 0, 0),
+        SENSITIVITY_2(2, 4, 0, 1),
+        SENSITIVITY_3(3, 4, 0, 2),
+        SENSITIVITY_4(4, 4, 0, 3),
+        SENSITIVITY_5(5, 4, 1, 5),
+        SENSITIVITY_6(6, 4, 2, 6),
+        SENSITIVITY_7(7, 4, 2, 7),
+        SENSITIVITY_8(8, 4, 3, 8),
+        SENSITIVITY_9(9, 4, 4, 9),
+        SENSITIVITY_10(10, 5, 4, 9),
+        SENSITIVITY_11(11, 5, 4, 12),
+        SENSITIVITY_12(12, 5, 7, 12),
+        SENSITIVITY_13(13, 5, 8, 13),
+        SENSITIVITY_14(14, 5, 9, 14),
+        SENSITIVITY_15(15, 6, 9, 14),
+        SENSITIVITY_16(16, 7, 10, 14),
+        SENSITIVITY_17(17, 8, 10, 14),
+        SENSITIVITY_18(18, 9, 11, 14),
+        SENSITIVITY_19(19, 10, 12, 14),
+        SENSITIVITY_20(20, 11, 12, 14),
+        SENSITIVITY_21(21, 12, 12, 14),
+        SENSITIVITY_22(22, 13, 12, 14),
+        CUSTOM(1, 0, 0, 0);
+
+        private int mValue;
+        private int mIF;
+        private int mMixer;
+        private int mLNA;
+
+        private Gain(int value, int ifGain, int mixer, int lna)
+        {
+            mValue = value;
+            mIF = ifGain;
+            mMixer = mixer;
+            mLNA = lna;
+        }
+
+        public int getValue()
+        {
+            return mValue;
+        }
+
+        public int getIF()
+        {
+            return mIF;
+        }
+
+        public int getMixer()
+        {
+            return mMixer;
+        }
+
+        public int getLNA()
+        {
+            return mLNA;
+        }
+
+        public static Gain getGain(GainMode mode, int value)
+        {
+            assert (GAIN_MIN <= value && value <= GAIN_MAX);
+
+            switch(mode)
+            {
+                case LINEARITY:
+                    for(Gain gain : getLinearityGains())
+                    {
+                        if(gain.getValue() == value)
+                        {
+                            return gain;
+                        }
+                    }
+                    return LINEARITY_GAIN_DEFAULT;
+                case SENSITIVITY:
+                    for(Gain gain : getSensitivityGains())
+                    {
+                        if(gain.getValue() == value)
+                        {
+                            return gain;
+                        }
+                    }
+                    return SENSITIVITY_GAIN_DEFAULT;
+                case CUSTOM:
+                default:
+                    return Gain.CUSTOM;
+            }
+        }
+
+        public GainMode getGainMode()
+        {
+            if(getLinearityGains().contains(this))
+            {
+                return GainMode.LINEARITY;
+            }
+            else if(getSensitivityGains().contains(this))
+            {
+                return GainMode.SENSITIVITY;
+            }
+
+            return GainMode.CUSTOM;
+        }
+
+        public static EnumSet<Gain> getLinearityGains()
+        {
+            return EnumSet.range(LINEARITY_1, LINEARITY_22);
+        }
+
+        public static EnumSet<Gain> getSensitivityGains()
+        {
+            return EnumSet.range(SENSITIVITY_1, SENSITIVITY_22);
+        }
+    }
 }

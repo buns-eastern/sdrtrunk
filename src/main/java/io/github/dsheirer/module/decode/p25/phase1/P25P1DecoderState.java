@@ -106,7 +106,6 @@ import io.github.dsheirer.module.decode.p25.phase1.message.pdu.ambtc.osp.AMBTCIn
 import io.github.dsheirer.module.decode.p25.phase1.message.pdu.ambtc.osp.AMBTCMessageUpdate;
 import io.github.dsheirer.module.decode.p25.phase1.message.pdu.ambtc.osp.AMBTCMotorolaGroupRegroupChannelGrant;
 import io.github.dsheirer.module.decode.p25.phase1.message.pdu.ambtc.osp.AMBTCNetworkStatusBroadcast;
-import io.github.dsheirer.module.decode.p25.phase1.message.pdu.ambtc.osp.AMBTCProtectionParameterBroadcast;
 import io.github.dsheirer.module.decode.p25.phase1.message.pdu.ambtc.osp.AMBTCRFSSStatusBroadcast;
 import io.github.dsheirer.module.decode.p25.phase1.message.pdu.ambtc.osp.AMBTCStatusUpdate;
 import io.github.dsheirer.module.decode.p25.phase1.message.pdu.ambtc.osp.AMBTCTelephoneInterconnectChannelGrant;
@@ -721,6 +720,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
 
                 //Network configuration messages
                 case OSP_ADJACENT_STATUS_BROADCAST:
+                case OSP_ADJACENT_STATUS_BROADCAST_UNCOORDINATED_BAND_PLAN:
                     mNetworkConfigurationMonitor.process(ambtc);
                     break;
                 case OSP_NETWORK_STATUS_BROADCAST:
@@ -823,14 +823,6 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                     {
                         broadcastEvent(ambtc.getIdentifiers(), ambtc.getTimestamp(), DecodeEventType.SDM, "MESSAGE:" +
                                 mu.getShortDataMessage());
-                    }
-                    break;
-                case OSP_ADJACENT_STATUS_BROADCAST_UNCOORDINATED_BAND_PLAN:
-                    if(ambtc instanceof AMBTCProtectionParameterBroadcast ppb)
-                    {
-                        broadcastEvent(ambtc, DecodeEventType.RESPONSE, "USE ENCRYPTION " + ppb.getEncryptionKey() +
-                                " OUTBOUND MI:" + ppb.getOutboundMessageIndicator() +
-                                " INBOUND MI:" + ppb.getInboundMessageIndicator());
                     }
                     break;
                 case OSP_ROAMING_ADDRESS_UPDATE:
