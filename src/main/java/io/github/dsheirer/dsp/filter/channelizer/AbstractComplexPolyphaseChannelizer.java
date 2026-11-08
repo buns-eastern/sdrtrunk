@@ -23,6 +23,9 @@ import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.sample.complex.InterleavedComplexSamples;
 import io.github.dsheirer.source.ISourceEventListener;
 import io.github.dsheirer.source.SourceEvent;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.slf4j.Logger;
@@ -33,12 +36,12 @@ public abstract class AbstractComplexPolyphaseChannelizer implements Listener<In
     private final static Logger mLog = LoggerFactory.getLogger(AbstractComplexPolyphaseChannelizer.class);
     private Broadcaster<SourceEvent> mSourceChangeBroadcaster = new Broadcaster();
     private List<PolyphaseChannelSource> mChannels = new CopyOnWriteArrayList<>();
+    private List<PolyphaseChannelSource> mDispatchChannels = List.of();
     private List<IChannelResultsListener> mChannelResultsListeners = new CopyOnWriteArrayList<>();
     private double mSampleRate;
     private int mChannelCount;
     private int mSubChannelCount;
     private double mChannelSampleRate;
-    protected long mCurrentSamplesTimestamp;
 
     /**
      * Complex sample polyphase channelizer
@@ -60,17 +63,6 @@ public abstract class AbstractComplexPolyphaseChannelizer implements Listener<In
     public double getSampleRate()
     {
         return mSampleRate;
-    }
-
-    /**
-     * Sets the input sample rate for for this channelizer
-     * @param sampleRate in hertz
-     */
-    public void setRates(double sampleRate, int channelCount)
-    {
-        mSampleRate = sampleRate;
-        mChannelCount = channelCount;
-        mChannelSampleRate = mSampleRate / (double)mChannelCount;
     }
 
     /**
@@ -99,15 +91,56 @@ public abstract class AbstractComplexPolyphaseChannelizer implements Listener<In
     }
 
     /**
-     * Dispatches the processed channel samples to any registered polyphase channel outputs.
+     * Prepares the registered channels to receive the next channel results batch by applying any pending channel
+     * updates, and identifies the polyphase channel indexes that they need.  The next invocation of dispatch() delivers
+     * to these same channels, so a channel registered after this method is invoked starts with the following batch.
      *
-     * @param channelResultsList a list of arrays of I/Q samples per channel
+     * @return sorted polyphase channel indexes in use, or an empty array if there are no registered channels.
      */
-    protected void dispatch(List<float[]> channelResultsList)
+    protected int[] prepareChannels()
     {
-        for(PolyphaseChannelSource channel : mChannels)
+        List<PolyphaseChannelSource> channels = new ArrayList<>(mChannels);
+        BitSet indexes = new BitSet(getChannelCount());
+
+        for(PolyphaseChannelSource channel : channels)
         {
-            channel.receiveChannelResults(channelResultsList, mCurrentSamplesTimestamp);
+            try
+            {
+                channel.applyPendingOutputProcessorUpdate();
+
+                for(int index : channel.getOutputProcessorIndexes())
+                {
+                    indexes.set(index);
+                }
+            }
+            catch(Throwable t)
+            {
+                mLog.error("Error preparing polyphase channel source to receive channel results", t);
+            }
+        }
+
+        mDispatchChannels = channels;
+        return indexes.stream().toArray();
+    }
+
+    /**
+     * Dispatches the processed channel samples to the channels identified by prepareChannels().  An error in one
+     * channel does not affect delivery to the other channels.
+     *
+     * @param channelResults batch of I/Q samples per channel.  Channels must retain the batch to use it after returning.
+     */
+    protected void dispatch(ChannelResultsBatch channelResults)
+    {
+        for(PolyphaseChannelSource channel : mDispatchChannels)
+        {
+            try
+            {
+                channel.receiveChannelResults(channelResults);
+            }
+            catch(Throwable t)
+            {
+                mLog.error("Error dispatching channel results to polyphase channel source", t);
+            }
         }
 
         if(!mChannelResultsListeners.isEmpty())
@@ -115,11 +148,22 @@ public abstract class AbstractComplexPolyphaseChannelizer implements Listener<In
             //Output sample rate is 2x the channel spacing for this 2x oversampled channelizer
             double outputSampleRate = getChannelSampleRate() * 2.0;
 
+            //Raw listeners receive a copy of each block since the batch arrays are reused after dispatch.  The full
+            //transform is applied to every block whenever a raw listener is registered (see hasChannelResultsListeners)
+            float[] samples = channelResults.getSamples();
+            int blockLength = channelResults.getBlockLength();
+            List<float[]> channelResultsList = new ArrayList<>(channelResults.getBlockCount());
+
+            for(int offset = 0; offset + blockLength <= samples.length; offset += blockLength)
+            {
+                channelResultsList.add(Arrays.copyOfRange(samples, offset, offset + blockLength));
+            }
+
             for(IChannelResultsListener listener : mChannelResultsListeners)
             {
                 try
                 {
-                    listener.receiveChannelResults(channelResultsList, outputSampleRate, mCurrentSamplesTimestamp);
+                    listener.receiveChannelResults(channelResultsList, outputSampleRate, channelResults.getTimestamp());
                 }
                 catch(Throwable t)
                 {
@@ -146,6 +190,15 @@ public abstract class AbstractComplexPolyphaseChannelizer implements Listener<In
     public void removeChannelResultsListener(IChannelResultsListener listener)
     {
         mChannelResultsListeners.remove(listener);
+    }
+
+    /**
+     * Indicates if any raw channel results listeners are registered.  When true, the channelizer must transform every
+     * channel, not only the channels in use, so that the raw listeners receive valid results for all channels.
+     */
+    protected boolean hasChannelResultsListeners()
+    {
+        return !mChannelResultsListeners.isEmpty();
     }
 
     /**
