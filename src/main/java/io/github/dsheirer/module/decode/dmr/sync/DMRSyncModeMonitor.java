@@ -23,17 +23,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Monitors sync pattern detections to automatically detect the prevailing or dominant sync mode group used on a channel
- * and optimizes the DMR sync detectors to reduce the quantity of false detects of unused sync patterns and the overall
- * sync detection processing workload.
+ * Manages the sync detection mode for a set of DMR sync detectors.  The mode defaults to AUTOMATIC (all sync pattern
+ * groups) and is only narrowed when explicitly set, such as for DMR traffic channels (BASE_ONLY).
  */
 public class DMRSyncModeMonitor
 {
-    private static final int DOMINANT_THRESHOLD = 10;
     private final List<DMRSyncDetector> mSyncDetectors = new ArrayList<>();
-    private int mBaseCount;
-    private int mMobileCount;
-    private int mDirectCount;
     private DMRSyncDetectMode mMode = DMRSyncDetectMode.AUTOMATIC;
 
     /**
@@ -45,8 +40,8 @@ public class DMRSyncModeMonitor
 
     /**
      * Sets (and locks) the sync detection mode.  This can be directly invoked when the operating mode is known
-     * in advance, such as for a repeated traffic channel where the expected mode is BASE_ONLY, otherwise this method
-     * is automatically invoked by this monitor when operating in ALL mode, once the dominant mode is established.
+     * in advance, such as for a repeated traffic channel where the expected mode is BASE_ONLY.  Otherwise the mode
+     * remains AUTOMATIC so that all sync pattern groups are detected.
      * @param mode to set
      */
     public void setMode(DMRSyncDetectMode mode)
@@ -60,48 +55,19 @@ public class DMRSyncModeMonitor
     }
 
     /**
-     * Indicates a sync pattern is positively detected and updates the current sync detection mode for all monitored
-     * sync detectors once the dominant mode is established.
+     * Indicates a sync pattern is positively detected.
+     *
+     * The sync detection mode is not automatically narrowed to a single (base, mobile or direct) sync pattern group.
+     * On conventional channels, false sync detections from noise during idle periods can outnumber the sync patterns
+     * used by the radios on the channel.  Narrowing the mode would then permanently stop detection of the radios'
+     * sync patterns until the channel is restarted.  Channels where the mode is known in advance (ie DMR traffic
+     * channels) set the mode explicitly via setMode().
+     *
      * @param pattern that was detected.
      */
     public void detected(DMRSyncPattern pattern)
     {
-        if(mMode != DMRSyncDetectMode.AUTOMATIC)
-        {
-            return;
-        }
-
-        switch(pattern)
-        {
-            case BASE_STATION_DATA:
-            case BASE_STATION_VOICE:
-                mBaseCount++;
-                break;
-            case MOBILE_STATION_DATA:
-            case MOBILE_STATION_VOICE:
-            case REVERSE_CHANNEL:
-                mMobileCount++;
-                break;
-            case DIRECT_DATA_TIMESLOT_1:
-            case DIRECT_DATA_TIMESLOT_2:
-            case DIRECT_VOICE_TIMESLOT_1:
-            case DIRECT_VOICE_TIMESLOT_2:
-                mDirectCount++;
-                break;
-        }
-
-        if(mBaseCount - mMobileCount > DOMINANT_THRESHOLD && mBaseCount - mDirectCount > DOMINANT_THRESHOLD)
-        {
-            setMode(DMRSyncDetectMode.BASE_ONLY);
-        }
-        else if(mMobileCount - mBaseCount > DOMINANT_THRESHOLD && mMobileCount - mDirectCount > DOMINANT_THRESHOLD)
-        {
-            setMode(DMRSyncDetectMode.MOBILE_ONLY);
-        }
-        else if(mDirectCount - mBaseCount > DOMINANT_THRESHOLD && mDirectCount - mMobileCount > DOMINANT_THRESHOLD)
-        {
-            setMode(DMRSyncDetectMode.DIRECT_ONLY);
-        }
+        //No automatic mode changes - see method comment.
     }
 
     /**
