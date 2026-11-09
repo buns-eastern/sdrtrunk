@@ -164,7 +164,7 @@ public class AliasItemEditor extends Editor<Alias>
     private VBox mActionEditorBox;
     private VBox mIdentifierEditorBox;
     private TextField mStreamAsTalkgroupField;
-    private TextFormatter<Integer> mStreamAsIntegerTextFormatter = new IntegerFormatter(1,0xFFFF);
+    private TextFormatter<Integer> mStreamAsIntegerTextFormatter = new IntegerFormatter(1,999999);
 
     private Map<AliasIDType,IdentifierEditor> mIdentifierEditorMap = new HashMap<>();
     private EmptyIdentifierEditor mEmptyIdentifierEditor = new EmptyIdentifierEditor();

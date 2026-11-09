@@ -31,8 +31,8 @@ import io.github.dsheirer.protocol.Protocol;
  */
 public enum TalkgroupFormat
 {
-    AM("*****", 1, 0xFFFF, "1 to 65,535",
-            "AM valid value range is 1-65,535"),
+    AM("******", 1, 999999, "1 to 999,999",
+            "AM valid value range is 1-999,999"),
     APCO25("********", 0, 0xFFFF, "0 to 65,535",
         "<html>APCO25 talkgroup valid range is 0 to 65,535"),
     DMR("********", 0, 0xFFFFFF, "0 to 16,777,215",
@@ -45,8 +45,8 @@ public enum TalkgroupFormat
         "MDC-1200 valid value range is 1-65,535"),
     MPT1327("###-####", 1, 0x7FFFFF, "000-0001 to 127-8192",
         "<html>MPT-1327 valid ranges are 0-127(prefix)<br>and 1-8192(ident) (ie. 000-0001 to 127-8192)"),
-    NBFM("*****", 1, 0xFFFF, "1 to 65,535",
-            "NBFM valid value range is 1-65,535"),
+    NBFM("******", 1, 999999, "1 to 999,999",
+            "NBFM valid value range is 1-999,999"),
     NXDN("*****", 0, 0xFFFF, "0 to 65,535",
             "NXDN talkgroup valid range is 0 to 65,535"),
     PASSPORT("*****", 1, 0xFFFF, "1 to 65,535",

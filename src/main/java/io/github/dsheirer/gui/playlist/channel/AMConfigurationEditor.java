@@ -87,8 +87,8 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
             (int)DbPowerMeter.DEFAULT_MAXIMUM_POWER);
     private EventLogConfigurationEditor mEventLogConfigurationEditor;
     private TalkgroupValueChangeListener mTalkgroupValueChangeListener = new TalkgroupValueChangeListener();
-    private IntegerFormatter mDecimalFormatter = new IntegerFormatter(1, 65535);
-    private HexFormatter mHexFormatter = new HexFormatter(1, 65535);
+    private IntegerFormatter mDecimalFormatter = new IntegerFormatter(1, 999999);
+    private HexFormatter mHexFormatter = new HexFormatter(1, 999999);
 
     /**
      * Constructs an instance
@@ -466,12 +466,12 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
         if(format == IntegerFormat.DECIMAL)
         {
             mTalkgroupTextFormatter = mDecimalFormatter;
-            getTalkgroupField().setTooltip(new Tooltip("1 - 65,535"));
+            getTalkgroupField().setTooltip(new Tooltip("1 - 999,999"));
         }
         else
         {
             mTalkgroupTextFormatter = mDecimalFormatter;
-            getTalkgroupField().setTooltip(new Tooltip("1 - FFFF"));
+            getTalkgroupField().setTooltip(new Tooltip("1 - F423F"));
         }
 
         mTalkgroupTextFormatter.setValue(value);
