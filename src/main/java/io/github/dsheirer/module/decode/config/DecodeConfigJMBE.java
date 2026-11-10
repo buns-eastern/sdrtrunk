@@ -6,6 +6,8 @@ public abstract class DecodeConfigJMBE extends DecodeConfiguration
 {
     public static float DEFAULT_COMFORT_NOISE_GAIN = 0.05f;
     public static float DEFAULT_TONE_GAIN = 1.0f;
+    public static final float DEFAULT_AUDIO_BOOST = 1.0f;
+    public static final float MAXIMUM_AUDIO_BOOST = 2.0f;
     private boolean mAGC = true;
     private boolean mLegacyToneLevels;
 
@@ -102,6 +104,38 @@ public abstract class DecodeConfigJMBE extends DecodeConfiguration
         else
         {
             mComfortNoiseGain = gain;
+        }
+    }
+
+    private float mAudioBoost = DEFAULT_AUDIO_BOOST;
+
+    /**
+     * Audio boost applied to decoded voice audio when a JMBE 2.x library is in use.
+     * @return boost multiplier in range 1.0 (no change) to 2.0 (double the signal level, +6 dB).
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "jmbeAudioBoost", namespace = "http://www.w3.org/2001/XMLSchema-instance")
+    public float getAudioBoost()
+    {
+        return mAudioBoost;
+    }
+
+    /**
+     * Sets the audio boost applied to decoded voice audio when a JMBE 2.x library is in use.
+     * @param boost multiplier, limited to the range 1.0 to 2.0
+     */
+    public void setAudioBoost(float boost)
+    {
+        if(Float.isNaN(boost) || boost < DEFAULT_AUDIO_BOOST)
+        {
+            mAudioBoost = DEFAULT_AUDIO_BOOST;
+        }
+        else if(boost > MAXIMUM_AUDIO_BOOST)
+        {
+            mAudioBoost = MAXIMUM_AUDIO_BOOST;
+        }
+        else
+        {
+            mAudioBoost = boost;
         }
     }
 }

@@ -23,6 +23,7 @@ import com.google.common.eventbus.Subscribe;
 import io.github.dsheirer.alias.AliasList;
 import io.github.dsheirer.audio.AbstractAudioModule;
 import io.github.dsheirer.audio.squelch.ISquelchStateListener;
+import io.github.dsheirer.dsp.gain.NonClippingGain;
 import io.github.dsheirer.eventbus.MyEventBus;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.message.IMessageListener;
@@ -60,6 +61,8 @@ public abstract class JmbeAudioModule extends AbstractAudioModule implements Lis
     private final UserPreferences mUserPreferences;
     //Loaded JMBE library classes, keyed by library path, so that IMBE and AMBE audio can use different libraries.
     private static final Map<Path,Class> sLoadedJmbeAudioConverterClasses = new ConcurrentHashMap<>();
+    //Optional audio boost for JMBE 2.x decoded audio.  Null when no boost is applied.
+    private NonClippingGain mAudioBoostGain;
 
     public JmbeAudioModule(UserPreferences userPreferences, AliasList aliasList, int timeslot)
     {
@@ -86,6 +89,39 @@ public abstract class JmbeAudioModule extends AbstractAudioModule implements Lis
     protected boolean isJmbeVersion2()
     {
         return getAudioCodec() instanceof IAudioCodecV2;
+    }
+
+    /**
+     * Sets the audio boost applied to decoded voice audio.  The boost only takes effect when a JMBE 2.x library is
+     * loaded.  Version 1.x libraries keep their original fixed gain stages unchanged.
+     * @param boost multiplier, 1.0 (no change) to 2.0 (double the signal level, +6 dB)
+     */
+    public void setAudioBoost(float boost)
+    {
+        if(boost > 1.0f)
+        {
+            mAudioBoostGain = new NonClippingGain(Math.min(boost, 2.0f), 0.95f);
+        }
+        else
+        {
+            mAudioBoostGain = null;
+        }
+    }
+
+    /**
+     * Applies the optional audio boost to JMBE 2.x decoded audio before adding it to the current audio segment.
+     */
+    @Override
+    public void addAudio(float[] audioBuffer)
+    {
+        NonClippingGain boost = mAudioBoostGain;
+
+        if(boost != null && audioBuffer != null && isJmbeVersion2())
+        {
+            boost.apply(audioBuffer);
+        }
+
+        super.addAudio(audioBuffer);
     }
 
     /**

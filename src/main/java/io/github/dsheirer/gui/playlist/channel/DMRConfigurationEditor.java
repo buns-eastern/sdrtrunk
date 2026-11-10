@@ -26,6 +26,7 @@ import io.github.dsheirer.gui.playlist.source.FrequencyEditor;
 import io.github.dsheirer.gui.playlist.source.FrequencyField;
 import io.github.dsheirer.gui.playlist.source.SourceConfigurationEditor;
 import io.github.dsheirer.module.decode.DecoderType;
+import io.github.dsheirer.module.decode.config.DecodeConfigJMBE;
 import io.github.dsheirer.module.decode.config.AuxDecodeConfiguration;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
 import io.github.dsheirer.module.decode.dmr.DecodeConfigDMR;
@@ -221,7 +222,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(editorBox);
 
             row++;
-            addAudioControls(gridPane, row, "AMBE Audio", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
+            addAudioControls(gridPane, row, "P25 Phase 2 | DMR | NXDN", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
                 getJmbeToneGainSlider(), getLegacyToneLevelsButton());
 
             mDecoderPane.setContent(gridPane);
@@ -779,6 +780,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
         getJmbeAGCButton().setDisable(disable);
         getJmbeNoiseGainSlider().setDisable(disable);
         getJmbeToneGainSlider().setDisable(disable);
+        getJmbeAudioBoostSlider().setDisable(disable);
         getLegacyToneLevelsButton().setDisable(disable);
 
         if(config instanceof DecodeConfigDMR)
@@ -799,6 +801,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
             getJmbeAGCButton().setSelected(decodeConfig.isAGC());
             getJmbeNoiseGainSlider().setValue(decodeConfig.getComfortNoiseGain());
             getJmbeToneGainSlider().setValue(decodeConfig.getToneGain());
+            getJmbeAudioBoostSlider().setValue(decodeConfig.getAudioBoost());
             getLegacyToneLevelsButton().setSelected(decodeConfig.isLegacyToneLevels());
         }
         else
@@ -812,6 +815,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
             getJmbeAGCButton().setSelected(false);
             getJmbeNoiseGainSlider().setValue(0);
             getJmbeToneGainSlider().setValue(0);
+            getJmbeAudioBoostSlider().setValue(DecodeConfigJMBE.DEFAULT_AUDIO_BOOST);
             getLegacyToneLevelsButton().setSelected(false);
         }
     }
@@ -839,6 +843,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
         config.setAGC(getJmbeAGCButton().selectedProperty().getValue());
         config.setComfortNoiseGain((float)getJmbeNoiseGainSlider().getValue());
         config.setToneGain((float)getJmbeToneGainSlider().getValue());
+        config.setAudioBoost((float)getJmbeAudioBoostSlider().getValue());
         config.setLegacyToneLevels(getLegacyToneLevelsButton().isSelected());
         getItem().setDecodeConfiguration(config);
     }

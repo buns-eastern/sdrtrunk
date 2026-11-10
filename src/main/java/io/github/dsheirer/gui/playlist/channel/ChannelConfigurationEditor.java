@@ -50,6 +50,7 @@ import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
@@ -58,6 +59,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Separator;
 import javafx.scene.control.Slider;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
@@ -83,6 +85,7 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class ChannelConfigurationEditor extends Editor<Channel>
 {
+    private Slider mJmbeAudioBoostSlider;
     private final static Logger mLog = LoggerFactory.getLogger(ChannelConfigurationEditor.class);
 
     private PlaylistManager mPlaylistManager;
@@ -689,49 +692,99 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
     }
 
     /**
-     * Adds the JMBE audio controls to the decoder grid as a nested grid so that they don't have to align with the
-     * columns of the decoder rows above them, and keeps column 3 of the decoder grid as the growing column.
-     * @param gridPane decoder grid
-     * @param row in the decoder grid
-     * @param title label for the audio controls
-     * @param noiseGainSlider for comfort noise insertion gain
-     * @param agcSwitch for automatic gain control
-     * @param toneGainSlider for tone generation gain
-     * @param legacyToneLevelsSwitch for legacy tone levels
+     * Adds the AMBE audio section (JMBE 2.x settings) to the grid pane, separated from the decoder settings above it.
+     * @param gridPane to add the section to
+     * @param row in the grid pane
+     * @param appliesTo description of the channels the settings apply to
+     * @param noiseGainSlider comfort noise volume
+     * @param agcSwitch automatic gain control
+     * @param toneGainSlider tone volume
+     * @param legacyToneLevelsSwitch legacy tone levels
      */
-    protected void addAudioControls(GridPane gridPane, int row, String title, Slider noiseGainSlider,
+    protected void addAudioControls(GridPane gridPane, int row, String appliesTo, Slider noiseGainSlider,
                                     ToggleSwitch agcSwitch, Slider toneGainSlider, ToggleSwitch legacyToneLevelsSwitch)
     {
+        Label titleLabel = new Label("AMBE Audio");
+        titleLabel.setStyle("-fx-font-weight: bold;");
+        Label appliesToLabel = new Label(appliesTo);
+        appliesToLabel.setWrapText(true);
+        Label noteLabel = new Label("JMBE 2.x only");
+        noteLabel.setOpacity(0.7);
+        VBox headingBox = new VBox(4, titleLabel, appliesToLabel, noteLabel);
+        headingBox.setMinWidth(170);
+        headingBox.setPrefWidth(170);
+        headingBox.setMaxWidth(170);
+
         GridPane audioPane = new GridPane();
         audioPane.setHgap(10);
         audioPane.setVgap(10);
 
-        audioPane.add(new Label(title), 0, 0);
         Label noiseGainLabel = new Label("Comfort Noise Volume:");
         GridPane.setHalignment(noiseGainLabel, HPos.RIGHT);
-        audioPane.add(noiseGainLabel, 1, 0);
-        audioPane.add(createSliderWithReset(noiseGainSlider, DecodeConfigJMBE.DEFAULT_COMFORT_NOISE_GAIN), 2, 0);
+        audioPane.add(noiseGainLabel, 0, 0);
+        audioPane.add(createSliderWithReset(noiseGainSlider, DecodeConfigJMBE.DEFAULT_COMFORT_NOISE_GAIN), 1, 0);
         Label agcLabel = new Label("AGC:");
         agcLabel.setTooltip(agcSwitch.getTooltip());
         GridPane.setHalignment(agcLabel, HPos.RIGHT);
-        audioPane.add(agcLabel, 3, 0);
-        audioPane.add(agcSwitch, 4, 0);
+        audioPane.add(agcLabel, 2, 0);
+        audioPane.add(agcSwitch, 3, 0);
 
         Label toneGainLabel = new Label("Tone Volume:");
         GridPane.setHalignment(toneGainLabel, HPos.RIGHT);
-        audioPane.add(toneGainLabel, 1, 1);
-        audioPane.add(createSliderWithReset(toneGainSlider, DecodeConfigJMBE.DEFAULT_TONE_GAIN), 2, 1);
+        audioPane.add(toneGainLabel, 0, 1);
+        audioPane.add(createSliderWithReset(toneGainSlider, DecodeConfigJMBE.DEFAULT_TONE_GAIN), 1, 1);
         Label legacyToneLevelsLabel = new Label("Use Legacy Tone Levels:");
         legacyToneLevelsLabel.setTooltip(legacyToneLevelsSwitch.getTooltip());
         GridPane.setHalignment(legacyToneLevelsLabel, HPos.RIGHT);
-        audioPane.add(legacyToneLevelsLabel, 3, 1);
-        audioPane.add(legacyToneLevelsSwitch, 4, 1);
+        audioPane.add(legacyToneLevelsLabel, 2, 1);
+        audioPane.add(legacyToneLevelsSwitch, 3, 1);
+
+        Label audioBoostLabel = new Label("Audio Boost:");
+        audioBoostLabel.setTooltip(getJmbeAudioBoostSlider().getTooltip());
+        GridPane.setHalignment(audioBoostLabel, HPos.RIGHT);
+        audioPane.add(audioBoostLabel, 0, 2);
+        HBox audioBoostBox = createSliderWithReset(getJmbeAudioBoostSlider(), DecodeConfigJMBE.DEFAULT_AUDIO_BOOST);
+        Label decibelLabel = new Label();
+        decibelLabel.textProperty().bind(Bindings.createStringBinding(() -> String.format("(+%.1f dB)",
+            20.0 * Math.log10(Math.max(1.0, getJmbeAudioBoostSlider().getValue()))),
+            getJmbeAudioBoostSlider().valueProperty()));
+        decibelLabel.disableProperty().bind(getJmbeAudioBoostSlider().disableProperty());
+        decibelLabel.setMinWidth(Region.USE_PREF_SIZE);
+        audioBoostBox.getChildren().add(2, decibelLabel);
+        audioPane.add(audioBoostBox, 1, 2);
+
+        ColumnConstraints sliderColumn = new ColumnConstraints();
+        sliderColumn.setHgrow(Priority.ALWAYS);
+        audioPane.getColumnConstraints().addAll(new ColumnConstraints(), sliderColumn);
+
+        HBox sectionBox = new HBox(14, headingBox, new Separator(Orientation.VERTICAL), audioPane);
+        HBox.setHgrow(audioPane, Priority.ALWAYS);
+        VBox section = new VBox(10, new Separator(Orientation.HORIZONTAL), sectionBox);
 
         ColumnConstraints growColumn = new ColumnConstraints();
         growColumn.setHgrow(Priority.ALWAYS);
         gridPane.getColumnConstraints().addAll(new ColumnConstraints(), new ColumnConstraints(), new ColumnConstraints(),
             growColumn);
-        gridPane.add(audioPane, 0, row, 6, 1);
+        gridPane.add(section, 0, row, 6, 1);
+    }
+
+    /**
+     * Audio boost for JMBE 2.x decoded voice audio.
+     * @return slider with range 1.0 (no change) to 2.0 (double the signal level, +6 dB).
+     */
+    protected Slider getJmbeAudioBoostSlider()
+    {
+        if(mJmbeAudioBoostSlider == null)
+        {
+            mJmbeAudioBoostSlider = new Slider(DecodeConfigJMBE.DEFAULT_AUDIO_BOOST, DecodeConfigJMBE.MAXIMUM_AUDIO_BOOST,
+                DecodeConfigJMBE.DEFAULT_AUDIO_BOOST);
+            mJmbeAudioBoostSlider.setTooltip(new Tooltip("Raises the volume of decoded voice audio. 1.00 = no change. " +
+                "2.00 = double the signal level (+6 dB)."));
+            mJmbeAudioBoostSlider.setDisable(true);
+            mJmbeAudioBoostSlider.valueProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+        }
+
+        return mJmbeAudioBoostSlider;
     }
 
     /**

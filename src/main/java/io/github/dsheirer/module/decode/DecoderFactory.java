@@ -671,6 +671,8 @@ public class DecoderFactory
         {
             audioModule.setFeature(IAudioCodecV2.FEATURE_TONE_GENERATOR_GAIN, config.getToneGain());
         }
+        //Audio boost is applied by the audio module itself and only takes effect with a JMBE 2.x library
+        audioModule.setAudioBoost(config.getAudioBoost());
     }
 
     /**
@@ -1133,5 +1135,6 @@ public class DecoderFactory
         to.setComfortNoiseGain(from.getComfortNoiseGain());
         to.setToneGain(from.getToneGain());
         to.setLegacyToneLevels(from.isLegacyToneLevels());
+        to.setAudioBoost(from.getAudioBoost());
     }
 }
