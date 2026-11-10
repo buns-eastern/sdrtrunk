@@ -19,6 +19,7 @@
 
 package io.github.dsheirer.module.decode.dcs;
 
+import io.github.dsheirer.module.decode.IAuxiliaryDecoder;
 import io.github.dsheirer.dsp.filter.FilterFactory;
 import io.github.dsheirer.dsp.filter.design.FilterDesignException;
 import io.github.dsheirer.dsp.filter.fir.FIRFilterSpecification;
@@ -44,7 +45,7 @@ import org.slf4j.LoggerFactory;
  * a full DCS tone sequence is 23 bits * 59.52 samples/bit = 1369 samples.  The DCS tone sequence is continuously
  * transmitted at a rate of 134.4 bits-per-second / 23 = 5.84 repeats per second while the source continues transmitting.
  */
-public class DCSDecoder extends Decoder implements IRealBufferListener, Listener<float[]>
+public class DCSDecoder extends Decoder implements IRealBufferListener, Listener<float[]>, IAuxiliaryDecoder
 {
     private static final Logger mLog = LoggerFactory.getLogger(DCSDecoder.class);
     //Slope calculation sumXX value is always the same for 59 evenly spaced samples

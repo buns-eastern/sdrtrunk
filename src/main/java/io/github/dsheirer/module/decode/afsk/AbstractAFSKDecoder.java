@@ -18,6 +18,7 @@
  */
 package io.github.dsheirer.module.decode.afsk;
 
+import io.github.dsheirer.module.decode.IAuxiliaryDecoder;
 import io.github.dsheirer.dsp.afsk.AFSK1200Decoder;
 import io.github.dsheirer.module.decode.Decoder;
 import io.github.dsheirer.sample.Listener;
@@ -30,7 +31,7 @@ import io.github.dsheirer.sample.real.IRealBufferListener;
  *
  * Sub-class implementations should invoke getDecoder().setListener() to receive decoded symbol stream.
  */
-public abstract class AbstractAFSKDecoder extends Decoder implements IRealBufferListener, Listener<float[]>
+public abstract class AbstractAFSKDecoder extends Decoder implements IRealBufferListener, Listener<float[]>, IAuxiliaryDecoder
 {
     private AFSK1200Decoder mAFSK1200Decoder;
 

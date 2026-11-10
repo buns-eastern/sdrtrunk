@@ -45,6 +45,7 @@ import io.github.dsheirer.module.decode.dcs.DCSCode;
 import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.sample.complex.ComplexSamples;
 import io.github.dsheirer.sample.complex.IComplexSamplesListener;
+import io.github.dsheirer.sample.real.IAuxiliaryAudioProvider;
 import io.github.dsheirer.sample.real.IRealBufferProvider;
 import io.github.dsheirer.source.ISourceEventListener;
 import io.github.dsheirer.source.SourceEvent;
@@ -73,7 +74,7 @@ import java.util.Set;
  * the trailing noise burst that occurs when a transmitter drops carrier.
  */
 public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventListener, IComplexSamplesListener,
-        Listener<ComplexSamples>, IRealBufferProvider, IDecoderStateEventProvider, INoiseSquelchController
+        Listener<ComplexSamples>, IRealBufferProvider, IAuxiliaryAudioProvider, IDecoderStateEventProvider, INoiseSquelchController
 {
     private final static Logger mLog = LoggerFactory.getLogger(NBFMDecoder.class);
 
@@ -87,6 +88,7 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
     private IRealDecimationFilter mIDecimationFilter;
     private IRealDecimationFilter mQDecimationFilter;
     private Listener<float[]> mResampledBufferListener;
+    private Listener<float[]> mAuxiliaryAudioListener;
     private Listener<DecoderStateEvent> mDecoderStateEventListener;
     private RealResampler mResampler;
     private final double mChannelBandwidth;
@@ -448,6 +450,15 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
      */
     private void processResampledAudio(float[] resampledAudio)
     {
+        // Step 0: Auxiliary decoders (MDC-1200, Fleetsync, etc.) receive a copy of the unprocessed audio, ahead of
+        //         the tone gate, audio filters and head/tail trimming, so their data bursts reach them intact.
+        Listener<float[]> auxiliaryAudioListener = mAuxiliaryAudioListener;
+
+        if(auxiliaryAudioListener != null)
+        {
+            auxiliaryAudioListener.receive(resampledAudio.clone());
+        }
+
         // Step 1: Feed audio to the active tone/code detector for analysis
         if(mCTCSSDetector != null)
         {
@@ -501,6 +512,16 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
     public void removeBufferListener()
     {
         mResampledBufferListener = null;
+    }
+
+    /**
+     * Implements the IAuxiliaryAudioProvider interface to register a listener for unprocessed demodulated audio.
+     * @param listener to receive the audio, or null to stop the feed.
+     */
+    @Override
+    public void setAuxiliaryAudioListener(Listener<float[]> listener)
+    {
+        mAuxiliaryAudioListener = listener;
     }
 
     /**
