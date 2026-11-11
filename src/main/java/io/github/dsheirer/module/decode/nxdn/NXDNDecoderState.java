@@ -22,6 +22,7 @@ package io.github.dsheirer.module.decode.nxdn;
 import io.github.dsheirer.channel.state.ChangeChannelTimeoutEvent;
 import io.github.dsheirer.channel.state.DecoderState;
 import io.github.dsheirer.channel.state.DecoderStateEvent;
+import io.github.dsheirer.channel.state.SingleChannelState;
 import io.github.dsheirer.channel.state.State;
 import io.github.dsheirer.controller.channel.Channel;
 import io.github.dsheirer.identifier.Form;
@@ -91,6 +92,17 @@ public class NXDNDecoderState extends DecoderState
     private boolean mEncryptedCall = false;
     private int mDisconnectResponseCount = 0;
     private int mIdleDuringCallCount = IDLE_DURING_CALL_MAX_COUNT;
+
+    /**
+     * Call hold: once voice audio is flowing, the channel state stays in CALL (so the audio segment, recording and
+     * PCM feed stay open) until the call actually ends - a transmission release or disconnect, or no voice audio for
+     * longer than the channel fade timeout.  Other messages during the call no longer close the audio for a moment
+     * and split one call into two recordings.  When the hold times out, the call event is ended at the same time, so
+     * Events and the audio always split in the same place.
+     */
+    private static final long CALL_HOLD_MS = SingleChannelState.FADE_TIMEOUT_DELAY;
+    private long mLastCallActivityTimestamp = 0;
+    private State mCallState = State.CALL;
 
     /**
      * Constructs an instance
@@ -192,6 +204,8 @@ public class NXDNDecoderState extends DecoderState
 
         if(iMessage instanceof NXDNMessage nxdn && nxdn.isValid())
         {
+            checkCallHoldTimeout(nxdn.getTimestamp());
+
             if(nxdn instanceof NXDNLayer3Message layer3)
             {
                 processLayer3(layer3);
@@ -339,6 +353,7 @@ public class NXDNDecoderState extends DecoderState
             case TRAFFIC_OUT_08_CC_TRANSMISSION_RELEASE:
             case TYPE_D_OUT_08_CC_TRANSMISSION_RELEASE:
                 mTrafficChannelManager.processEndCall(getCurrentChannel(), layer3.getTimestamp());
+                releaseCallHold();
                 mEncryptedCallStateDetermined = false;
                 mEncryptedCall = false;
                 mIdleDuringCallCount = IDLE_DURING_CALL_MAX_COUNT;
@@ -419,6 +434,7 @@ public class NXDNDecoderState extends DecoderState
             case TRAFFIC_OUT_17_CC_DISCONNECT:
             case TYPE_D_OUT_17_CC_DISCONNECT:
                 mTrafficChannelManager.processEndCall(getCurrentChannel(), layer3.getTimestamp());
+                releaseCallHold();
                 mEncryptedCallStateDetermined = false;
                 mEncryptedCall = false;
                 getIdentifierCollection().remove(IdentifierClass.USER);
@@ -719,6 +735,7 @@ public class NXDNDecoderState extends DecoderState
     private void processAudio(Audio audio)
     {
         mIdleDuringCallCount = 0;
+        mLastCallActivityTimestamp = audio.getTimestamp();
         State state = State.CALL;
 
         if(mEncryptedCallStateDetermined && mEncryptedCall)
@@ -726,9 +743,73 @@ public class NXDNDecoderState extends DecoderState
             state = State.ENCRYPTED;
         }
 
+        mCallState = state;
+
         mTrafficChannelManager.processCallProgressUpdate(getCurrentChannel(), audio.getTimestamp());
 
         broadcast(new DecoderStateEvent(this, DecoderStateEvent.Event.CONTINUATION, state));
+    }
+
+    @Override
+    protected void resetState()
+    {
+        super.resetState();
+        releaseCallHold();
+    }
+
+    /**
+     * Releases the call hold when the call ends so the channel state (and audio) can follow.
+     */
+    private void releaseCallHold()
+    {
+        mLastCallActivityTimestamp = 0;
+        mCallState = State.CALL;
+    }
+
+    /**
+     * Ends the call hold when there's been no voice audio for longer than the hold time.  The call event is ended at
+     * the time of the last audio and the channel state is set to ACTIVE so the audio segment closes with it.
+     * @param timestamp of the message being processed
+     */
+    private void checkCallHoldTimeout(long timestamp)
+    {
+        if(mLastCallActivityTimestamp > 0 && timestamp - mLastCallActivityTimestamp > CALL_HOLD_MS)
+        {
+            long lastActivity = mLastCallActivityTimestamp;
+            releaseCallHold();
+
+            if(hasTrafficChannelManager())
+            {
+                mTrafficChannelManager.processEndCall(getCurrentChannel(), lastActivity);
+            }
+
+            super.broadcast(new DecoderStateEvent(this, DecoderStateEvent.Event.CONTINUATION, State.ACTIVE));
+        }
+    }
+
+    /**
+     * Holds the CALL (or ENCRYPTED) state while voice audio is flowing.  Any other activity state reported during the
+     * call is reported as a continuation of the call instead, so that the audio segment isn't closed early.  The
+     * hold ends when the call ends (transmission release, disconnect) or times out.
+     */
+    @Override
+    protected void broadcast(DecoderStateEvent event)
+    {
+        if(mLastCallActivityTimestamp > 0 &&
+           event.getSource() == this &&
+           event.getState() != State.CALL &&
+           event.getState() != State.ENCRYPTED &&
+           (event.getEvent() == DecoderStateEvent.Event.CONTINUATION ||
+            event.getEvent() == DecoderStateEvent.Event.DECODE ||
+            event.getEvent() == DecoderStateEvent.Event.START) &&
+           (event.getState() == State.ACTIVE || event.getState() == State.DATA || event.getState() == State.CONTROL ||
+            event.getState() == State.IDLE))
+        {
+            super.broadcast(new DecoderStateEvent(this, DecoderStateEvent.Event.CONTINUATION, mCallState));
+            return;
+        }
+
+        super.broadcast(event);
     }
 
     /**

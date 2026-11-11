@@ -21,6 +21,7 @@ package io.github.dsheirer.module.decode.dmr;
 import com.google.common.eventbus.Subscribe;
 import io.github.dsheirer.channel.state.ChangeChannelTimeoutEvent;
 import io.github.dsheirer.channel.state.DecoderStateEvent;
+import io.github.dsheirer.channel.state.MultiChannelState;
 import io.github.dsheirer.channel.state.DecoderStateEvent.Event;
 import io.github.dsheirer.channel.state.State;
 import io.github.dsheirer.channel.state.TimeslotDecoderState;
@@ -128,6 +129,18 @@ public class DMRDecoderState extends TimeslotDecoderState
     private DMRNetworkConfigurationMonitor mNetworkConfigurationMonitor;
     private DMRTrafficChannelManager mTrafficChannelManager;
     private DecodeEvent mCurrentCallEvent;
+
+    /**
+     * Call hold: once a call is underway, the channel state stays in CALL (so the audio segment, recording and PCM
+     * feed stay open) until the call actually ends - a terminator, slot idle, or no call activity (voice or call
+     * link control) for longer than the channel fade timeout.  Other bursts during the call (unknown or damaged
+     * bursts, empty timeslot placeholders, stray data or CSBK) no longer close the audio for a moment and split one
+     * call into two recordings.  When the hold times out, the call event is closed at the same time, so Events and
+     * the audio always split in the same place.
+     */
+    private static final long CALL_HOLD_MS = MultiChannelState.FADE_TIMEOUT_DELAY;
+    private long mLastCallActivityTimestamp = 0;
+    private State mCallState = State.CALL;
     private boolean mIgnoreCRCChecksums;
     private Listener<IMessage> mRawStreamListener;
     private DMRDecoderState mSisterDecoderState;
@@ -288,7 +301,7 @@ public class DMRDecoderState extends TimeslotDecoderState
     protected void resetState()
     {
         super.resetState();
-        closeCurrentCallEvent(System.currentTimeMillis());
+        closeCurrentCallEvent(mLastCallActivityTimestamp > 0 ? mLastCallActivityTimestamp : System.currentTimeMillis());
     }
 
     /**
@@ -314,6 +327,8 @@ public class DMRDecoderState extends TimeslotDecoderState
 
         if(message.getTimeslot() == getTimeslot())
         {
+            checkCallHoldTimeout(message.getTimestamp());
+
             if(mRawStreamListener != null
                     && isValid(message)
                     && !(message instanceof VoiceMessage)
@@ -591,6 +606,8 @@ public class DMRDecoderState extends TimeslotDecoderState
      */
     private void processVoice(VoiceMessage message)
     {
+        mLastCallActivityTimestamp = message.getTimestamp();
+
         if(message.getSyncPattern().isMobileSyncPattern())
         {
             if(message.getSyncPattern().isDirect())
@@ -604,6 +621,7 @@ public class DMRDecoderState extends TimeslotDecoderState
         }
         else
         {
+            mCallState = State.CALL;
             broadcast(new DecoderStateEvent(this, Event.CONTINUATION, State.CALL, getTimeslot()));
         }
 
@@ -1403,6 +1421,7 @@ public class DMRDecoderState extends TimeslotDecoderState
      */
     private void updateCurrentCall(DecodeEventType type, String details, long timestamp)
     {
+        mLastCallActivityTimestamp = Math.max(mLastCallActivityTimestamp, timestamp);
         Event event = (mCurrentCallEvent == null ? Event.START : Event.CONTINUATION);
 
         //Create a repeater channel descriptor if we don't have one
@@ -1435,12 +1454,54 @@ public class DMRDecoderState extends TimeslotDecoderState
 
         if(type == DecodeEventType.CALL_GROUP_ENCRYPTED || type == DecodeEventType.CALL_UNIT_TO_UNIT_ENCRYPTED)
         {
+            mCallState = State.ENCRYPTED;
             broadcast(new DecoderStateEvent(this, event, State.ENCRYPTED, getTimeslot()));
         }
         else
         {
+            mCallState = State.CALL;
             broadcast(new DecoderStateEvent(this, event, State.CALL, getTimeslot()));
         }
+    }
+
+    /**
+     * Ends the call hold when there's been no call activity for longer than the hold time.  The call event is closed
+     * at the time of the last call activity and the channel state is set to ACTIVE so the audio segment closes
+     * with it.
+     * @param timestamp of the message being processed
+     */
+    private void checkCallHoldTimeout(long timestamp)
+    {
+        if(mLastCallActivityTimestamp > 0 && timestamp - mLastCallActivityTimestamp > CALL_HOLD_MS)
+        {
+            long lastActivity = mLastCallActivityTimestamp;
+            closeCurrentCallEvent(lastActivity);
+            super.broadcast(new DecoderStateEvent(this, Event.CONTINUATION, State.ACTIVE, getTimeslot()));
+        }
+    }
+
+    /**
+     * Holds the CALL (or ENCRYPTED) state while a call is underway.  Any other activity state reported during the
+     * call is reported as a continuation of the call instead, so that the audio segment isn't closed early.  The
+     * hold ends when the call ends (terminator, slot idle, link control terminator) or times out.
+     */
+    @Override
+    protected void broadcast(DecoderStateEvent event)
+    {
+        if(mLastCallActivityTimestamp > 0 &&
+           event.getSource() == this &&
+           event.getTimeslot() == getTimeslot() &&
+           event.getState() != State.CALL &&
+           event.getState() != State.ENCRYPTED &&
+           (event.getEvent() == Event.CONTINUATION || event.getEvent() == Event.DECODE || event.getEvent() == Event.START) &&
+           (event.getState() == State.ACTIVE || event.getState() == State.DATA || event.getState() == State.CONTROL ||
+            event.getState() == State.IDLE))
+        {
+            super.broadcast(new DecoderStateEvent(this, Event.CONTINUATION, mCallState, getTimeslot()));
+            return;
+        }
+
+        super.broadcast(event);
     }
 
     /**
@@ -1450,6 +1511,10 @@ public class DMRDecoderState extends TimeslotDecoderState
      */
     private void closeCurrentCallEvent(long timestamp)
     {
+        //The call is over - release the call hold so the channel state (and audio) can follow
+        mLastCallActivityTimestamp = 0;
+        mCallState = State.CALL;
+
         if(mCurrentCallEvent != null)
         {
             mCurrentCallEvent.end(timestamp);
