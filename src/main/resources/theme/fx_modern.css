@@ -1,0 +1,582 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2014-2026 Dennis Sheirer
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+/* Shared look for the JavaFX windows (playlist editor and friends). Colors come from the theme file
+   (fx_<theme>.css) loaded before this one, so every rule here works in every theme. */
+
+.root {
+    -fx-background-color: -st-bg;
+}
+
+.label {
+    -fx-text-fill: -st-text;
+}
+
+/* Menu bar */
+.menu-bar {
+    -fx-background-color: -st-border, -st-surface2;
+    -fx-background-insets: 0, 0 0 1 0;
+}
+
+.menu-bar > .container > .menu-button {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-padding: 0;
+}
+
+.menu-bar > .container > .menu-button:hover,
+.menu-bar > .container > .menu-button:focused,
+.menu-bar > .container > .menu-button:showing {
+    -fx-background-color: -st-select;
+}
+
+.menu-bar > .container > .menu-button > .label {
+    -fx-text-fill: -st-text;
+    -fx-padding: 4 10 4 10;
+}
+
+/* Tabs: flat, with an accent underline on the open tab */
+.tab-pane > .tab-header-area {
+    -fx-padding: 2 10 0 10;
+}
+
+.tab-pane > .tab-header-area > .tab-header-background {
+    -fx-background-color: -st-border, -st-surface2;
+    -fx-background-insets: 0, 0 0 1 0;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0 0 2 0;
+    -fx-padding: 5 12 4 12;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:hover {
+    -fx-background-color: -st-hover;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected {
+    -fx-border-color: -st-accent;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab > .tab-container > .tab-label {
+    -fx-text-fill: -st-muted;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected > .tab-container > .tab-label {
+    -fx-text-fill: -st-text;
+}
+
+.tab-pane:focused > .tab-header-area > .headers-region > .tab:selected .focus-indicator {
+    -fx-border-color: transparent;
+}
+
+/* Buttons */
+.button, .menu-button, .toggle-button, .split-menu-button {
+    -fx-background-color: -st-border, -st-surface2;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 5, 4;
+    -fx-text-fill: -st-text;
+    -fx-padding: 5 12 5 12;
+}
+
+.button:hover, .menu-button:hover, .toggle-button:hover, .split-menu-button:hover {
+    -fx-background-color: -st-border, -st-hover;
+}
+
+.button:focused, .menu-button:focused, .toggle-button:focused {
+    -fx-background-color: -st-accent, -st-surface2;
+}
+
+.menu-button {
+    -fx-padding: 0;
+}
+
+.menu-button > .label {
+    -fx-padding: 5 4 5 12;
+}
+
+.menu-button > .arrow-button {
+    -fx-padding: 5 12 5 4;
+}
+
+.menu-button > .arrow-button > .arrow {
+    -fx-background-color: -st-text;
+}
+
+.button.st-primary, .menu-button.st-primary {
+    -fx-background-color: -st-accent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 5;
+    -fx-text-fill: -st-on-accent;
+    -fx-font-weight: bold;
+}
+
+.menu-button.st-primary > .label {
+    -fx-text-fill: -st-on-accent;
+}
+
+.menu-button.st-primary > .arrow-button > .arrow {
+    -fx-background-color: -st-on-accent;
+}
+
+.button.st-primary:hover, .menu-button.st-primary:hover,
+.button.st-primary:focused, .menu-button.st-primary:focused {
+    -fx-background-color: -st-text, -st-accent;
+    -fx-background-insets: 0, 1;
+}
+
+.button.st-danger {
+    -fx-background-color: -st-danger, -st-surface;
+    -fx-text-fill: -st-danger;
+}
+
+.button.st-danger:hover, .button.st-danger:focused {
+    -fx-background-color: -st-danger, -st-hover;
+}
+
+.button.st-ok {
+    -fx-background-color: -st-ok, -st-surface;
+    -fx-text-fill: -st-ok;
+}
+
+.button.st-ok:hover, .button.st-ok:focused {
+    -fx-background-color: -st-ok, -st-hover;
+}
+
+/* Toggle buttons and segmented buttons (channel view filter) */
+.toggle-button:selected {
+    -fx-background-color: -st-border, -st-accent-soft;
+    -fx-text-fill: -st-text;
+    -fx-font-weight: bold;
+}
+
+.segmented-button .toggle-button {
+    -fx-background-radius: 0;
+    -fx-background-insets: 0, 1 0 1 1;
+    -fx-text-fill: -st-muted;
+}
+
+.segmented-button .toggle-button:selected {
+    -fx-text-fill: -st-text;
+}
+
+.segmented-button .toggle-button.left-pill {
+    -fx-background-radius: 5 0 0 5, 4 0 0 4;
+}
+
+.segmented-button .toggle-button.right-pill {
+    -fx-background-radius: 0 5 5 0, 0 4 4 0;
+    -fx-background-insets: 0, 1;
+}
+
+.segmented-button .toggle-button.only-button {
+    -fx-background-radius: 5, 4;
+    -fx-background-insets: 0, 1;
+}
+
+/* Text input */
+.text-field, .text-area, .password-field {
+    -fx-background-color: -st-border, -st-input;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 5, 4;
+    -fx-text-fill: -st-text;
+    -fx-prompt-text-fill: -st-muted;
+    -fx-highlight-fill: -st-select;
+    -fx-highlight-text-fill: -st-text;
+}
+
+.text-field:focused, .text-area:focused, .password-field:focused {
+    -fx-background-color: -st-accent, -st-input;
+}
+
+.text-area .content {
+    -fx-background-color: -st-input;
+    -fx-background-radius: 4;
+}
+
+.spinner .text-field, .combo-box-base .text-field, .date-picker .text-field {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+}
+
+/* Combo boxes and spinners */
+.combo-box-base, .spinner, .choice-box {
+    -fx-background-color: -st-border, -st-input;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 5, 4;
+}
+
+.combo-box-base:hover, .choice-box:hover {
+    -fx-background-color: -st-border, -st-hover;
+}
+
+.combo-box-base:focused, .spinner:focused, .choice-box:focused {
+    -fx-background-color: -st-accent, -st-input;
+}
+
+.combo-box-base > .arrow-button, .choice-box > .open-button {
+    -fx-background-color: transparent;
+}
+
+.combo-box-base > .arrow-button > .arrow, .choice-box > .open-button > .arrow,
+.spinner .increment-arrow-button > .increment-arrow, .spinner .decrement-arrow-button > .decrement-arrow {
+    -fx-background-color: -st-muted;
+}
+
+.spinner .increment-arrow-button, .spinner .decrement-arrow-button {
+    -fx-background-color: transparent;
+}
+
+.combo-box-popup > .list-view {
+    -fx-background-color: -st-border, -st-surface;
+    -fx-background-insets: 0, 1;
+}
+
+/* Tables and lists */
+.table-view, .list-view, .tree-view, .tree-table-view {
+    -fx-background-color: -st-border, -st-surface;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 7, 6;
+    -fx-padding: 1;
+}
+
+.table-view:focused, .list-view:focused, .tree-view:focused, .tree-table-view:focused {
+    -fx-background-color: -st-border, -st-surface;
+}
+
+.table-view .column-header-background, .tree-table-view .column-header-background {
+    -fx-background-color: -st-border, -st-surface2;
+    -fx-background-insets: 0, 0 0 1 0;
+    -fx-background-radius: 6 6 0 0;
+}
+
+.table-view .column-header, .tree-table-view .column-header {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-size: 30;
+}
+
+.table-view .column-header .label, .tree-table-view .column-header .label {
+    -fx-text-fill: -st-muted;
+    -fx-font-weight: bold;
+    -fx-font-size: 0.92em;
+    -fx-alignment: center-left;
+    -fx-padding: 0 5 0 5;
+}
+
+.table-view .filler, .tree-table-view .filler {
+    -fx-background-color: transparent;
+}
+
+.table-view .column-header .arrow {
+    -fx-background-color: -st-muted;
+}
+
+.table-row-cell, .tree-table-row-cell {
+    -fx-background-color: -st-border, -st-surface;
+    -fx-background-insets: 0, 0 0 1 0;
+    -fx-cell-size: 28;
+    -fx-border-width: 0 0 0 3;
+    -fx-border-color: transparent;
+}
+
+.table-row-cell:odd, .tree-table-row-cell:odd {
+    -fx-background-color: -st-border, -st-surface-alt;
+}
+
+.table-row-cell:hover, .tree-table-row-cell:hover {
+    -fx-background-color: -st-border, -st-hover;
+}
+
+.table-row-cell:selected, .tree-table-row-cell:selected {
+    -fx-background-color: -st-border, -st-select;
+    -fx-border-color: transparent transparent transparent -st-accent;
+}
+
+.table-row-cell > .table-cell, .tree-table-row-cell > .tree-table-cell {
+    -fx-text-fill: -st-text;
+    -fx-border-color: transparent;
+    -fx-padding: 0 8 0 5;
+}
+
+.table-row-cell:empty, .tree-table-row-cell:empty {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.list-cell {
+    -fx-background-color: -st-surface;
+    -fx-text-fill: -st-text;
+}
+
+.list-cell:odd {
+    -fx-background-color: -st-surface-alt;
+}
+
+.list-cell:filled:hover {
+    -fx-background-color: -st-hover;
+}
+
+.list-cell:filled:selected {
+    -fx-background-color: -st-select;
+    -fx-text-fill: -st-text;
+}
+
+.list-cell:empty {
+    -fx-background-color: transparent;
+}
+
+.combo-box > .list-cell, .combo-box > .list-cell:filled:selected, .combo-box > .list-cell:filled:hover {
+    -fx-background-color: transparent;
+    -fx-text-fill: -st-text;
+}
+
+.table-view .placeholder .label, .list-view .placeholder .label {
+    -fx-text-fill: -st-muted;
+}
+
+/* Collapsible sections become cards */
+.titled-pane {
+    -fx-text-fill: -st-text;
+}
+
+.titled-pane > .title {
+    -fx-background-color: -st-border, -st-surface2;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 7 7 0 0, 6 6 0 0;
+    -fx-padding: 7 12 7 10;
+}
+
+.titled-pane:collapsed > .title {
+    -fx-background-radius: 7, 6;
+}
+
+.titled-pane > .title:hover {
+    -fx-background-color: -st-border, -st-hover;
+}
+
+.titled-pane:focused > .title {
+    -fx-background-color: -st-border, -st-surface2;
+}
+
+.titled-pane > .title > .text {
+    -fx-fill: -st-text;
+    -fx-font-weight: bold;
+}
+
+.titled-pane > .title > .arrow-button > .arrow {
+    -fx-background-color: -st-muted;
+}
+
+.titled-pane > .content {
+    -fx-background-color: -st-border, -st-surface;
+    -fx-background-insets: 0, 0 1 1 1;
+    -fx-background-radius: 0 0 7 7, 0 0 6 6;
+    -fx-border-color: transparent;
+    -fx-padding: 10 12 12 12;
+}
+
+/* Sliders: thin track, ring thumb */
+.slider .track {
+    -fx-background-color: -st-border;
+    -fx-background-insets: 0;
+    -fx-background-radius: 2;
+    -fx-padding: 2;
+}
+
+.slider .thumb {
+    -fx-background-color: -st-accent, -st-surface;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8, 6;
+    -fx-padding: 7;
+}
+
+.slider:hover .thumb, .slider:focused .thumb {
+    -fx-background-color: -st-accent, -st-accent-soft;
+}
+
+/* ControlsFX toggle switches */
+.toggle-switch .thumb-area {
+    -fx-background-color: -st-border;
+    -fx-background-insets: 0;
+    -fx-background-radius: 1em;
+}
+
+.toggle-switch:selected .thumb-area {
+    -fx-background-color: -st-accent;
+}
+
+.toggle-switch .thumb {
+    -fx-background-color: #ffffff;
+    -fx-background-insets: 2;
+    -fx-background-radius: 1em;
+}
+
+.toggle-switch .text {
+    -fx-fill: -st-text;
+}
+
+/* Check boxes and radio buttons */
+.check-box > .box, .radio-button > .radio {
+    -fx-background-color: -st-border, -st-input;
+    -fx-background-insets: 0, 1;
+}
+
+.check-box:selected > .box, .radio-button:selected > .radio {
+    -fx-background-color: -st-accent;
+}
+
+.check-box:selected > .box > .mark, .radio-button:selected > .radio > .dot {
+    -fx-background-color: -st-on-accent;
+}
+
+/* Scroll panes, split panes and separators */
+.scroll-pane, .scroll-pane > .viewport {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+.scroll-bar {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar > .thumb {
+    -fx-background-color: -st-border;
+    -fx-background-insets: 2;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar > .thumb:hover {
+    -fx-background-color: -st-muted;
+}
+
+.scroll-bar > .increment-button, .scroll-bar > .decrement-button {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar > .increment-button > .increment-arrow, .scroll-bar > .decrement-button > .decrement-arrow {
+    -fx-background-color: -st-muted;
+}
+
+.split-pane {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.split-pane > .split-pane-divider {
+    -fx-background-color: -st-border;
+    -fx-padding: 1;
+}
+
+.separator > .line {
+    -fx-border-color: -st-border;
+    -fx-border-width: 1 0 0 0;
+}
+
+.separator:vertical > .line {
+    -fx-border-width: 0 0 0 1;
+}
+
+.tooltip {
+    -fx-background-color: -st-surface2;
+    -fx-background-radius: 5;
+    -fx-text-fill: -st-text;
+    -fx-border-color: -st-border;
+    -fx-border-radius: 5;
+}
+
+/* Menus and context menus */
+.context-menu {
+    -fx-background-color: -st-border, -st-surface;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 5, 4;
+}
+
+.menu-item:focused {
+    -fx-background-color: -st-select;
+}
+
+.menu-item > .label {
+    -fx-text-fill: -st-text;
+}
+
+.menu-item:disabled > .label {
+    -fx-text-fill: -st-muted;
+}
+
+/* Building blocks used by the editors */
+.st-card {
+    -fx-background-color: -st-border, -st-surface;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 7, 6;
+    -fx-padding: 10 12 12 12;
+}
+
+.st-card-title {
+    -fx-font-weight: bold;
+}
+
+.st-title {
+    -fx-font-size: 1.3em;
+    -fx-font-weight: bold;
+}
+
+.st-muted {
+    -fx-text-fill: -st-muted;
+}
+
+.label.st-mono, .table-cell.st-mono {
+    -fx-font-family: "Consolas";
+}
+
+.st-chip {
+    -fx-background-color: -st-accent-soft;
+    -fx-background-radius: 9;
+    -fx-text-fill: -st-accent;
+    -fx-font-weight: bold;
+    -fx-font-size: 0.9em;
+    -fx-padding: 1 8 1 8;
+}
+
+.st-chip-live {
+    -fx-background-color: -st-ok-soft;
+    -fx-text-fill: -st-ok;
+}
+
+.st-pill {
+    -fx-border-color: -st-border;
+    -fx-border-radius: 9;
+    -fx-text-fill: -st-muted;
+    -fx-font-size: 0.9em;
+    -fx-padding: 0 7 0 7;
+}
+
+.st-ok-icon {
+    -fx-fill: -st-ok;
+}
+
+.st-danger-icon {
+    -fx-fill: -st-danger;
+}

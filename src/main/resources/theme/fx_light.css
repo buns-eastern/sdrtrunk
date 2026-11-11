@@ -1,0 +1,56 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2014-2026 Dennis Sheirer
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+/* Light colors for the JavaFX windows. The shared look is in fx_modern.css and uses these colors. */
+.root {
+    -st-bg: #eef0f3;
+    -st-surface: #ffffff;
+    -st-surface2: #f6f7f9;
+    -st-surface-alt: #f9f9f9;
+    -st-hover: #e9eaed;
+    -st-border: #d5d9e0;
+    -st-text: #1f2329;
+    -st-muted: #667080;
+    -st-accent: #2675bf;
+    -st-on-accent: #ffffff;
+    -st-accent-soft: #e5eef7;
+    -st-select: #e1ecf6;
+    -st-danger: #c0392b;
+    -st-ok: #2e8b57;
+    -st-ok-soft: #e6f1eb;
+    -st-input: #ffffff;
+
+    -fx-base: #f6f7f9;
+    -fx-background: #eef0f3;
+    -fx-control-inner-background: #ffffff;
+    -fx-control-inner-background-alt: #f9f9f9;
+    -fx-accent: #2675bf;
+    -fx-default-button: #2675bf;
+    -fx-focus-color: #2675bf;
+    -fx-faint-focus-color: transparent;
+    -fx-text-base-color: #1f2329;
+    -fx-text-background-color: #1f2329;
+    -fx-text-inner-color: #1f2329;
+    -fx-mark-color: #1f2329;
+    -fx-selection-bar: #e1ecf6;
+    -fx-selection-bar-non-focused: #e1ecf6;
+    -fx-selection-bar-text: #1f2329;
+    -fx-box-border: #d5d9e0;
+    -fx-outer-border: #d5d9e0;
+}

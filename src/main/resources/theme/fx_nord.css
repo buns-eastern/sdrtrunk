@@ -1,0 +1,56 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2014-2026 Dennis Sheirer
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+/* Nord colors for the JavaFX windows. The shared look is in fx_modern.css and uses these colors. */
+.root {
+    -st-bg: #2e3440;
+    -st-surface: #3b4252;
+    -st-surface2: #434c5e;
+    -st-surface-alt: #404756;
+    -st-hover: #4d5567;
+    -st-border: #4c566a;
+    -st-text: #e5e9f0;
+    -st-muted: #a3adbf;
+    -st-accent: #88c0d0;
+    -st-on-accent: #2e3440;
+    -st-accent-soft: #495969;
+    -st-select: #4c5e6e;
+    -st-danger: #bf616a;
+    -st-ok: #a3be8c;
+    -st-ok-soft: #4c565b;
+    -st-input: #2b303b;
+
+    -fx-base: #434c5e;
+    -fx-background: #2e3440;
+    -fx-control-inner-background: #2b303b;
+    -fx-control-inner-background-alt: #404756;
+    -fx-accent: #88c0d0;
+    -fx-default-button: #88c0d0;
+    -fx-focus-color: #88c0d0;
+    -fx-faint-focus-color: transparent;
+    -fx-text-base-color: #e5e9f0;
+    -fx-text-background-color: #e5e9f0;
+    -fx-text-inner-color: #e5e9f0;
+    -fx-mark-color: #e5e9f0;
+    -fx-selection-bar: #4c5e6e;
+    -fx-selection-bar-non-focused: #4c5e6e;
+    -fx-selection-bar-text: #e5e9f0;
+    -fx-box-border: #4c566a;
+    -fx-outer-border: #4c566a;
+}

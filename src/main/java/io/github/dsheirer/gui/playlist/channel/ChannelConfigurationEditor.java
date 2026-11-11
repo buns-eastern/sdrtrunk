@@ -39,6 +39,7 @@ import io.github.dsheirer.source.config.SourceConfigTuner;
 import io.github.dsheirer.source.config.SourceConfiguration;
 import io.github.dsheirer.source.tuner.manager.TunerManager;
 import io.github.dsheirer.util.ThreadPool;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 import javafx.application.Platform;
@@ -101,7 +102,12 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
     private GridPane mTextFieldPane;
     private Button mSaveButton;
     private Button mResetButton;
-    private VBox mButtonBox;
+    private HBox mHeaderBox;
+    private Label mHeaderNameLabel;
+    private Label mHeaderProtocolLabel;
+    private Label mHeaderFrequencyLabel;
+    private Label mHeaderPlayingLabel;
+    private VBox mChannelCard;
     private ScrollPane mTitledPanesScrollPane;
     private VBox mTitledPanesBox;
     private ToggleSwitch mAutoStartSwitch;
@@ -127,16 +133,12 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
 
         setMaxWidth(Double.MAX_VALUE);
 
-        HBox hbox = new HBox();
-        hbox.setSpacing(10);
-        hbox.setPadding(new Insets(10,10,10,10));
-        hbox.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(getTextFieldPane(), Priority.ALWAYS);
-        HBox.setHgrow(getButtonBox(), Priority.NEVER);
-        hbox.getChildren().addAll(getTextFieldPane(), getButtonBox());
+        VBox topBox = new VBox(10, getHeaderBox(), getChannelCard());
+        topBox.setPadding(new Insets(12,12,2,12));
+        topBox.setMaxWidth(Double.MAX_VALUE);
         VBox.setVgrow(getTitledPanesScrollPane(), Priority.ALWAYS);
 
-        getChildren().addAll(hbox, getTitledPanesScrollPane());
+        getChildren().addAll(topBox, getTitledPanesScrollPane());
     }
 
     /**
@@ -264,6 +266,7 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
             setSourceConfiguration(null);
         }
 
+        updateHeader();
         modifiedProperty().setValue(false);
     }
 
@@ -297,6 +300,7 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
             saveEventLogConfiguration();
             saveRecordConfiguration();
             saveSourceConfiguration();
+            updateHeader();
 
             modifiedProperty().set(false);
         }
@@ -319,15 +323,17 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
         {
             mPlayGraphicNode = new IconNode(FontAwesome.PLAY);
             mPlayGraphicNode.setFill(Color.GREEN);
-            mPlayGraphicNode.setIconSize(24);
+            mPlayGraphicNode.setIconSize(13);
+            mPlayGraphicNode.getStyleClass().add("st-ok-icon");
 
             mStopGraphicNode = new IconNode(FontAwesome.STOP);
             mStopGraphicNode.setFill(Color.RED);
-            mStopGraphicNode.setIconSize(24);
+            mStopGraphicNode.setIconSize(13);
+            mStopGraphicNode.getStyleClass().add("st-danger-icon");
 
             mPlayButton = new Button("Play");
-            mPlayButton.setMaxWidth(Double.MAX_VALUE);
-            mPlayButton.setMaxHeight(Double.MAX_VALUE);
+            mPlayButton.setMinWidth(Region.USE_PREF_SIZE);
+            mPlayButton.getStyleClass().add("st-ok");
             mPlayButton.setDisable(true);
             mPlayButton.setOnAction((ActionEvent event) -> {
                 if(getItem() != null)
@@ -451,16 +457,23 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
      */
     private void setPlayButtonState(boolean playing)
     {
+        getPlayButton().getStyleClass().removeAll("st-ok", "st-danger");
+
         if(playing)
         {
             getPlayButton().setText("Stop");
             getPlayButton().setGraphic(mStopGraphicNode);
+            getPlayButton().getStyleClass().add("st-danger");
         }
         else
         {
             getPlayButton().setText("Play");
             getPlayButton().setGraphic(mPlayGraphicNode);
+            getPlayButton().getStyleClass().add("st-ok");
         }
+
+        getHeaderPlayingLabel().setVisible(playing && getItem() != null);
+        getHeaderPlayingLabel().setManaged(playing && getItem() != null);
     }
 
     private ToggleSwitch getAutoStartSwitch()
@@ -505,6 +518,8 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
         if(mTitledPanesBox == null)
         {
             mTitledPanesBox = new VBox();
+            mTitledPanesBox.setSpacing(10);
+            mTitledPanesBox.setPadding(new Insets(10,12,12,12));
             mTitledPanesBox.setMaxWidth(Double.MAX_VALUE);
         }
 
@@ -552,9 +567,6 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
             GridPane.setConstraints(getAutoStartSwitch(), 3, row);
             GridPane.setHalignment(getAutoStartSwitch(), HPos.LEFT);
             mTextFieldPane.getChildren().add(getAutoStartSwitch());
-
-            GridPane.setConstraints(getPlayButton(), 4, row, 1, 2);
-            mTextFieldPane.getChildren().add(getPlayButton());
 
             Label siteLabel = new Label("Site");
             GridPane.setHalignment(siteLabel, HPos.RIGHT);
@@ -818,24 +830,120 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
         return box;
     }
 
-    private VBox getButtonBox()
+    /**
+     * Header row: channel name, protocol, frequency and playing state on the left, Play/Stop, Save and Reset on
+     * the right.
+     */
+    private HBox getHeaderBox()
     {
-        if(mButtonBox == null)
+        if(mHeaderBox == null)
         {
-            mButtonBox = new VBox();
-            mButtonBox.setSpacing(10);
-            mButtonBox.getChildren().addAll(getSaveButton(), getResetButton());
+            mHeaderNameLabel = new Label();
+            mHeaderNameLabel.getStyleClass().add("st-title");
+            mHeaderNameLabel.textProperty().bind(getNameField().textProperty());
+
+            mHeaderProtocolLabel = new Label();
+            mHeaderProtocolLabel.getStyleClass().add("st-chip");
+
+            mHeaderFrequencyLabel = new Label();
+            mHeaderFrequencyLabel.getStyleClass().addAll("st-mono", "st-muted");
+
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+
+            mHeaderBox = new HBox(10, mHeaderNameLabel, mHeaderProtocolLabel, mHeaderFrequencyLabel,
+                getHeaderPlayingLabel(), spacer, getPlayButton(), getSaveButton(), getResetButton());
+            mHeaderBox.setAlignment(Pos.CENTER_LEFT);
+            mHeaderBox.setMaxWidth(Double.MAX_VALUE);
+            updateHeader();
         }
 
-        return mButtonBox;
+        return mHeaderBox;
+    }
+
+    private Label getHeaderPlayingLabel()
+    {
+        if(mHeaderPlayingLabel == null)
+        {
+            mHeaderPlayingLabel = new Label("\u25CF Playing");
+            mHeaderPlayingLabel.getStyleClass().addAll("st-chip", "st-chip-live");
+            mHeaderPlayingLabel.setVisible(false);
+            mHeaderPlayingLabel.setManaged(false);
+        }
+
+        return mHeaderPlayingLabel;
+    }
+
+    /**
+     * Refreshes the protocol, frequency and playing state shown in the header for the current channel.
+     */
+    private void updateHeader()
+    {
+        if(mHeaderBox == null)
+        {
+            return;
+        }
+
+        Channel channel = getItem();
+        String protocol = null;
+        String frequency = null;
+
+        if(channel != null)
+        {
+            if(channel.getDecodeConfiguration() != null && channel.getDecodeConfiguration().getDecoderType() != null)
+            {
+                protocol = channel.getDecodeConfiguration().getDecoderType().getDisplayString();
+            }
+
+            List<Long> frequencies = channel.getFrequencyList();
+
+            if(frequencies != null && !frequencies.isEmpty() && frequencies.get(0) != null)
+            {
+                frequency = (frequencies.get(0) / 1E6) + " MHz";
+
+                if(frequencies.size() > 1)
+                {
+                    frequency += " +" + (frequencies.size() - 1);
+                }
+            }
+        }
+
+        mHeaderProtocolLabel.setText(protocol);
+        mHeaderProtocolLabel.setVisible(protocol != null);
+        mHeaderProtocolLabel.setManaged(protocol != null);
+        mHeaderFrequencyLabel.setText(frequency);
+        mHeaderFrequencyLabel.setVisible(frequency != null);
+        mHeaderFrequencyLabel.setManaged(frequency != null);
+
+        boolean playing = channel != null && channel.processingProperty().get();
+        getHeaderPlayingLabel().setVisible(playing);
+        getHeaderPlayingLabel().setManaged(playing);
+    }
+
+    /**
+     * Card holding the system, site, name, alias list and auto-start fields.
+     */
+    private VBox getChannelCard()
+    {
+        if(mChannelCard == null)
+        {
+            Label title = new Label("Channel");
+            title.getStyleClass().add("st-card-title");
+            mChannelCard = new VBox(10, title, getTextFieldPane());
+            mChannelCard.getStyleClass().add("st-card");
+            mChannelCard.setMaxWidth(Double.MAX_VALUE);
+        }
+
+        return mChannelCard;
     }
 
     private Button getSaveButton()
     {
         if(mSaveButton == null)
         {
-            mSaveButton = new Button("     Save     ");
-            mSaveButton.setMaxWidth(Double.MAX_VALUE);
+            mSaveButton = new Button("Save");
+            mSaveButton.setMinWidth(80);
+            mSaveButton.getStyleClass().add("st-primary");
             mSaveButton.disableProperty().bind(modifiedProperty().not());
             mSaveButton.setOnAction(event -> {
                 if(mFilterProcessor != null)
@@ -881,7 +989,7 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
         if(mResetButton == null)
         {
             mResetButton = new Button("Reset");
-            mResetButton.setMaxWidth(Double.MAX_VALUE);
+            mResetButton.setMinWidth(Region.USE_PREF_SIZE);
             mResetButton.disableProperty().bind(modifiedProperty().not());
             mResetButton.setOnAction(event -> {
                 modifiedProperty().set(false);

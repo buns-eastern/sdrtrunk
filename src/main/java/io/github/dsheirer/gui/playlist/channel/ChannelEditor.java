@@ -61,6 +61,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.util.Callback;
@@ -85,7 +86,7 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
     private MenuButton mNewButton;
     private Button mDeleteButton;
     private Button mCloneButton;
-    private VBox mButtonBox;
+    private HBox mButtonBox;
     private HBox mSearchAndViewBox;
     private TextField mSearchField;
     private SegmentedButton mViewSegmentedButton;
@@ -111,16 +112,11 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
         mUnknownConfigurationEditor = new UnknownConfigurationEditor(mPlaylistManager, mTunerManager,
                 userPreferences, this);
 
-        HBox channelsBox = new HBox();
-        channelsBox.setSpacing(10.0);
-        HBox.setHgrow(getChannelTableView(), Priority.ALWAYS);
-        channelsBox.getChildren().addAll(getChannelTableView(), getButtonBox());
-
         VBox topBox = new VBox();
-        topBox.setPadding(new Insets(10,10,10,10));
+        topBox.setPadding(new Insets(12,12,10,12));
         topBox.setSpacing(10);
-        VBox.setVgrow(channelsBox, Priority.ALWAYS);
-        topBox.getChildren().addAll(getSearchAndViewBox(), channelsBox);
+        VBox.setVgrow(getChannelTableView(), Priority.ALWAYS);
+        topBox.getChildren().addAll(getSearchAndViewBox(), getChannelTableView());
 
         setOrientation(Orientation.VERTICAL);
         getItems().addAll(topBox, getChannelConfigurationEditor());
@@ -251,7 +247,6 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
         {
             mViewSegmentedButton = new SegmentedButton(getAllToggleButton(), getPlayingToggleButton(),
                 getAutoStartToggleButton());
-            mViewSegmentedButton.getStyleClass().add(SegmentedButton.STYLE_CLASS_DARK);
             getAllToggleButton().setSelected(true);
             mViewSegmentedButton.getToggleGroup().selectedToggleProperty()
                 .addListener((observable, oldValue, newValue) -> {
@@ -332,20 +327,10 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
             mSearchAndViewBox.setAlignment(Pos.CENTER_LEFT);
             mSearchAndViewBox.setSpacing(10);
 
-            HBox searchBox = new HBox();
-            searchBox.setSpacing(5);
-            searchBox.setAlignment(Pos.CENTER);
-            Label searchLabel = new Label("Search:");
-            searchLabel.setAlignment(Pos.CENTER_RIGHT);
-            searchBox.getChildren().addAll(searchLabel, getSearchField());
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
 
-            HBox viewBox = new HBox();
-            viewBox.setSpacing(5);
-            viewBox.setAlignment(Pos.CENTER);
-            Label viewLabel = new Label("View Channels:");
-            viewBox.getChildren().addAll(viewLabel, getViewSegmentedButton());
-
-            mSearchAndViewBox.getChildren().addAll(searchBox, viewBox);
+            mSearchAndViewBox.getChildren().addAll(getSearchField(), getViewSegmentedButton(), spacer, getButtonBox());
         }
 
         return mSearchAndViewBox;
@@ -356,6 +341,8 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
         if(mSearchField == null)
         {
             mSearchField = TextFields.createClearableTextField();
+            mSearchField.setPromptText("Search channels");
+            mSearchField.setPrefWidth(260);
             mSearchField.textProperty().addListener((observable, oldValue, newValue) -> updateChannelListFilter());
         }
 
@@ -430,6 +417,7 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
                         {
                             IconNode iconNode = new IconNode(FontAwesome.CHECK);
                             iconNode.setFill(Color.GREEN);
+                            iconNode.getStyleClass().add("st-ok-icon");
                             setGraphic(iconNode);
                         }
                     }
@@ -440,7 +428,7 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
 
             TableColumn<Channel,Boolean> autoStartColumn = new TableColumn<>("Auto-Start");
             autoStartColumn.setCellValueFactory(new PropertyValueFactory<>("autoStart"));
-            autoStartColumn.setPrefWidth(85);
+            autoStartColumn.setPrefWidth(95);
             autoStartColumn.setCellFactory(param -> {
                 TableCell<Channel,Boolean> tableCell = new TableCell<>()
                 {
@@ -458,6 +446,7 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
                         {
                             IconNode iconNode = new IconNode(FontAwesome.CHECK);
                             iconNode.setFill(Color.GREEN);
+                            iconNode.getStyleClass().add("st-ok-icon");
                             setGraphic(iconNode);
                         }
                     }
@@ -480,10 +469,36 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
 
             TableColumn frequencyColumn = new TableColumn("Frequency");
             frequencyColumn.setCellValueFactory(new FrequencyCellValueFactory());
+            frequencyColumn.getStyleClass().add("st-mono");
             frequencyColumn.setPrefWidth(100);
 
             TableColumn protocolColumn = new TableColumn("Protocol");
             protocolColumn.setCellValueFactory(new ProtocolCellValueFactory());
+            protocolColumn.setCellFactory(param -> new TableCell<Channel,String>()
+            {
+                private final Label mPill = new Label();
+
+                {
+                    mPill.getStyleClass().add("st-pill");
+                }
+
+                @Override
+                protected void updateItem(String item, boolean empty)
+                {
+                    super.updateItem(item, empty);
+                    setText(null);
+
+                    if(empty || item == null)
+                    {
+                        setGraphic(null);
+                    }
+                    else
+                    {
+                        mPill.setText(item);
+                        setGraphic(mPill);
+                    }
+                }
+            });
             protocolColumn.setPrefWidth(100);
 
             TableColumn aliaslistColumn = new TableColumn("Alias List");
@@ -522,12 +537,13 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
         return mPlaceholderLabel;
     }
 
-    private VBox getButtonBox()
+    private HBox getButtonBox()
     {
         if(mButtonBox == null)
         {
-            mButtonBox = new VBox();
-            mButtonBox.setSpacing(10);
+            mButtonBox = new HBox();
+            mButtonBox.setSpacing(8);
+            mButtonBox.setAlignment(Pos.CENTER_RIGHT);
             mButtonBox.getChildren().addAll(getNewButton(), getCloneButton(), getDeleteButton());
         }
 
@@ -540,7 +556,7 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
         {
             mNewButton = new MenuButton("New");
             mNewButton.setAlignment(Pos.CENTER);
-            mNewButton.setMaxWidth(Double.MAX_VALUE);
+            mNewButton.getStyleClass().add("st-primary");
 
             MenuItem decodersItem = new MenuItem("Decoder");
             decodersItem.setDisable(true);
@@ -568,7 +584,7 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
         {
             mDeleteButton = new Button("Delete");
             mDeleteButton.setDisable(true);
-            mDeleteButton.setMaxWidth(Double.MAX_VALUE);
+            mDeleteButton.getStyleClass().add("st-danger");
             mDeleteButton.setOnAction(event -> {
                 Channel selected = getChannelTableView().getSelectionModel().getSelectedItem();
 
@@ -611,7 +627,6 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
         {
             mCloneButton = new Button("Clone");
             mCloneButton.setDisable(true);
-            mCloneButton.setMaxWidth(Double.MAX_VALUE);
             mCloneButton.setOnAction(event -> {
                 Channel selected = getChannelTableView().getSelectionModel().getSelectedItem();
                 Channel copy = selected.copyOf();

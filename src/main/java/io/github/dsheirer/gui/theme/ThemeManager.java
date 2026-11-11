@@ -242,6 +242,53 @@ public class ThemeManager
                "-fx-padding: 8px; -fx-background-radius: 4px; -fx-font-size: 11.5px;";
     }
 
+    /**
+     * Theme key for the JavaFX stylesheets (theme/fx_<key>.css).  Unknown or missing keys fall back the same way the
+     * Swing look and feel does.
+     */
+    public static String javaFxThemeKey()
+    {
+        String key = (sPreferences == null) ? THEME_DEFAULT : theme();
+
+        if(key != null)
+        {
+            switch(key)
+            {
+                case THEME_ARC_DARK:
+                case THEME_ONE_DARK:
+                case THEME_DRACULA:
+                case THEME_NORD:
+                case THEME_LIGHT:
+                    return key;
+                default:
+                    break;
+            }
+        }
+
+        return (sPreferences == null) ? THEME_DEFAULT : THEME_ARC_DARK;
+    }
+
+    /**
+     * Window background color for JavaFX scenes, matching the JavaFX theme stylesheet.
+     */
+    public static String javaFxBackgroundColor()
+    {
+        switch(javaFxThemeKey())
+        {
+            case THEME_ONE_DARK:
+                return "#21252b";
+            case THEME_DRACULA:
+                return "#21222c";
+            case THEME_NORD:
+                return "#2e3440";
+            case THEME_LIGHT:
+                return "#eef0f3";
+            case THEME_ARC_DARK:
+            default:
+                return "#2b2e38";
+        }
+    }
+
     public static boolean isDarkTheme()
     {
         if(sPreferences == null)

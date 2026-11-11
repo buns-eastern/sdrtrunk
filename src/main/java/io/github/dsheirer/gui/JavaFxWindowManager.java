@@ -319,7 +319,7 @@ public class JavaFxWindowManager extends Application
      * Access the playlist stage.
      */
     /**
-     * Applies the current app theme (dark or light) to a JavaFX scene so the JavaFX windows match the rest of
+     * Applies the current app theme colors to a JavaFX scene so the JavaFX windows match the rest of
      * the app instead of staying on default light Modena styling.
      */
     private void applyTheme(Scene scene)
@@ -327,14 +327,25 @@ public class JavaFxWindowManager extends Application
         try
         {
             boolean dark = io.github.dsheirer.gui.theme.ThemeManager.isDarkTheme();
-            java.net.URL css = getClass().getResource(dark ? "/sdrtrunk_style.css" : "/channel_light.css");
+            String themeKey = io.github.dsheirer.gui.theme.ThemeManager.javaFxThemeKey();
 
-            if(css != null)
+            //Base dark/light styling (charts), then the theme colors, then the shared look that uses those colors
+            for(String path: new String[]{dark ? "/sdrtrunk_style.css" : "/channel_light.css",
+                "/theme/fx_" + themeKey + ".css", "/theme/fx_modern.css"})
             {
-                scene.getStylesheets().add(css.toExternalForm());
+                java.net.URL css = getClass().getResource(path);
+
+                if(css != null)
+                {
+                    scene.getStylesheets().add(css.toExternalForm());
+                }
+                else
+                {
+                    mLog.warn("JavaFX stylesheet not found [" + path + "]");
+                }
             }
 
-            scene.setFill(javafx.scene.paint.Color.web(dark ? "#1e1f22" : "#fbfbfb"));
+            scene.setFill(javafx.scene.paint.Color.web(io.github.dsheirer.gui.theme.ThemeManager.javaFxBackgroundColor()));
         }
         catch(Throwable t)
         {

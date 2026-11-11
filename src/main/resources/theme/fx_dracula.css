@@ -1,0 +1,56 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2014-2026 Dennis Sheirer
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+/* Dracula colors for the JavaFX windows. The shared look is in fx_modern.css and uses these colors. */
+.root {
+    -st-bg: #21222c;
+    -st-surface: #282a36;
+    -st-surface2: #303341;
+    -st-surface-alt: #2d2f3b;
+    -st-hover: #3c3f4c;
+    -st-border: #44475a;
+    -st-text: #f8f8f2;
+    -st-muted: #9ea8c7;
+    -st-accent: #bd93f9;
+    -st-on-accent: #1e1f29;
+    -st-accent-soft: #433d59;
+    -st-select: #494161;
+    -st-danger: #ff5555;
+    -st-ok: #50fa7b;
+    -st-ok-soft: #2e4b41;
+    -st-input: #1e1f29;
+
+    -fx-base: #303341;
+    -fx-background: #21222c;
+    -fx-control-inner-background: #1e1f29;
+    -fx-control-inner-background-alt: #2d2f3b;
+    -fx-accent: #bd93f9;
+    -fx-default-button: #bd93f9;
+    -fx-focus-color: #bd93f9;
+    -fx-faint-focus-color: transparent;
+    -fx-text-base-color: #f8f8f2;
+    -fx-text-background-color: #f8f8f2;
+    -fx-text-inner-color: #f8f8f2;
+    -fx-mark-color: #f8f8f2;
+    -fx-selection-bar: #494161;
+    -fx-selection-bar-non-focused: #494161;
+    -fx-selection-bar-text: #f8f8f2;
+    -fx-box-border: #44475a;
+    -fx-outer-border: #44475a;
+}
