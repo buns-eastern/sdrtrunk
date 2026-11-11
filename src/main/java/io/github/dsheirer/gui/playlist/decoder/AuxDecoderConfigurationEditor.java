@@ -25,8 +25,10 @@ package io.github.dsheirer.gui.playlist.decoder;
 import io.github.dsheirer.gui.playlist.Editor;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.config.AuxDecodeConfiguration;
+import javafx.beans.property.BooleanProperty;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
+import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.GridPane;
 import org.controlsfx.control.ToggleSwitch;
@@ -55,6 +57,44 @@ public class AuxDecoderConfigurationEditor extends Editor<AuxDecodeConfiguration
             mControls.add(control);
             getChildren().add(control);
         }
+    }
+
+    /**
+     * Adds an extra control directly below the switch for the specified decoder.
+     * @param type of decoder
+     * @param node to add
+     */
+    public void addControlBelow(DecoderType type, Node node)
+    {
+        for(AuxDecoderControl control: mControls)
+        {
+            if(control.getDecoderType() == type)
+            {
+                int index = getChildren().indexOf(control);
+                getChildren().add(index + 1, node);
+                return;
+            }
+        }
+
+        getChildren().add(node);
+    }
+
+    /**
+     * Selected (on/off) property of the switch for the specified decoder.
+     * @param type of decoder
+     * @return property, or null if this editor doesn't have a switch for the decoder.
+     */
+    public BooleanProperty selectedProperty(DecoderType type)
+    {
+        for(AuxDecoderControl control: mControls)
+        {
+            if(control.getDecoderType() == type)
+            {
+                return control.getToggleSwitch().selectedProperty();
+            }
+        }
+
+        return null;
     }
 
     @Override

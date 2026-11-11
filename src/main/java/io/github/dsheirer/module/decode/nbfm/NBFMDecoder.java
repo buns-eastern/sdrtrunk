@@ -35,6 +35,7 @@ import io.github.dsheirer.dsp.fm.IDemodulator;
 import io.github.dsheirer.dsp.squelch.INoiseSquelchController;
 import io.github.dsheirer.dsp.squelch.NoiseSquelch;
 import io.github.dsheirer.dsp.squelch.NoiseSquelchState;
+import io.github.dsheirer.dsp.squelch.MdcSquawkRemover;
 import io.github.dsheirer.dsp.squelch.SquelchTailRemover;
 import io.github.dsheirer.dsp.window.WindowType;
 import io.github.dsheirer.module.decode.DecoderType;
@@ -122,6 +123,9 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
     private final int mSquelchHeadRemovalMs;
     private SquelchTailRemover mSquelchTailRemover;
 
+    // MDC-1200 squawk removal (250 ms audio delay, MDC bursts cut out)
+    private MdcSquawkRemover mMdcSquawkRemover;
+
     // VoxSend audio filter chain (low-pass, de-emphasis, bass boost, voice enhancement, noise gate)
     private NBFMAudioFilters mAudioFilters;
     private final DecodeConfigNBFM mNBFMConfig;
@@ -208,6 +212,12 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
             if(squelchState == SquelchState.SQUELCH)
             {
                 // Squelch closed (end of transmission)
+                // Deliver the audio still held in the MDC squawk remover's delay line before the call ends
+                if(mMdcSquawkRemover != null)
+                {
+                    mMdcSquawkRemover.flush();
+                }
+
                 if(mSquelchTailRemover != null)
                 {
                     mSquelchTailRemover.squelchClose();
@@ -329,6 +339,39 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
     }
 
     /**
+     * Turns MDC-1200 squawk removal on or off.  When on, the channel audio is delayed 250 ms and MDC data bursts are
+     * cut out of it.  Call before the channel starts.
+     * @param enabled true to remove MDC squawks
+     */
+    public void setMdcSquawkRemoval(boolean enabled)
+    {
+        if(enabled)
+        {
+            if(mMdcSquawkRemover == null)
+            {
+                mMdcSquawkRemover = new MdcSquawkRemover();
+                mMdcSquawkRemover.setOutputListener(this::processAudioAfterMdcRemoval);
+            }
+        }
+        else
+        {
+            mMdcSquawkRemover = null;
+        }
+    }
+
+    /**
+     * Sends any audio held in the MDC squawk remover through the rest of the audio chain now, while the tone gate is
+     * still open.  Used when a call ends because the tone/code was lost.
+     */
+    private void flushMdcSquawkRemover()
+    {
+        if(mMdcSquawkRemover != null)
+        {
+            mMdcSquawkRemover.flush();
+        }
+    }
+
+    /**
      * Sets the decoder state reference for CTCSS/DCS detection integration.
      * @param decoderState the NBFM decoder state to receive tone notifications
      */
@@ -444,7 +487,8 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
      * Processes resampled 8 kHz audio through the CTCSS/DCS tone filter and squelch tail remover
      * before broadcasting to downstream consumers.
      *
-     * Audio flow: resampler → this method → detector analysis → tone gate → tail remover → broadcast
+     * Audio flow: resampler → this method → detector analysis → MDC squawk remover (optional) → tone gate →
+     * audio filters → tail remover → broadcast
      *
      * @param resampledAudio 8 kHz audio from the resampler
      */
@@ -469,6 +513,24 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
             mDCSDetector.process(resampledAudio);
         }
 
+        // Step 1b: MDC squawk removal (when enabled) holds the audio 250 ms, cuts out MDC data bursts and then
+        //          passes the audio on to the rest of the chain
+        if(mMdcSquawkRemover != null)
+        {
+            mMdcSquawkRemover.process(resampledAudio);
+        }
+        else
+        {
+            processAudioAfterMdcRemoval(resampledAudio);
+        }
+    }
+
+    /**
+     * Tone gate, audio filters and squelch tail remover, then broadcast.
+     * @param resampledAudio 8 kHz audio
+     */
+    private void processAudioAfterMdcRemoval(float[] resampledAudio)
+    {
         // Step 2: Gate audio based on tone/code match
         if(mToneFilterEnabled && !mToneMatch)
         {
@@ -719,6 +781,10 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
                 {
                     // Wrong tone confirmed — fully squelch the channel like a real radio
                     boolean wasActive = mToneMatch;
+                    if(wasActive)
+                    {
+                        flushMdcSquawkRemover();
+                    }
                     mToneMatch = false;
 
                     // If we had an active call, end it and go idle
@@ -739,6 +805,10 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
                 {
                     // Tone lost — squelch the channel until tone re-confirmed
                     boolean wasActive = mToneMatch;
+                    if(wasActive)
+                    {
+                        flushMdcSquawkRemover();
+                    }
                     mToneMatch = false;
 
                     if(wasActive)
@@ -789,6 +859,10 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
                 {
                     // Wrong code confirmed — fully squelch the channel
                     boolean wasActive = mToneMatch;
+                    if(wasActive)
+                    {
+                        flushMdcSquawkRemover();
+                    }
                     mToneMatch = false;
 
                     if(wasActive)
@@ -808,6 +882,10 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
                 {
                     // Code lost — squelch until re-confirmed
                     boolean wasActive = mToneMatch;
+                    if(wasActive)
+                    {
+                        flushMdcSquawkRemover();
+                    }
                     mToneMatch = false;
 
                     if(wasActive)

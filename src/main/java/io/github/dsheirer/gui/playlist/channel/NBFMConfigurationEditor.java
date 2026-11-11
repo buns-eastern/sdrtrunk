@@ -134,6 +134,9 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
 
     private SourceConfigurationEditor mSourceConfigurationEditor;
     private AuxDecoderConfigurationEditor mAuxDecoderConfigurationEditor;
+    private ToggleSwitch mMdcSquawkSwitch;
+    private Label mMdcSquawkHintLabel;
+    private VBox mMdcSquawkBox;
     private EventLogConfigurationEditor mEventLogConfigurationEditor;
     private final TalkgroupValueChangeListener mTalkgroupValueChangeListener = new TalkgroupValueChangeListener();
     private final IntegerFormatter mDecimalFormatter = new IntegerFormatter(1, 999999);
@@ -1033,6 +1036,76 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         return mEventLogConfigurationEditor;
     }
 
+    /**
+     * Adds the MDC squawk removal switch under the MDC1200 switch.  It can only be turned on while MDC1200 is on.
+     */
+    private void addMdcSquawkControl(AuxDecoderConfigurationEditor editor)
+    {
+        mMdcSquawkSwitch = new ToggleSwitch();
+        mMdcSquawkSwitch.selectedProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+
+        Label titleLabel = new Label("Remove MDC squawk from audio");
+        titleLabel.setStyle("-fx-font-weight: bold;");
+        mMdcSquawkHintLabel = new Label();
+        mMdcSquawkHintLabel.getStyleClass().add("st-muted");
+        mMdcSquawkHintLabel.setWrapText(true);
+
+        GridPane gridPane = new GridPane();
+        gridPane.setHgap(10);
+        gridPane.setVgap(2);
+        gridPane.add(mMdcSquawkSwitch, 0, 0);
+        gridPane.add(titleLabel, 1, 0);
+        gridPane.add(mMdcSquawkHintLabel, 1, 1);
+
+        mMdcSquawkBox = new VBox(gridPane);
+        mMdcSquawkBox.getStyleClass().add("st-sub-option");
+        VBox.setMargin(mMdcSquawkBox, new Insets(0, 0, 4, 22));
+        editor.addControlBelow(DecoderType.MDC1200, mMdcSquawkBox);
+
+        javafx.beans.property.BooleanProperty mdcSelected = editor.selectedProperty(DecoderType.MDC1200);
+
+        if(mdcSelected != null)
+        {
+            mdcSelected.addListener((observable, oldValue, newValue) -> updateMdcSquawkControl(newValue));
+            updateMdcSquawkControl(mdcSelected.get());
+        }
+        else
+        {
+            updateMdcSquawkControl(false);
+        }
+    }
+
+    /**
+     * Enables the MDC squawk removal switch only while the MDC1200 decoder is on.
+     */
+    private void updateMdcSquawkControl(boolean mdcOn)
+    {
+        mMdcSquawkBox.setDisable(!mdcOn);
+
+        if(mdcOn)
+        {
+            mMdcSquawkHintLabel.setText("Cuts the MDC burst out of this channel\u2019s audio. Adds a \u00BC-second audio delay.");
+        }
+        else
+        {
+            mMdcSquawkHintLabel.setText("Turn on MDC1200 to use this.");
+            mMdcSquawkSwitch.setSelected(false);
+        }
+    }
+
+    private ToggleSwitch getMdcSquawkSwitch()
+    {
+        getAuxDecoderConfigurationEditor();
+        return mMdcSquawkSwitch;
+    }
+
+    private boolean isMdcDecoderSelected()
+    {
+        javafx.beans.property.BooleanProperty mdcSelected =
+            getAuxDecoderConfigurationEditor().selectedProperty(DecoderType.MDC1200);
+        return mdcSelected != null && mdcSelected.get();
+    }
+
     private AuxDecoderConfigurationEditor getAuxDecoderConfigurationEditor()
     {
         if(mAuxDecoderConfigurationEditor == null)
@@ -1040,6 +1113,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             mAuxDecoderConfigurationEditor = new AuxDecoderConfigurationEditor(DecoderType.AUX_DECODERS);
             mAuxDecoderConfigurationEditor.setPadding(new Insets(5,5,5,5));
             mAuxDecoderConfigurationEditor.modifiedProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+            addMdcSquawkControl(mAuxDecoderConfigurationEditor);
         }
 
         return mAuxDecoderConfigurationEditor;
@@ -1246,6 +1320,9 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             mHeadRemovalSpinner.getValueFactory().setValue(decodeConfigNBFM.getSquelchHeadRemovalMs());
             mAudioHangtimeSpinner.getValueFactory().setValue(decodeConfigNBFM.getAudioHangtimeMs());
 
+            // MDC squawk removal
+            getMdcSquawkSwitch().setSelected(decodeConfigNBFM.isMdcSquawkRemoval());
+
             // Load audio filter settings
             loadAudioFilterConfiguration(decodeConfigNBFM);
         }
@@ -1276,6 +1353,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             mSquelchTailEnabledSwitch.setSelected(false);
             mTailRemovalSpinner.getValueFactory().setValue(100);
             mHeadRemovalSpinner.getValueFactory().setValue(0);
+            getMdcSquawkSwitch().setSelected(false);
 
             // Disable audio filter controls
             disableAudioFilterControls();
@@ -1344,6 +1422,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         config.setSquelchTailRemovalMs(mTailRemovalSpinner.getValue());
         config.setSquelchHeadRemovalMs(mHeadRemovalSpinner.getValue());
         config.setAudioHangtimeMs(mAudioHangtimeSpinner.getValue());
+        config.setMdcSquawkRemoval(getMdcSquawkSwitch().isSelected() && isMdcDecoderSelected());
 
         // Save audio filter settings
         saveAudioFilterConfiguration(config);
@@ -1558,6 +1637,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     protected void setAuxDecoderConfiguration(AuxDecodeConfiguration config)
     {
         getAuxDecoderConfigurationEditor().setItem(config);
+        updateMdcSquawkControl(isMdcDecoderSelected());
     }
 
     @Override

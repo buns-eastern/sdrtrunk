@@ -52,6 +52,9 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     private int mSquelchHeadRemovalMs = SquelchTailRemover.DEFAULT_HEAD_REMOVAL_MS;
     private boolean mSquelchTailRemovalEnabled = true;
 
+    // MDC-1200 squawk removal (needs the MDC1200 additional decoder)
+    private boolean mMdcSquawkRemoval = false;
+
     // VOXSEND AUDIO FILTER CONFIGURATION
     private boolean mDeemphasisEnabled = false;
     private double mDeemphasisTimeConstant = 75.0; // microseconds
@@ -306,6 +309,21 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     public boolean hasToneFiltering()
     {
         return mToneFilterEnabled && !mToneFilters.isEmpty();
+    }
+
+    /**
+     * MDC-1200 squawk removal.  When enabled (and the MDC1200 additional decoder is on), MDC data bursts are cut out
+     * of the channel audio.  Adds a 250 ms audio delay.
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "mdcSquawkRemoval")
+    public boolean isMdcSquawkRemoval()
+    {
+        return mMdcSquawkRemoval;
+    }
+
+    public void setMdcSquawkRemoval(boolean enabled)
+    {
+        mMdcSquawkRemoval = enabled;
     }
 
     // ========== NEW: Squelch tail/head removal ==========

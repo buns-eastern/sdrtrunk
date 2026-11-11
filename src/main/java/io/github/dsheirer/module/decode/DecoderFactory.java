@@ -532,6 +532,11 @@ public class DecoderFactory
         NBFMDecoderState decoderState = new NBFMDecoderState(channel.getName(), decodeConfigNBFM);
         NBFMDecoder decoder = new NBFMDecoder(decodeConfigNBFM);
         decoder.setDecoderState(decoderState);
+
+        //MDC squawk removal only applies when the MDC1200 additional decoder is also running on this channel
+        boolean mdcDecoder = channel.getAuxDecodeConfiguration() != null &&
+            channel.getAuxDecodeConfiguration().getAuxDecoders().contains(DecoderType.MDC1200);
+        decoder.setMdcSquawkRemoval(decodeConfigNBFM.isMdcSquawkRemoval() && mdcDecoder);
         modules.add(decoder);
         modules.add(decoderState);
         AudioModule audioModule = new AudioModule(aliasList, 0, 60000, decodeConfigNBFM.isAudioFilter());
@@ -1017,6 +1022,7 @@ public class DecoderFactory
                     copyNBFM.setSquelchNoiseOpenThreshold(origNBFM.getSquelchNoiseOpenThreshold());
                     copyNBFM.setSquelchNoiseCloseThreshold(origNBFM.getSquelchNoiseCloseThreshold());
                     copyNBFM.setTalkgroup(origNBFM.getTalkgroup());
+                    copyNBFM.setMdcSquawkRemoval(origNBFM.isMdcSquawkRemoval());
                     return copyNBFM;
                 case NXDN:
                     DecodeConfigNXDN origNXDN = (DecodeConfigNXDN)config;
