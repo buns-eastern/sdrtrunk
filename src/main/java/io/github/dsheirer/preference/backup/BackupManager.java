@@ -89,6 +89,8 @@ public class BackupManager
     private static final String ROLE_SETTINGS = "settings";
     private static final String ROLE_PROPERTIES = "properties";
     private static final String ROLE_JMBE = "jmbe";
+    private static final String ROLE_ICON_IMAGE = "icon-image";
+    private static final String ICON_IMAGES_FOLDER = "icons";
 
     private static final String MANIFEST_FORMAT = "format";
     private static final String MANIFEST_APPLICATION = "application";
@@ -246,6 +248,7 @@ public class BackupManager
                 String entry = FILES + "settings/" + ICONS_FILE;
                 entries.put(entry, data);
                 roles.put(entry, ROLE_ICONS);
+                addIconImages(data, entries, roles, manifest);
             }
 
             String settingsName = getSettingsFileName(systemProperties);
@@ -319,6 +322,157 @@ public class BackupManager
 
         writeVerified(target, manifest, entries);
         mLog.info("Backup created [" + target + "] with " + entries.size() + " items");
+    }
+
+    /**
+     * Adds the pictures used by custom icons (icons that point at a picture file on this computer) to the backup.
+     * Built-in icons are part of the application and are skipped.  A custom icon whose picture is missing is left
+     * as it is - it doesn't stop the backup.
+     * @param iconsXml contents of the icons file (only read)
+     */
+    private void addIconImages(byte[] iconsXml, Map<String,byte[]> entries, Map<String,String> roles,
+                               Properties manifest) throws Exception
+    {
+        org.w3c.dom.NodeList icons = parseXml(iconsXml).getElementsByTagName("icon");
+        List<String> usedNames = new ArrayList<>();
+        Map<String,String> added = new LinkedHashMap<>();
+        int count = 0;
+
+        for(int x = 0; x < icons.getLength(); x++)
+        {
+            org.w3c.dom.Element icon = (org.w3c.dom.Element)icons.item(x);
+            String path = icon.getAttribute("path");
+
+            if(path == null || path.isBlank() || path.startsWith("images") || added.containsKey(path))
+            {
+                continue;
+            }
+
+            Path picture;
+
+            try
+            {
+                picture = Paths.get(path);
+            }
+            catch(Exception e)
+            {
+                continue;
+            }
+
+            if(!picture.isAbsolute())
+            {
+                continue;
+            }
+
+            if(!Files.isRegularFile(picture))
+            {
+                mLog.warn("Icon picture not found - icon [" + icon.getAttribute("name") + "] left as it is [" +
+                    path + "]");
+                continue;
+            }
+
+            byte[] data = Files.readAllBytes(picture);
+
+            if(data.length == 0)
+            {
+                continue;
+            }
+
+            String entry = FILES + "icons/" + uniqueName(picture.getFileName().toString(), usedNames);
+            entries.put(entry, data);
+            roles.put(entry, ROLE_ICON_IMAGE);
+            manifest.setProperty("icon.image." + count + ".path", path);
+            manifest.setProperty("icon.image." + count + ".entry", entry);
+            added.put(path, entry);
+            count++;
+        }
+
+        manifest.setProperty("icon.image.count", String.valueOf(count));
+    }
+
+    /**
+     * Writes the custom icon pictures into this computer's icons folder and returns the icons file with those
+     * icons pointed at the new location.  Icons without a picture in the backup are left as they are.
+     * @param contents of the backup
+     * @param folder for the icon pictures on this computer
+     * @param iconsXml icons file from the backup
+     * @return icons file to write on this computer
+     */
+    private static byte[] restoreIconImages(BackupContents contents, Path folder, byte[] iconsXml) throws Exception
+    {
+        Properties manifest = contents.getManifest();
+        int count = Integer.parseInt(manifest.getProperty("icon.image.count", "0"));
+
+        if(count <= 0)
+        {
+            return iconsXml;
+        }
+
+        Map<String,String> newPaths = new LinkedHashMap<>();
+
+        for(int x = 0; x < count; x++)
+        {
+            String original = manifest.getProperty("icon.image." + x + ".path");
+            String entry = manifest.getProperty("icon.image." + x + ".entry");
+            byte[] data = entry != null ? contents.getEntries().get(entry) : null;
+
+            if(original == null || data == null)
+            {
+                continue;
+            }
+
+            Files.createDirectories(folder);
+            Path destination = folder.resolve(Paths.get(entry).getFileName().toString());
+
+            //Leave an identical existing picture untouched
+            if(!(Files.isRegularFile(destination) && MessageDigest.isEqual(Files.readAllBytes(destination), data)))
+            {
+                writeFile(destination, data);
+            }
+
+            newPaths.put(original, destination.toAbsolutePath().toString());
+        }
+
+        if(newPaths.isEmpty())
+        {
+            return iconsXml;
+        }
+
+        org.w3c.dom.Document document = parseXml(iconsXml);
+        org.w3c.dom.NodeList icons = document.getElementsByTagName("icon");
+
+        for(int x = 0; x < icons.getLength(); x++)
+        {
+            org.w3c.dom.Element icon = (org.w3c.dom.Element)icons.item(x);
+            String replacement = newPaths.get(icon.getAttribute("path"));
+
+            if(replacement != null)
+            {
+                icon.setAttribute("path", replacement);
+            }
+        }
+
+        javax.xml.transform.TransformerFactory factory = javax.xml.transform.TransformerFactory.newInstance();
+        factory.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        javax.xml.transform.Transformer transformer = factory.newTransformer();
+        transformer.setOutputProperty(javax.xml.transform.OutputKeys.ENCODING, "UTF-8");
+        transformer.setOutputProperty(javax.xml.transform.OutputKeys.INDENT, "yes");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        transformer.transform(new javax.xml.transform.dom.DOMSource(document),
+            new javax.xml.transform.stream.StreamResult(out));
+        byte[] updated = out.toByteArray();
+        checkXml(updated, ICONS_FILE);
+        return updated;
+    }
+
+    private static org.w3c.dom.Document parseXml(byte[] data) throws Exception
+    {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setExpandEntityReferences(false);
+        javax.xml.parsers.DocumentBuilder builder = factory.newDocumentBuilder();
+        builder.setErrorHandler(null);
+        return builder.parse(new ByteArrayInputStream(data));
     }
 
     /**
@@ -598,6 +752,13 @@ public class BackupManager
                     case ROLE_PLAYLIST, ROLE_ICONS, ROLE_SETTINGS -> checkXml(bytes, name);
                     case ROLE_TUNERS -> checkJson(bytes, name);
                     case ROLE_JMBE -> checkZip(bytes, name);
+                    case ROLE_ICON_IMAGE ->
+                    {
+                        if(bytes.length == 0)
+                        {
+                            throw new BackupException("Icon picture is empty [" + name + "]");
+                        }
+                    }
                     default -> throw new BackupException("Unknown backup entry type [" + role + "]");
                 }
 
@@ -886,7 +1047,9 @@ public class BackupManager
             if(entry.getValue().equals(ROLE_ICONS))
             {
                 Files.createDirectories(settingsFolder);
-                writeFile(settingsFolder.resolve(ICONS_FILE), contents.getEntries().get(entry.getKey()));
+                byte[] icons = restoreIconImages(contents, settingsFolder.resolve(ICON_IMAGES_FOLDER),
+                    contents.getEntries().get(entry.getKey()));
+                writeFile(settingsFolder.resolve(ICONS_FILE), icons);
             }
             else if(entry.getValue().equals(ROLE_SETTINGS))
             {
