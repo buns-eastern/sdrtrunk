@@ -304,6 +304,21 @@ public class SDRTrunk implements Listener<TunerEvent>
                 {
                     mMainGui.setVisible(true);
 
+                    //"Close SDRTrunk Now" after staging a restore runs the normal shutdown
+                    io.github.dsheirer.gui.preference.backup.BackupPreferenceEditor.setCloseApplicationHandler(() ->
+                        EventQueue.invokeLater(() -> {
+                            processShutdown();
+                            System.exit(0);
+                        }));
+
+                    //Result of a restore that was applied at this start
+                    if(io.github.dsheirer.gui.preference.backup.BackupPreferenceEditor.hasStartupResults())
+                    {
+                        new javafx.embed.swing.JFXPanel();
+                        Platform.runLater(() ->
+                            io.github.dsheirer.gui.preference.backup.BackupPreferenceEditor.showStartupResults(null));
+                    }
+
                     //Restore split pane divider locations after the frame is displayed and laid out
                     EventQueue.invokeLater(() -> {
                         SplitPaneDividerMonitor.restore(mUserPreferences, mSplitPane, MAIN_SPLIT_PANE_IDENTIFIER);
@@ -1037,6 +1052,10 @@ public class SDRTrunk implements Listener<TunerEvent>
      */
     public static void main(String[] args)
     {
+        //A restore staged from Preferences > Backup & Migrate is applied here, before any preferences, playlist,
+        //tuner settings or icons are loaded
+        io.github.dsheirer.preference.backup.BackupManager.applyPendingRestore();
+
         new SDRTrunk();
     }
 }

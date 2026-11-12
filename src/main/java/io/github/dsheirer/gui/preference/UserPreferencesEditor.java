@@ -221,6 +221,11 @@ public class UserPreferencesEditor extends BorderPane
             treeRoot.getChildren().add(externalOutputsItem);
             externalOutputsItem.setExpanded(true);
 
+            TreeItem<String> backupItem = new TreeItem<>("Backup & Migrate");
+            backupItem.getChildren().add(new TreeItem(PreferenceEditorType.BACKUP));
+            treeRoot.getChildren().add(backupItem);
+            backupItem.setExpanded(true);
+
             mEditorSelectionTreeView = new TreeView();
             mEditorSelectionTreeView.setShowRoot(false);
             mEditorSelectionTreeView.setRoot(treeRoot);

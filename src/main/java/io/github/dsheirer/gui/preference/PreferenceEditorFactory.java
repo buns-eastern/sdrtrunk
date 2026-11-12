@@ -97,6 +97,8 @@ public class PreferenceEditorFactory
                 return new TalkgroupFormatPreferenceEditor(userPreferences);
             case VECTOR_CALIBRATION:
                 return new VectorCalibrationPreferenceEditor(userPreferences);
+            case BACKUP:
+                return new io.github.dsheirer.gui.preference.backup.BackupPreferenceEditor(userPreferences);
         }
 
         return null;

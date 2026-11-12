@@ -586,3 +586,23 @@
     -fx-border-width: 0 0 0 2;
     -fx-padding: 3 0 3 12;
 }
+
+.st-text {
+    -fx-fill: -st-text;
+}
+
+.st-warning {
+    -fx-background-color: -st-warn, -st-surface;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 7, 6;
+    -fx-padding: 10 12 10 12;
+}
+
+.st-warning-title {
+    -fx-fill: -st-warn;
+    -fx-font-weight: bold;
+}
+
+.st-warning-icon {
+    -fx-text-fill: -st-warn;
+}

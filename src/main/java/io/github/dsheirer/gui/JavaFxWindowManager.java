@@ -324,6 +324,20 @@ public class JavaFxWindowManager extends Application
      */
     private void applyTheme(Scene scene)
     {
+        applyThemeTo(scene);
+    }
+
+    /**
+     * Applies the current app theme colors to any JavaFX scene (for example a dialog).
+     * @param scene to style
+     */
+    public static void applyThemeTo(Scene scene)
+    {
+        if(scene == null)
+        {
+            return;
+        }
+
         try
         {
             boolean dark = io.github.dsheirer.gui.theme.ThemeManager.isDarkTheme();
@@ -333,7 +347,7 @@ public class JavaFxWindowManager extends Application
             for(String path: new String[]{dark ? "/sdrtrunk_style.css" : "/channel_light.css",
                 "/theme/fx_" + themeKey + ".css", "/theme/fx_modern.css"})
             {
-                java.net.URL css = getClass().getResource(path);
+                java.net.URL css = JavaFxWindowManager.class.getResource(path);
 
                 if(css != null)
                 {
