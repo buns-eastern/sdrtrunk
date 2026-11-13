@@ -621,7 +621,7 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
 
                 //update the ending timestamp so that the duration value is correctly calculated
                 trackerTS2.updateDurationTraffic(timestamp);
-                broadcast(trackerTS1);
+                broadcast(trackerTS2);
             }
             finally
             {
@@ -1429,7 +1429,7 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
                 .build();
 
             tracker = new P25ChannelEventTracker(event);
-            addTracker(tracker, frequency, P25P1Message.TIMESLOT_1);
+            addTracker(tracker, frequency, timeslot);
             broadcast(tracker);
             return;
         }
