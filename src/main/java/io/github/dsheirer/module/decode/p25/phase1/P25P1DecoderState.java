@@ -206,6 +206,14 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private final Listener<ChannelEvent> mChannelEventListener;
     private final P25TrafficChannelManager mTrafficChannelManager;
     private ServiceOptions mCurrentServiceOptions;
+
+    /**
+     * Encryption state of the current call as signalled by the algorithm ID in the HDU header or LDU2 encryption sync
+     * parameters (null when not yet known for this call).  Some radios set the encryption flag in the service options of
+     * the LDU1 voice channel user link control while transmitting clear voice (HDU and LDU2 report ALGID 0x80), so the
+     * algorithm ID takes precedence over the link control service options when it is known.
+     */
+    private Boolean mCallEncryptedByAlgorithm = null;
     private List<ControlChannelHeartbeat> mHeartbeatMonitors = new ArrayList<>();
     private Listener<IMessage> mRawStreamListener;
     private final DecodeConfigP25 mDecodeConfigP25;
@@ -541,6 +549,12 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         if(lcw instanceof IServiceOptionsProvider sop)
         {
             serviceOptions = sop.getServiceOptions();
+
+            //Trust the HDU/LDU2 algorithm ID over the link control service options encryption flag when known.
+            if(serviceOptions != null && serviceOptions.isEncrypted() && Boolean.FALSE.equals(mCallEncryptedByAlgorithm))
+            {
+                serviceOptions = VoiceServiceOptions.createUnencrypted(serviceOptions);
+            }
         }
         else if(lcw.isEncrypted())
         {
@@ -985,6 +999,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
 
                 Identifier<?> radio = getIdentifierCollection().getFromIdentifier();
 
+                mCallEncryptedByAlgorithm = headerData.isEncryptedAudio();
                 mTrafficChannelManager.processP1TrafficCallStart(getCurrentFrequency(), talkgroup, radio,
                         headerData.getEncryptionKey(), mCurrentServiceOptions, getCurrentChannel(), message.getTimestamp());
 
@@ -1038,6 +1053,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
             if(esp != null && esp.isValid())
             {
                 getIdentifierCollection().update(esp.getIdentifiers());
+                mCallEncryptedByAlgorithm = esp.isEncryptedAudio();
 
                 if(esp.isEncryptedAudio())
                 {
@@ -1061,6 +1077,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
      */
     private void processTDU(P25P1Message message)
     {
+        mCallEncryptedByAlgorithm = null;
         mTrafficChannelManager.processP1TrafficCallEnd(getCurrentFrequency(), message.getTimestamp(), "TDU:" + message);
         broadcast(new DecoderStateEvent(this, Event.DECODE, State.ACTIVE));
     }
@@ -1079,6 +1096,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
 
             if(lcw != null && lcw.isValid())
             {
+                mCallEncryptedByAlgorithm = null;
                 mTrafficChannelManager.processP1TrafficCallEnd(getCurrentFrequency(), message.getTimestamp(), "TDULC:" + message);
                 broadcast(new DecoderStateEvent(this, Event.DECODE, State.ACTIVE));
                 processLC(lcw, message.getTimestamp(), true);
