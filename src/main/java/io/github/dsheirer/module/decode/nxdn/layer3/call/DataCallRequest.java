@@ -64,7 +64,6 @@ public class DataCallRequest extends DataCallWithOptionalLocation
         sb.append(getCallType()).append(" DATA CALL REQUEST");
         sb.append(" FROM:").append(getSource());
         sb.append(" TO:").append(getDestination());
-        sb.append(" ").append(getEncryptionKeyIdentifier());
         sb.append(getCallOption());
         return sb.toString();
 
@@ -79,6 +78,6 @@ public class DataCallRequest extends DataCallWithOptionalLocation
     @Override
     public List<Identifier> getIdentifiers()
     {
-        return List.of(getSource(), getDestination(), getEncryptionKeyIdentifier());
+        return List.of(getSource(), getDestination());
     }
 }

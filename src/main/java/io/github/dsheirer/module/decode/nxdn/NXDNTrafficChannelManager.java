@@ -567,6 +567,19 @@ public class NXDNTrafficChannelManager extends TrafficChannelManager implements 
                     tracker.addDetails("TIMER:" + callTimer + " " + audioCodec + " " + mode);
                 }
             }
+            else if(encryption.isEncrypted())
+            {
+                //The control channel grant doesn't carry the cipher type.  When the traffic channel voice call
+                //reports scrambling or encryption, update the tracked call event to show it.
+                DecodeEventType encryptedType = getType(callType, encryption);
+
+                if(tracker.getEvent().getEventType() != encryptedType)
+                {
+                    tracker.getEvent().setDecodeEventType(encryptedType);
+                    tracker.prefixDetails(encryption.toString());
+                    tracker.addIdentifierIfMissing(encryption);
+                }
+            }
 
             boolean ignoreEncrypted = mIgnoreEncryptedCalls && encryption.isEncrypted();
 

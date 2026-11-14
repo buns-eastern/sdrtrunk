@@ -84,7 +84,6 @@ public class VoiceCallAssignment extends VoiceCallWithOptionalLocation implement
         }
 
         sb.append(getCallType()).append(" VOICE CALL ASSIGNMENT");
-        sb.append(" ").append(getEncryptionKeyIdentifier());
         sb.append(" FROM:").append(getSource());
         sb.append(" TO:").append(getDestination());
         if(hasChannel())
@@ -146,6 +145,6 @@ public class VoiceCallAssignment extends VoiceCallWithOptionalLocation implement
     @Override
     public List<Identifier> getIdentifiers()
     {
-        return List.of(getSource(), getDestination(), getEncryptionKeyIdentifier());
+        return List.of(getSource(), getDestination());
     }
 }

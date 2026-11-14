@@ -52,6 +52,12 @@ public class DataCallHeader extends DataCall implements IPacketHeader
     }
 
     @Override
+    public boolean hasEncryptionInformation()
+    {
+        return true;
+    }
+
+    @Override
     public String toString()
     {
         StringBuilder sb = getMessageBuilder();

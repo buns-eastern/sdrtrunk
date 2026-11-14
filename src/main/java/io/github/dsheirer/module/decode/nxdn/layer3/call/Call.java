@@ -59,13 +59,32 @@ public abstract class Call extends CallControl
     public abstract CallOption getCallOption();
 
     /**
-     * Encryption algorithm and key ID.
+     * Indicates if this message carries the cipher type and key ID fields.  Only the voice call (VCALL), data call
+     * header (DCALL) and short data call request (SDCALL_REQ) messages carry them.  Other call control messages use
+     * those bits for other fields (e.g. call timer and channel in a voice call assignment).
+     */
+    public boolean hasEncryptionInformation()
+    {
+        return false;
+    }
+
+    /**
+     * Encryption algorithm and key ID, or unencrypted when this message doesn't carry encryption information.
      */
     public EncryptionKeyIdentifier getEncryptionKeyIdentifier()
     {
         if(mEncryptionKeyIdentifier == null)
         {
-            mEncryptionKeyIdentifier = EncryptionKeyIdentifier.create(Protocol.NXDN, NXDNEncryptionKey.create(getMessage().getInt(CIPHER_TYPE), getMessage().getInt(KEY_ID)));
+            if(hasEncryptionInformation())
+            {
+                mEncryptionKeyIdentifier = EncryptionKeyIdentifier.create(Protocol.NXDN,
+                        NXDNEncryptionKey.create(getMessage().getInt(CIPHER_TYPE), getMessage().getInt(KEY_ID)));
+            }
+            else
+            {
+                //This message type doesn't carry the cipher type and key ID fields.
+                mEncryptionKeyIdentifier = EncryptionKeyIdentifier.create(Protocol.NXDN, NXDNEncryptionKey.create(0, 0));
+            }
         }
 
         return mEncryptionKeyIdentifier;

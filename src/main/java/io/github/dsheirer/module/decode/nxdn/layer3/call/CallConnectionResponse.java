@@ -53,11 +53,6 @@ public class CallConnectionResponse extends CallWithOptionalLocation
         sb.append("CALL CONNECTION RESPONSE FROM:").append(getSource());
         sb.append(" TO:").append(getDestination());
 
-        if(getEncryptionKeyIdentifier().isEncrypted())
-        {
-            sb.append(" ").append(getEncryptionKeyIdentifier());
-        }
-
         return sb.toString();
     }
 

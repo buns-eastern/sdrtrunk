@@ -60,6 +60,12 @@ public class VoiceCallAssignmentDuplicateTraffic extends VoiceCall implements IC
     }
 
     @Override
+    public boolean hasEncryptionInformation()
+    {
+        return false;
+    }
+
+    @Override
     public String toString()
     {
         StringBuilder sb = getMessageBuilder();
@@ -77,7 +83,6 @@ public class VoiceCallAssignmentDuplicateTraffic extends VoiceCall implements IC
         sb.append(getCallType()).append(" VOICE CALL ASSIGNMENT");
         sb.append(" FROM:").append(getSource());
         sb.append(" TO:").append(getDestination());
-        sb.append(" ").append(getEncryptionKeyIdentifier());
         if(hasChannel())
         {
             sb.append(" CHANNEL:").append(getChannel());

@@ -96,19 +96,26 @@ public class NXDNAudioModule extends AmbeAudioModule
             }
             else if(message.isValid())
             {
-                if(message instanceof VoiceCall voiceCall)
+                if(message instanceof VoiceCall voiceCall && voiceCall.hasEncryptionInformation())
                 {
+                    //Voice call (VCALL) carries the cipher type and sets the encryption state for the call
                     mEncryptedCall = voiceCall.getEncryptionKeyIdentifier().isEncrypted();
                     mEncryptedCallStateEstablished = true;
                     mAudioCodec = voiceCall.getCallOption().getCodec();
                     processCachedAudio();
                 }
-                else if(message instanceof VoiceCallWithOptionalLocation voiceCall)
+                else if(message instanceof VoiceCall || message instanceof VoiceCallWithOptionalLocation)
                 {
-                    mEncryptedCall = voiceCall.getEncryptionKeyIdentifier().isEncrypted();
-                    mEncryptedCallStateEstablished = true;
-                    mAudioCodec = voiceCall.getCallOption().getCodec();
-                    processCachedAudio();
+                    //Other call messages don't carry the cipher type.  They can establish the call (as before) but
+                    //they never change an encryption state that was set by a voice call message.
+                    if(!mEncryptedCallStateEstablished)
+                    {
+                        mEncryptedCall = false;
+                        mEncryptedCallStateEstablished = true;
+                        mAudioCodec = message instanceof VoiceCall vc ? vc.getCallOption().getCodec() :
+                                ((VoiceCallWithOptionalLocation)message).getCallOption().getCodec();
+                        processCachedAudio();
+                    }
                 }
                 else if(message instanceof Disconnect || message instanceof TransmissionRelease)
                 {
