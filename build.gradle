@@ -125,6 +125,10 @@ repositories {
 //Version is defined in gradle.properties so that we can CLI override it for nightly builds.
 version = project.findProperty('projectVersion')
 
+//Build ID shown in the title bar and used by Backup & Migrate to match builds.  The nightly workflows pass one value
+//for every platform zip in a run so that they all match.  Local builds use the current date and time.
+def buildId = project.findProperty('buildId') ?: new SimpleDateFormat("yyyyMMdd.HHmm").format(new Date())
+
 //Java 24 is required for this version of the Project Panama preview/incubator feature
 java {
     toolchain {
@@ -352,6 +356,7 @@ jar {
                 'Implementation-Version' : archiveVersion,
                 'Created-By'            : "Gradle ${gradle.gradleVersion}",
                 'Build-Timestamp'       : new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ").format(new Date()),
+                'Build-Id'              : buildId,
                 'Build-JDK'             : "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']}",
                 'Build-OS'              : "${System.properties['os.name']} (${System.properties['os.arch']} ${System.properties['os.version']}"
         )

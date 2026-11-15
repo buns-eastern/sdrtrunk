@@ -48,6 +48,7 @@ public class SystemProperties
     private static String PROPERTIES_FILENAME = "SDRTrunk.properties";
     private static String MANIFEST_VERSION = "Implementation-Version";
     private static String BUILD_TIMESTAMP = "Build-Timestamp";
+    private static String BUILD_ID = "Build-Id";
 
     private static SystemProperties INSTANCE;
     private static Properties mProperties;
@@ -217,10 +218,16 @@ public class SystemProperties
             {
                 String version = manifest.getMainAttributes().getValue(MANIFEST_VERSION);
                 String timestamp = manifest.getMainAttributes().getValue(BUILD_TIMESTAMP);
+                String buildId = manifest.getMainAttributes().getValue(BUILD_ID);
 
                 if(version != null)
                 {
-                    if(version.contains("nightly") && timestamp != null)
+                    if(version.contains("nightly") && buildId != null && !buildId.isBlank())
+                    {
+                        //One build ID is shared by every platform built in the same nightly run
+                        sb.append(" nightly ").append(buildId.trim());
+                    }
+                    else if(version.contains("nightly") && timestamp != null)
                     {
                         sb.append( " nightly - ").append(timestamp);
                     }

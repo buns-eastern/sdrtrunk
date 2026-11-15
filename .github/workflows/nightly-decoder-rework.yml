@@ -125,6 +125,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # One build ID (date and time the build started) shared by every platform zip from this run, so builds for
+      # different platforms from the same run match.  The time zone comes from the optional BUILD_TZ secret.
+      - name: Set build ID
+        run: echo "BUILD_ID=$(TZ="${BUILD_TZ:-UTC}" date +%Y%m%d.%H%M)" >> "$GITHUB_ENV"
+        env:
+          BUILD_TZ: ${{ secrets.BUILD_TZ }}
+
       - name: Set up JDK 25
         uses: actions/setup-java@v3
         with:
@@ -178,12 +185,12 @@ jobs:
       - name: Build Linux and Mac releases with Gradle
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: runtimeZipOthers -PprojectVersion=nightly
+          arguments: runtimeZipOthers -PprojectVersion=nightly -PbuildId=${{ env.BUILD_ID }}
 
       - name: Build Windows release with Gradle
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: runtimeZipWindows -PprojectVersion=nightly
+          arguments: runtimeZipWindows -PprojectVersion=nightly -PbuildId=${{ env.BUILD_ID }}
 
       # Inject platform-specific native libs into release zips
       - name: Inject native libraries into release packages
@@ -220,7 +227,7 @@ jobs:
 
       - name: Create Build Info file
         run: |
-          echo -e "ref: $GITHUB_REF \ncommit: $GITHUB_SHA\nbuild: $(date +"%Y-%m-%dT%H:%M:%SZ")" > build/image/build_info.txt
+          echo -e "ref: $GITHUB_REF \ncommit: $GITHUB_SHA\nbuild: $(date +"%Y-%m-%dT%H:%M:%SZ")\nbuild id: $BUILD_ID" > build/image/build_info.txt
 
       - name: Delete previous nightly release
         run: gh release delete nightly-decoder-rework --yes --cleanup-tag || true
