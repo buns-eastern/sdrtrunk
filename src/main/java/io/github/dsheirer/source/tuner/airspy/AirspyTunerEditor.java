@@ -494,7 +494,36 @@ public class AirspyTunerEditor extends TunerEditor<AirspyTuner, AirspyTunerConfi
                     GainMode mode = (GainMode)mGainModeCombo.getSelectedItem();
                     int value = getMasterGainSlider().getValue();
                     Gain gain = Gain.getGain(mode, value);
+
+                    //Update the gain controls without their change listeners sending each intermediate value to the
+                    //tuner or saving it, then apply the selected mode's gains to the tuner once.
+                    setLoading(true);
                     updateGainComponents(gain);
+                    setLoading(false);
+
+                    try
+                    {
+                        AirspyTunerController controller = getTuner().getController();
+
+                        if(gain == Gain.CUSTOM)
+                        {
+                            controller.setMixerAGC(getMixerAGCCheckBox().isSelected());
+                            controller.setLNAAGC(getLNAAGCCheckBox().isSelected());
+                            controller.setIFGain(getIFGainSlider().getValue());
+                            controller.setMixerGain(getMixerGainSlider().getValue());
+                            controller.setLNAGain(getLNAGainSlider().getValue());
+                        }
+                        else
+                        {
+                            controller.setGain(gain);
+                        }
+                    }
+                    catch(Exception ex)
+                    {
+                        mLog.error("Couldn't set Airspy gain mode to:" + gain.name(), ex);
+                        JOptionPane.showMessageDialog(mGainModeCombo, "Couldn't set gain mode to " + mode);
+                    }
+
                     save();
                 }
             });
