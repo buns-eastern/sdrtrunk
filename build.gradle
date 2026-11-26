@@ -61,6 +61,10 @@ plugins {
 String gitDescribe = describeGitVersion()
 version = project.findProperty('projectVersion') ?: (gitDescribe ? gitDescribe.substring(1) : 'unknown')
 
+//Build ID shown in the title bar and used by Backup & Migrate to match builds.  The nightly workflow passes one value
+//for every platform zip in a run so that they all match.  Local builds use the current date and time.
+def buildId = project.findProperty('buildId') ?: new SimpleDateFormat("yyyyMMdd.HHmm").format(new Date())
+
 String describeGitVersion()
 {
     try
@@ -257,6 +261,7 @@ jar {
                 'Git-Describe'          : gitDescribe ?: 'unknown',
                 'Created-By'            : "Gradle ${gradle.gradleVersion}",
                 'Build-Timestamp'       : new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ").format(new Date()),
+                'Build-Id'              : buildId,
                 'Build-JDK'             : "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']}",
                 'Build-OS'              : "${System.properties['os.name']} (${System.properties['os.arch']} ${System.properties['os.version']}"
         )
@@ -288,7 +293,7 @@ String targetWindowsAarch64 = 'windows-aarch64-v' + version
 /**
  * Download URLs to download the JDK as part of the gradle build packaging process
  */
-def jdk_download_base = "https://download.bell-sw.com/java/27+36/bellsoft-jdk27+36-"
+def jdk_download_base = "https://download.bell-sw.com/java/27.0.1.1+5/bellsoft-jdk27.0.1.1+5-"
 def jdk_download_suffix = "-full.tar.gz"
 def jdk_download_linux_aarch64 = jdk_download_base + "linux-aarch64" + jdk_download_suffix
 def jdk_download_linux_x86_64 = jdk_download_base + "linux-amd64" + jdk_download_suffix
