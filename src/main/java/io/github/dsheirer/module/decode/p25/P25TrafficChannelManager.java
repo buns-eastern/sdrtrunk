@@ -1192,14 +1192,7 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
         {
             SourceConfigTuner sourceConfig = new SourceConfigTuner();
             sourceConfig.setFrequency(apco25Channel.getDownlinkFrequency());
-            if(mParentChannel.getSourceConfiguration() instanceof SourceConfigTuner parentConfigTuner)
-            {
-                sourceConfig.setPreferredTuner(parentConfigTuner.getPreferredTuner());
-            }
-            else if(mParentChannel.getSourceConfiguration() instanceof SourceConfigTunerMultipleFrequency parentConfigTuner)
-            {
-                sourceConfig.setPreferredTuner(parentConfigTuner.getPreferredTuner());
-            }
+            sourceConfig.setPreferredTuner(getPreferredTuner(mParentChannel));
             trafficChannel.setSourceConfiguration(sourceConfig);
 
             //If this is a phase2 request and we have scramble/randomizer parameters, set them
