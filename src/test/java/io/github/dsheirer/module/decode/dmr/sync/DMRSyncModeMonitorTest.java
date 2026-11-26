@@ -45,19 +45,19 @@ public class DMRSyncModeMonitorTest
     }
 
     @Test
-    void dominantModeIsDetected()
+    void detectionsDoNotNarrowTheMode()
     {
         DMRSyncDetector detector = new DMRSyncDetector() {};
         DMRSyncModeMonitor monitor = monitor(detector);
-        detect(monitor, DMRSyncPattern.DIRECT_DATA_TIMESLOT_1, 10);
+        detect(monitor, DMRSyncPattern.DIRECT_DATA_TIMESLOT_1, 100);
+        detect(monitor, DMRSyncPattern.BASE_STATION_DATA, 100);
+        detect(monitor, DMRSyncPattern.MOBILE_STATION_VOICE, 100);
         assertEquals(DMRSyncDetectMode.AUTOMATIC, monitor.getMode());
-        detect(monitor, DMRSyncPattern.DIRECT_DATA_TIMESLOT_1, 1);
-        assertEquals(DMRSyncDetectMode.DIRECT_ONLY, monitor.getMode());
-        assertEquals(DMRSyncDetectMode.DIRECT_ONLY, detector.getMode());
+        assertEquals(DMRSyncDetectMode.AUTOMATIC, detector.getMode());
     }
 
     @Test
-    void resetRestoresAutomaticAndAllowsNewDominantMode()
+    void resetKeepsAutomatic()
     {
         DMRSyncDetector detector = new DMRSyncDetector() {};
         DMRSyncModeMonitor monitor = monitor(detector);
@@ -65,12 +65,6 @@ public class DMRSyncModeMonitorTest
         monitor.reset();
         assertEquals(DMRSyncDetectMode.AUTOMATIC, monitor.getMode());
         assertEquals(DMRSyncDetectMode.AUTOMATIC, detector.getMode());
-
-        //Counts are cleared by the reset, so the base station mode is established without having to outvote the
-        //direct mode detections from before the reset.
-        detect(monitor, DMRSyncPattern.BASE_STATION_DATA, 11);
-        assertEquals(DMRSyncDetectMode.BASE_ONLY, monitor.getMode());
-        assertEquals(DMRSyncDetectMode.BASE_ONLY, detector.getMode());
     }
 
     @Test

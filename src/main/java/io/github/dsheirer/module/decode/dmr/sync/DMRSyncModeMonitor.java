@@ -23,18 +23,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Monitors sync pattern detections to automatically detect the prevailing or dominant sync mode group used on a channel
- * and optimizes the DMR sync detectors to reduce the quantity of false detects of unused sync patterns and the overall
- * sync detection processing workload.
- *
- * An automatically detected mode is not permanent: reset() restores AUTOMATIC mode so that the dominant mode can be
- * re-established, for example after a period of inactivity on a channel that carries sparse or mixed mode (ie
- * repeater and direct mode) traffic.  A mode that is set via setMode() (ie BASE_ONLY for a traffic channel) is locked
- * and is not affected by sync detections or reset().
+ * Manages the sync detection mode for a set of DMR sync detectors.  The mode defaults to AUTOMATIC (all sync pattern
+ * groups) and is only narrowed when explicitly set, such as for DMR traffic channels (BASE_ONLY).
  */
 public class DMRSyncModeMonitor
 {
-    private static final int DOMINANT_THRESHOLD = 10;
     private final List<DMRSyncDetector> mSyncDetectors = new ArrayList<>();
     private int mBaseCount;
     private int mMobileCount;
@@ -88,48 +81,17 @@ public class DMRSyncModeMonitor
     }
 
     /**
-     * Indicates a sync pattern is positively detected and updates the current sync detection mode for all monitored
-     * sync detectors once the dominant mode is established.
+     * Indicates a sync pattern is positively detected.
+     *
+     * The sync detection mode is not automatically narrowed to a single (base, mobile or direct) sync pattern group.
+     * On conventional channels, false sync detections from noise during idle periods can outnumber the sync patterns
+     * used by the radios on the channel.  Narrowing the mode would then stop detection of the radios' sync patterns.
+     * Channels where the mode is known in advance (ie DMR traffic channels) set the mode explicitly via setMode().
      * @param pattern that was detected.
      */
     public void detected(DMRSyncPattern pattern)
     {
-        if(mMode != DMRSyncDetectMode.AUTOMATIC)
-        {
-            return;
-        }
-
-        switch(pattern)
-        {
-            case BASE_STATION_DATA:
-            case BASE_STATION_VOICE:
-                mBaseCount++;
-                break;
-            case MOBILE_STATION_DATA:
-            case MOBILE_STATION_VOICE:
-            case REVERSE_CHANNEL:
-                mMobileCount++;
-                break;
-            case DIRECT_DATA_TIMESLOT_1:
-            case DIRECT_DATA_TIMESLOT_2:
-            case DIRECT_VOICE_TIMESLOT_1:
-            case DIRECT_VOICE_TIMESLOT_2:
-                mDirectCount++;
-                break;
-        }
-
-        if(mBaseCount - mMobileCount > DOMINANT_THRESHOLD && mBaseCount - mDirectCount > DOMINANT_THRESHOLD)
-        {
-            applyMode(DMRSyncDetectMode.BASE_ONLY);
-        }
-        else if(mMobileCount - mBaseCount > DOMINANT_THRESHOLD && mMobileCount - mDirectCount > DOMINANT_THRESHOLD)
-        {
-            applyMode(DMRSyncDetectMode.MOBILE_ONLY);
-        }
-        else if(mDirectCount - mBaseCount > DOMINANT_THRESHOLD && mDirectCount - mMobileCount > DOMINANT_THRESHOLD)
-        {
-            applyMode(DMRSyncDetectMode.DIRECT_ONLY);
-        }
+        //No automatic narrowing - see above.
     }
 
     private void clearCounts()

@@ -33,6 +33,7 @@ public abstract class DMRBurst extends DMRMessage
 
     private DMRSyncPattern mSyncPattern;
     private CACH mCACH;
+    private boolean mColorCodeRejected = false;
 
     /**
      * DMR message frame.  This message is comprised of a 24-bit prefix and a 264-bit message frame.  Outbound base
@@ -53,6 +54,27 @@ public abstract class DMRBurst extends DMRMessage
      * Common Announcement Channel (CACH) message frame.  Note: check hasCACH() before accessing this method.
      * @return CACH frame or null if this message does not contain a CACH.
      */
+    /**
+     * Indicates if this burst was rejected by the channel's color code filter.  A rejected burst is still dispatched
+     * so that it remains visible in the message activity view, but decoder state and audio processing ignore it, so
+     * it produces no decode events, no audio, and therefore no recording or streaming.
+     *
+     * @return true if rejected by the color code filter.
+     */
+    public boolean isColorCodeRejected()
+    {
+        return mColorCodeRejected;
+    }
+
+    /**
+     * Sets the color code filter rejection state for this burst.
+     * @param rejected true when the burst fails the channel's color code filter.
+     */
+    public void setColorCodeRejected(boolean rejected)
+    {
+        mColorCodeRejected = rejected;
+    }
+
     public CACH getCACH()
     {
         return mCACH;
