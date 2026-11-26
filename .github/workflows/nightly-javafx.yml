@@ -1,0 +1,72 @@
+# Nightly build of the javafx branch for Linux, Mac and Windows, built on one Linux runner.
+# Manual only: press "Run workflow" in the Actions tab.
+name: Nightly Release JavaFX
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-javafx
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.ref == 'refs/heads/javafx'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # One build ID (date and time the build started) shared by every platform zip from this run.
+      # The time zone comes from the optional BUILD_TZ secret.
+      - name: Set build ID
+        run: echo "BUILD_ID=$(TZ="${BUILD_TZ:-UTC}" date +%Y%m%d.%H%M)" >> "$GITHUB_ENV"
+        env:
+          BUILD_TZ: ${{ secrets.BUILD_TZ }}
+
+      # jlink needs the build JDK to be the exact same version as the JDKs bundled in the zips (jdk_download_base in
+      # build.gradle), so the build runs on that same Liberica Full JDK.
+      - name: Set up Liberica JDK 27.0.1.1+5 Full
+        run: |
+          curl -sSLf -o "$RUNNER_TEMP/jdk.tar.gz" https://download.bell-sw.com/java/27.0.1.1+5/bellsoft-jdk27.0.1.1+5-linux-amd64-full.tar.gz
+          mkdir -p "$RUNNER_TEMP/jdk"
+          tar -xzf "$RUNNER_TEMP/jdk.tar.gz" -C "$RUNNER_TEMP/jdk" --strip-components=1
+          echo "JAVA_HOME=$RUNNER_TEMP/jdk" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/jdk/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/jdk/bin/java" -version
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Linux and Mac releases with Gradle
+        run: ./gradlew runtimeZipOthers -PprojectVersion=nightly -PbuildId=${{ env.BUILD_ID }} -Porg.gradle.java.installations.paths=${{ env.JAVA_HOME }}
+
+      - name: Build Windows release with Gradle
+        run: ./gradlew runtimeZipWindows -PprojectVersion=nightly -PbuildId=${{ env.BUILD_ID }} -Porg.gradle.java.installations.paths=${{ env.JAVA_HOME }}
+
+      - name: Create Build Info file
+        run: |
+          echo -e "ref: $GITHUB_REF \ncommit: $GITHUB_SHA\nbuild: $(date +"%Y-%m-%dT%H:%M:%SZ")\nbuild id: $BUILD_ID" > build/image/build_info.txt
+
+      - name: Delete previous nightly-javafx release
+        run: gh release delete nightly-javafx --yes --cleanup-tag || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create nightly-javafx release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly-javafx
+          name: Nightly Build JavaFX
+          prerelease: true
+          body: |
+            Nightly build of the **javafx** branch — buns-eastern fork of sdrtrunk.
+          files: |
+            build/image/*.zip
+            build/image/build_info.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
