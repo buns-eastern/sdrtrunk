@@ -38,6 +38,7 @@ import io.github.dsheirer.identifier.alias.TalkerAliasIdentifier;
 import io.github.dsheirer.identifier.alias.TalkerAliasManager;
 import io.github.dsheirer.identifier.alias.TalkerAliasTracker;
 import io.github.dsheirer.identifier.configuration.FrequencyConfigurationIdentifier;
+import io.github.dsheirer.identifier.integer.IntegerIdentifier;
 import io.github.dsheirer.identifier.configuration.SiteConfigurationIdentifier;
 import io.github.dsheirer.identifier.configuration.SystemConfigurationIdentifier;
 import io.github.dsheirer.identifier.decoder.DecoderLogicalChannelNameIdentifier;
@@ -64,6 +65,8 @@ import io.github.dsheirer.module.decode.p25.P25DecodeEvent;
 import io.github.dsheirer.module.decode.p25.P25TrafficChannelManager;
 import io.github.dsheirer.module.decode.p25.identifier.channel.APCO25Channel;
 import io.github.dsheirer.module.decode.p25.phase1.message.IFrequencyBand;
+import io.github.dsheirer.module.decode.p25.phase1.message.lc.standard.LCSourceIDExtension;
+import io.github.dsheirer.module.decode.p25.phase1.message.lc.IExtendedSourceMessage;
 import io.github.dsheirer.module.decode.p25.phase1.message.P25P1Message;
 import io.github.dsheirer.module.decode.p25.phase1.message.hdu.HDUMessage;
 import io.github.dsheirer.module.decode.p25.phase1.message.hdu.HeaderData;
@@ -203,6 +206,14 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private final P25TrafficChannelManager mTrafficChannelManager;
     private ServiceOptions mCurrentServiceOptions;
     private Listener<IMessage> mRawStreamListener;
+    private final DecodeConfigP25 mDecodeConfigP25;
+    private Integer mObservedSystem;
+    private Integer mObservedSite;
+
+    //Pending voice-channel source LC awaiting its SOURCE_ID_EXTENSION. Set when an extension-required
+    //channel-user LC is processed un-enriched; the fully-qualified (ISSI) source is applied to it when the
+    //extension arrives. Voice audio is no longer held upstream to wait for this (see P25P1MessageProcessor).
+    private IExtendedSourceMessage mPendingSourceExtension;
 
     /**
      * Encryption state of the current call as signalled by the algorithm ID in the HDU header or LDU2 encryption sync
@@ -225,6 +236,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         mChannel = channel;
         mModulation = ((DecodeConfigP25Phase1)channel.getDecodeConfiguration()).getModulation();
         mNetworkConfigurationMonitor = new P25P1NetworkConfigurationMonitor(mModulation);
+        mDecodeConfigP25 = (channel.getDecodeConfiguration() instanceof DecodeConfigP25 cfg) ? cfg : null;
 
         if(trafficChannelManager != null)
         {
@@ -289,6 +301,23 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                 mPatchGroupManager.addPatchGroup(patchGroupIdentifier, preLoadDataContent.getTimestamp());
             }
         }
+
+        //Seed the source (FROM) radio from the channel grant so the talker ID is present from the first audio
+        //frame -- even on very short PTTs that end before the voice-channel link control supplies it. The grant
+        //already carries the source (it's what allocated this traffic channel), but it was only loaded into the
+        //channel metadata, not this decode identifier collection that feeds the recording and PCM stream. Seeding
+        //it here makes the correct FROM available to both, instead of an empty/zero value on quick calls. The
+        //voice channel overrides it for any subsequent talkers as usual.
+        for(Identifier identifier: preLoadDataContent.getData().getIdentifiers(Role.FROM))
+        {
+            //Only seed a REAL source. Some grants (notably Harris consoles) carry FM:0 -- those resolve their ID
+            //on the voice channel, so don't seed a zero placeholder and don't disturb that path. RadioIdentifier
+            //.isValid() is value > 0; the voice channel still overrides this seed for any/all talkers regardless.
+            if(identifier.isValid())
+            {
+                getIdentifierCollection().update(identifier);
+            }
+        }
     }
 
     /**
@@ -302,6 +331,37 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         mRawStreamListener = listener;
     }
 
+    /**
+     * Indicates if the message should be rejected because this channel has an optional identity filter (NAC/System/
+     * Site) configured and the message's NAC, or the most recently observed System/Site, does not match.  When no
+     * filter is configured this always returns false, so behavior is identical to a channel without filters.
+     */
+    private boolean isIdentityFilterRejected(P25P1Message message)
+    {
+        if(mDecodeConfigP25 == null || !mDecodeConfigP25.hasIdentityFilter())
+        {
+            return false;
+        }
+
+        if(message.getNAC() instanceof IntegerIdentifier nacIdentifier &&
+                !mDecodeConfigP25.isNacAllowed(nacIdentifier.getValue()))
+        {
+            return true;
+        }
+
+        if(mObservedSystem != null && !mDecodeConfigP25.isSystemAllowed(mObservedSystem))
+        {
+            return true;
+        }
+
+        if(mObservedSite != null && !mDecodeConfigP25.isSiteAllowed(mObservedSite))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     @Override
     public void receive(IMessage iMessage)
     {
@@ -312,6 +372,11 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
 
         if(iMessage instanceof P25P1Message message)
         {
+            if(isIdentityFilterRejected(message))
+            {
+                return;
+            }
+
             getIdentifierCollection().update(message.getNAC());
 
             switch(message.getDUID())
@@ -482,6 +547,33 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private void processLCChannelUser(LinkControlWord lcw, long timestamp)
     {
         updateChannelUserIdentifiers(lcw, timestamp, true);
+
+        //If this channel-user LC carries an ISSI/roaming source that needs a separate SOURCE_ID_EXTENSION, remember
+        //it so the fully-qualified source can be applied when that extension arrives. Audio is no longer held to wait.
+        if(lcw instanceof IExtendedSourceMessage esm && esm.isExtensionRequired() && !esm.isFullyExtended())
+        {
+            mPendingSourceExtension = esm;
+        }
+
+        //Fallback: if neither the start-time grant preload nor the voice channel has supplied a usable source --
+        //e.g. a short console continuation that keyed up on an already-running traffic channel and so bypassed the
+        //preload -- recover the talker ID from the granted source the control channel recorded for this frequency.
+        //Only an empty/invalid FROM is filled; a real voice-channel source always takes priority and is never
+        //overridden (and an invalid/zero grant, like Harris/ISSI FM:0, is ignored, leaving voice-channel resolution
+        //untouched).
+        if(mTrafficChannelManager != null)
+        {
+            Identifier currentFrom = getIdentifierCollection().getFromIdentifier();
+            if(currentFrom == null || !currentFrom.isValid())
+            {
+                Identifier grantedFrom = mTrafficChannelManager.getGrantedFromIdentifier(getCurrentFrequency());
+                if(grantedFrom != null && grantedFrom.isValid())
+                {
+                    getIdentifierCollection().update(grantedFrom);
+                }
+            }
+        }
+
         DecodeEventType decodeEventType = getLCDecodeEventType(lcw);
 
         ServiceOptions serviceOptions = null;
@@ -695,6 +787,11 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                         getIdentifierCollection().update(frequencyID);
 
                     }
+                    if(ambtc instanceof AMBTCNetworkStatusBroadcast nsbAmbtcIdentity &&
+                            nsbAmbtcIdentity.getSystem() instanceof IntegerIdentifier nsbAmbtcSystem)
+                    {
+                        mObservedSystem = nsbAmbtcSystem.getValue();
+                    }
                     mNetworkConfigurationMonitor.process(ambtc);
                     break;
                 case OSP_RFSS_STATUS_BROADCAST:
@@ -711,6 +808,17 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                                 .create(rsb.getChannel().getDownlinkFrequency());
                         getIdentifierCollection().update(frequencyID);
 
+                    }
+                    if(ambtc instanceof AMBTCRFSSStatusBroadcast rsbIdentity)
+                    {
+                        if(rsbIdentity.getSystem() instanceof IntegerIdentifier rsbSystem)
+                        {
+                            mObservedSystem = rsbSystem.getValue();
+                        }
+                        if(rsbIdentity.getSite() instanceof IntegerIdentifier rsbSite)
+                        {
+                            mObservedSite = rsbSite.getValue();
+                        }
                     }
                     mNetworkConfigurationMonitor.process(ambtc);
                     break;
@@ -1350,6 +1458,11 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                         getIdentifierCollection().update(frequencyID);
 
                     }
+                    if(tsbk instanceof NetworkStatusBroadcast nsbIdentity &&
+                            nsbIdentity.getSystem() instanceof IntegerIdentifier nsbSystem)
+                    {
+                        mObservedSystem = nsbSystem.getValue();
+                    }
                     mNetworkConfigurationMonitor.process(tsbk);
                     break;
                 case OSP_RFSS_STATUS_BROADCAST:
@@ -1365,6 +1478,17 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                         FrequencyConfigurationIdentifier frequencyID = FrequencyConfigurationIdentifier
                                 .create(rfss.getChannel().getDownlinkFrequency());
                         getIdentifierCollection().update(frequencyID);
+                    }
+                    if(tsbk instanceof RFSSStatusBroadcast rfssIdentity)
+                    {
+                        if(rfssIdentity.getSystem() instanceof IntegerIdentifier rfssSystem)
+                        {
+                            mObservedSystem = rfssSystem.getValue();
+                        }
+                        if(rfssIdentity.getSite() instanceof IntegerIdentifier rfssSite)
+                        {
+                            mObservedSite = rfssSite.getValue();
+                        }
                     }
                     mNetworkConfigurationMonitor.process(tsbk);
                     break;
@@ -1961,7 +2085,21 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         switch(lcw.getOpcode())
         {
             case SOURCE_ID_EXTENSION:
-                //Ignore - handled elsewhere
+                //Apply the late-arriving fully-qualified (ISSI) source to the pending voice-channel LC and commit it
+                //to the identifier collection. Voice frames are no longer held upstream waiting for this extension
+                //(that stalled PCM audio ~360ms on ISSI calls). The audio has already flowed; this resolves the caller
+                //ID to its full WACN.SYSTEM.ID form — the same value as before, just without gating the audio on it.
+                if(lcw instanceof LCSourceIDExtension sourceIdExtension && mPendingSourceExtension != null)
+                {
+                    mPendingSourceExtension.setSourceIDExtension(sourceIdExtension);
+
+                    if(mPendingSourceExtension instanceof LinkControlWord pendingLcw)
+                    {
+                        updateChannelUserIdentifiers(pendingLcw, timestamp, true);
+                    }
+
+                    mPendingSourceExtension = null;
+                }
                 break;
             //Calls getting ready to start or in-progress on this channel
             case GROUP_VOICE_CHANNEL_USER:
@@ -2250,8 +2388,11 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         {
             case REQUEST_RESET:
                 resetState();
+                mPendingSourceExtension = null;
                 mTalkerAliasTracker.reset();
                 mNetworkConfigurationMonitor.reset();
+                mObservedSystem = null;
+                mObservedSite = null;
                 break;
             case NOTIFICATION_SOURCE_FREQUENCY:
                 long frequency = event.getFrequency();

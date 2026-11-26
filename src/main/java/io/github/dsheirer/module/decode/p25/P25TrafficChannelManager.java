@@ -148,6 +148,7 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
             createPhase1TrafficChannels(phase1.getTrafficChannelPoolSize(), phase1);
             DecodeConfigP25Phase2 phase2 = new DecodeConfigP25Phase2();
             DecoderFactory.transferJMBESettings(phase1, phase2);
+            phase1.copyIdentityFiltersTo(phase2);
             createPhase2TrafficChannels(phase1.getTrafficChannelPoolSize(), phase2);
         }
         else if(parentChannel.getDecodeConfiguration() instanceof DecodeConfigP25Phase2 phase2)
@@ -156,6 +157,7 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
             mIgnoreEncryptedCalls = phase2.getIgnoreEncryptedCalls();
             DecodeConfigP25Phase1 phase1 = new DecodeConfigP25Phase1();
             DecoderFactory.transferJMBESettings(phase2, phase1);
+            phase2.copyIdentityFiltersTo(phase1);
             createPhase1TrafficChannels(phase2.getTrafficChannelPoolSize(), phase1);
             createPhase2TrafficChannels(phase2.getTrafficChannelPoolSize(), phase2);
         }
@@ -813,6 +815,29 @@ public class P25TrafficChannelManager extends TrafficChannelManager implements I
                 processPhase1ControlChannelGrant(apco25Channel, serviceOptions, ic, decodeEventType,
                         isDataChannelGrant, timestamp, context);
             }
+        }
+        finally
+        {
+            mLock.unlock();
+        }
+    }
+
+    /**
+     * Returns the granted source (FROM) identifier currently tracked for the call on the specified frequency, or
+     * null if none. Used by a traffic-channel decoder state to recover the talker ID from the control-channel grant
+     * when the voice channel has not supplied one -- e.g. very short PTTs, including console continuations that key
+     * up on an already-allocated traffic channel and therefore bypass the start-time preload.
+     * @param frequency of the traffic channel
+     * @return granted FROM identifier, or null
+     */
+    public Identifier getGrantedFromIdentifier(long frequency)
+    {
+        mLock.lock();
+
+        try
+        {
+            P25ChannelEventTracker tracker = getTracker(frequency, P25P1Message.TIMESLOT_1);
+            return tracker != null ? tracker.getEvent().getIdentifierCollection().getFromIdentifier() : null;
         }
         finally
         {
