@@ -38,6 +38,8 @@ import io.github.dsheirer.identifier.alias.TalkerAliasIdentifier;
 import io.github.dsheirer.identifier.alias.TalkerAliasManager;
 import io.github.dsheirer.identifier.alias.TalkerAliasTracker;
 import io.github.dsheirer.identifier.configuration.FrequencyConfigurationIdentifier;
+import io.github.dsheirer.identifier.configuration.SiteConfigurationIdentifier;
+import io.github.dsheirer.identifier.configuration.SystemConfigurationIdentifier;
 import io.github.dsheirer.identifier.decoder.DecoderLogicalChannelNameIdentifier;
 import io.github.dsheirer.identifier.patch.PatchGroupIdentifier;
 import io.github.dsheirer.identifier.patch.PatchGroupManager;
@@ -174,6 +176,9 @@ import io.github.dsheirer.module.decode.p25.reference.VoiceServiceOptions;
 import io.github.dsheirer.protocol.Protocol;
 import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.util.PacketUtil;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import io.github.dsheirer.map.GeoPosition;
@@ -188,6 +193,8 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(P25P1DecoderState.class);
     private static final LoggingSuppressor LOGGING_SUPPRESSOR = new LoggingSuppressor(LOGGER);
+    private static final DateTimeFormatter PCM_VID_TIMESTAMP_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
     private final Channel mChannel;
     private final Modulation mModulation;
     private final PatchGroupManager mPatchGroupManager = new PatchGroupManager();
@@ -195,6 +202,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private final Listener<ChannelEvent> mChannelEventListener;
     private final P25TrafficChannelManager mTrafficChannelManager;
     private ServiceOptions mCurrentServiceOptions;
+    private Listener<IMessage> mRawStreamListener;
 
     /**
      * Encryption state of the current call as signalled by the algorithm ID in the HDU header or LDU2 encryption sync
@@ -286,9 +294,22 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     /**
      * Primary message processing method.
      */
+    /**
+     * Sets a listener to receive raw valid messages (for TCP streaming).
+     */
+    public void setRawStreamListener(Listener<IMessage> listener)
+    {
+        mRawStreamListener = listener;
+    }
+
     @Override
     public void receive(IMessage iMessage)
     {
+        if(mRawStreamListener != null && iMessage.isValid())
+        {
+            mRawStreamListener.receive(iMessage);
+        }
+
         if(iMessage instanceof P25P1Message message)
         {
             getIdentifierCollection().update(message.getNAC());
@@ -930,6 +951,17 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
             if(lcw != null && lcw.isValid())
             {
                 processLC(lcw, message.getTimestamp(), false);
+                // Broadcast fast voice_id (~180ms after squelch open, before audio module releases audio)
+                PcmStreamManager pcmMgr = PcmStreamManager.getInstance();
+                if(pcmMgr != null)
+                {
+                    pcmMgr.broadcastVoiceId(
+                            pcmVidGetSystem(),
+                            pcmVidGetSite(),
+                            pcmVidGetIdentifier(getIdentifierCollection().getToIdentifier()),
+                            pcmVidGetIdentifier(getIdentifierCollection().getFromIdentifier()),
+                            PCM_VID_TIMESTAMP_FMT.format(Instant.ofEpochMilli(message.getTimestamp())));
+                }
                 mTrafficChannelManager.processP1TrafficLDU1(getCurrentFrequency(),
                         getIdentifierCollection().getIdentifiers(), message.getTimestamp(), ldu1.toString());
             }
@@ -2249,5 +2281,35 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     @Override
     public void init()
     {
+    }
+
+    // -----------------------------------------------------------------------
+    // PCM voice_id helpers — extract system/site/identifier strings from the
+    // identifier collection without throwing if nothing is present yet.
+    // -----------------------------------------------------------------------
+
+    private String pcmVidGetSystem()
+    {
+        io.github.dsheirer.identifier.Identifier id =
+                getIdentifierCollection().getIdentifier(IdentifierClass.CONFIGURATION, Form.SYSTEM, Role.ANY);
+        if(id instanceof SystemConfigurationIdentifier sci)
+            return sci.getValue();
+        return "";
+    }
+
+    private String pcmVidGetSite()
+    {
+        io.github.dsheirer.identifier.Identifier id =
+                getIdentifierCollection().getIdentifier(IdentifierClass.CONFIGURATION, Form.SITE, Role.ANY);
+        if(id instanceof SiteConfigurationIdentifier sici)
+            return sici.getValue();
+        return "";
+    }
+
+    private String pcmVidGetIdentifier(io.github.dsheirer.identifier.Identifier id)
+    {
+        if(id == null)
+            return "";
+        return id.toString();
     }
 }

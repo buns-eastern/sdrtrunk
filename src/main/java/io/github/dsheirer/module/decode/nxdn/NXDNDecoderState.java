@@ -35,6 +35,7 @@ import io.github.dsheirer.identifier.alias.TalkerAliasManager;
 import io.github.dsheirer.identifier.alias.TalkerAliasTracker;
 import io.github.dsheirer.identifier.radio.RadioIdentifier;
 import io.github.dsheirer.message.IMessage;
+import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.event.DecodeEventType;
 import io.github.dsheirer.module.decode.event.PlottableDecodeEvent;
@@ -187,9 +188,25 @@ public class NXDNDecoderState extends DecoderState
         return summary.toString();
     }
 
+    private Listener<IMessage> mRawStreamListener;
+
+    /**
+     * Sets a listener to receive every valid decoded message for the raw network stream (port 9501).
+     * @param listener to receive raw messages, or null to disable.
+     */
+    public void setRawStreamListener(Listener<IMessage> listener)
+    {
+        mRawStreamListener = listener;
+    }
+
     @Override
     public void receive(IMessage iMessage)
     {
+        if(mRawStreamListener != null && iMessage.isValid())
+        {
+            mRawStreamListener.receive(iMessage);
+        }
+
         if(iMessage instanceof NXDNMessage nxdn && nxdn.isValid())
         {
             if(nxdn instanceof NXDNLayer3Message layer3)

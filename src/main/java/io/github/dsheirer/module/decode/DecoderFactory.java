@@ -93,6 +93,13 @@ import io.github.dsheirer.module.decode.nxdn.audio.NXDNAudioModule;
 import io.github.dsheirer.module.decode.nxdn.layer3.filter.NXDNMessageFilterSet;
 import io.github.dsheirer.module.decode.p25.P25TrafficChannelManager;
 import io.github.dsheirer.module.decode.p25.audio.P25P1AudioModule;
+import io.github.dsheirer.identifier.alias.TalkerAliasLogger;
+import io.github.dsheirer.module.decode.p25.audio.ImbeAudioStreamModule;
+import io.github.dsheirer.module.decode.p25.phase1.ChannelHeartbeatModule;
+import io.github.dsheirer.module.decode.p25.phase1.ImbeStreamManager;
+import io.github.dsheirer.module.decode.p25.phase1.NetworkEventBroadcastModule;
+import io.github.dsheirer.module.decode.p25.phase1.NetworkStreamManager;
+import io.github.dsheirer.module.decode.p25.phase1.PcmStreamManager;
 import io.github.dsheirer.module.decode.p25.audio.P25P2AudioModule;
 import io.github.dsheirer.module.decode.p25.phase1.DecodeConfigP25Phase1;
 import io.github.dsheirer.module.decode.p25.phase1.P25P1DecoderC4FM;
@@ -117,6 +124,8 @@ import io.github.dsheirer.settings.Settings;
 import io.github.dsheirer.source.SourceType;
 import io.github.dsheirer.source.config.SourceConfigTunerMultipleFrequency;
 import io.github.dsheirer.source.tuner.channel.rotation.ChannelRotationMonitor;
+import io.github.dsheirer.util.StringUtils;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import jmbe.iface.IAudioCodecV2;
@@ -212,6 +221,21 @@ public class DecoderFactory
         }
 
         configureTalkerAliasAutoAdd(channel, modules, aliasModel);
+
+        //Standalone channel heartbeat: emit liveness for any actively-decoding channel whose name does NOT
+        //start with "T-".  SDRTrunk names dynamically-spawned trunking voice (traffic) channels "T-<parent>"
+        //(see P25/DMR/MPT1327 traffic channel managers), so excluding that prefix leaves the conventional
+        //channels of every protocol -- NBFM, AM, conventional DMR, and conventional P25 -- while keeping
+        //trunking voice channels off this stream.  A channel reaches this point only as its processing chain
+        //starts (i.e. it is in "Now Playing"), so the heartbeat tracks exactly what SDRTrunk is decoding.
+        //Note: trunking CONTROL channels are not "T-" prefixed, so they are included here too; their liveness
+        //is also available on the raw control stream (9501) and can be filtered out downstream by name if not wanted.
+        if(settings.getStandaloneStreamSettings().isEnabled()
+                && channel.getName() != null && !channel.getName().startsWith("T-"))
+        {
+            modules.add(new ChannelHeartbeatModule(channel.getName(),
+                    settings.getStandaloneStreamSettings().getIntervalSeconds()));
+        }
 
         return modules;
     }
@@ -336,15 +360,38 @@ public class DecoderFactory
 
             if(channel.getChannelType() == ChannelType.STANDARD)
             {
+                final String safeSystemName = getSafeSystemName(channel);
+                Path eventLogDir = settings.getDirectorySettings().getDirectoryEventLog();
+
                 P25TrafficChannelManager primaryTCM = new P25TrafficChannelManager(channel);
                 modules.add(primaryTCM);
-                modules.add(new P25P1DecoderState(channel, primaryTCM));
+                P25P1DecoderState p25DecoderState = new P25P1DecoderState(channel, primaryTCM);
+                modules.add(p25DecoderState);
+
+                TalkerAliasLogger aliasLogger = new TalkerAliasLogger(eventLogDir, safeSystemName);
+                primaryTCM.getTalkerAliasManager().setChangeListener(aliasLogger::onAliasUpdate);
+                aliasLogger.bootstrap(primaryTCM.getTalkerAliasManager());
+
+                NetworkStreamManager streamManager = loadNetworkStreamManager(settings);
+                if(streamManager != null)
+                {
+                    modules.add(new NetworkEventBroadcastModule(safeSystemName, streamManager));
+                    final NetworkStreamManager mgr = streamManager;
+                    p25DecoderState.setRawStreamListener(msg ->
+                            mgr.broadcastRaw(formatRawMessage(safeSystemName, msg)));
+                }
             }
             else if(trafficChannelManager instanceof P25TrafficChannelManager parentTCM)
             {
                 P25P1DecoderState decoderState = new P25P1DecoderState(channel, parentTCM);
                 decoderState.setCurrentChannel(channelDescriptor);
                 modules.add(decoderState);
+
+                NetworkStreamManager trafficStreamManager = loadNetworkStreamManager(settings);
+                if(trafficStreamManager != null)
+                {
+                    modules.add(new NetworkEventBroadcastModule(getSafeSystemName(channel), trafficStreamManager));
+                }
             }
             else
             {
@@ -354,6 +401,14 @@ public class DecoderFactory
             P25P1AudioModule audioModule = new P25P1AudioModule(settings, aliasList);
             configureJMBEAudioModule(audioModule, configP25P1);
             modules.add(audioModule);
+
+            ImbeStreamManager imbeStreamManager = loadImbeStreamManager(settings);
+            if(imbeStreamManager != null)
+            {
+                modules.add(new ImbeAudioStreamModule(getSafeSystemName(channel), imbeStreamManager));
+            }
+
+            loadPcmStreamManager(settings);
 
             //Add a channel rotation monitor when we have multiple control channel frequencies specified
             if(channel.getSourceConfiguration() instanceof SourceConfigTunerMultipleFrequency sctmf &&
@@ -570,13 +625,37 @@ public class DecoderFactory
             {
                 NXDNTrafficChannelManager primaryTCM = new NXDNTrafficChannelManager(channel);
                 modules.add(primaryTCM);
-                modules.add(new NXDNDecoderState(channel, primaryTCM));
+                NXDNDecoderState nxdnDecoderState = new NXDNDecoderState(channel, primaryTCM);
+                modules.add(nxdnDecoderState);
+
+                //Custom network streams: NXDN decode events (9500) + raw control-channel messages (9501)
+                final String safeNxdnSystem = getSafeSystemName(channel);
+                NetworkStreamManager nxdnStreamManager = loadNetworkStreamManager(settings);
+                if(nxdnStreamManager != null)
+                {
+                    modules.add(new NetworkEventBroadcastModule(safeNxdnSystem, nxdnStreamManager));
+                    final NetworkStreamManager nxdnMgr = nxdnStreamManager;
+                    nxdnDecoderState.setRawStreamListener(msg -> nxdnMgr.broadcastRaw(formatRawMessage(safeNxdnSystem, msg)));
+                }
+
+                //Talker alias CSV logger (per-system OTA alias capture, same as P25/DMR)
+                Path nxdnEventLogDir = settings.getDirectorySettings().getDirectoryEventLog();
+                TalkerAliasLogger nxdnAliasLogger = new TalkerAliasLogger(nxdnEventLogDir, safeNxdnSystem);
+                primaryTCM.getTalkerAliasManager().setChangeListener(nxdnAliasLogger::onAliasUpdate);
+                nxdnAliasLogger.bootstrap(primaryTCM.getTalkerAliasManager());
             }
             else if(trafficChannelManager instanceof NXDNTrafficChannelManager parentTCM)
             {
                 NXDNDecoderState decoderState = new NXDNDecoderState(channel, parentTCM);
                 decoderState.setCurrentChannel(channelDescriptor);
                 modules.add(decoderState);
+
+                //Custom network stream: NXDN decode events (9500)
+                NetworkStreamManager nxdnTrafficStreamManager = loadNetworkStreamManager(settings);
+                if(nxdnTrafficStreamManager != null)
+                {
+                    modules.add(new NetworkEventBroadcastModule(getSafeSystemName(channel), nxdnTrafficStreamManager));
+                }
             }
             else
             {
@@ -588,6 +667,70 @@ public class DecoderFactory
         {
             throw new IllegalArgumentException("Can't create NXDN decoder - unrecognized config: " + decodeConfig);
         }
+    }
+
+    /**
+     * System name for the network streams and log files: the channel's system, or the channel's name when no system
+     * is set, with characters that aren't allowed in file names replaced.
+     */
+    private static String getSafeSystemName(Channel channel)
+    {
+        String systemName = channel.getSystem();
+        if(systemName == null || systemName.trim().isEmpty()) { systemName = channel.getName(); }
+        return StringUtils.replaceIllegalCharacters(systemName.trim());
+    }
+
+    private static ImbeStreamManager loadImbeStreamManager(Settings settings)
+    {
+        if(!settings.getImbeStreamSettings().isEnabled())
+        {
+            return null;
+        }
+        int port = settings.getImbeStreamSettings().getPort();
+        return ImbeStreamManager.getInstance(port);
+    }
+
+    private static PcmStreamManager loadPcmStreamManager(Settings settings)
+    {
+        if(!settings.getPcmStreamSettings().isEnabled())
+        {
+            return null;
+        }
+        int port = settings.getPcmStreamSettings().getPort();
+        return PcmStreamManager.getInstance(port);
+    }
+
+    private static NetworkStreamManager loadNetworkStreamManager(Settings settings)
+    {
+        if(!settings.getNetworkStreamSettings().isEnabled())
+        {
+            return null;
+        }
+        int eventPort = settings.getNetworkStreamSettings().getEventPort();
+        int rawPort = settings.getNetworkStreamSettings().getRawPort();
+        return NetworkStreamManager.getInstance(eventPort, rawPort);
+    }
+
+    private static String formatRawMessage(String systemName, io.github.dsheirer.message.IMessage msg)
+    {
+        String text = msg.toString()
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+            .replace("\n", " ").replace("\r", "");
+        return "{\"pipe\":\"raw\",\"system\":\"" + systemName
+            + "\",\"timestamp\":\"" + java.time.LocalDateTime.now().format(
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+            + "\",\"message\":\"" + text + "\"}";
+    }
+
+    private static String formatDmrRawMessage(String systemName, int timeslot, io.github.dsheirer.message.IMessage msg)
+    {
+        String text = msg.toString()
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+            .replace("\n", " ").replace("\r", "");
+        return "{\"pipe\":\"raw\",\"protocol\":\"DMR\",\"system\":\"" + systemName
+            + "\",\"timeslot\":" + timeslot
+            + ",\"timestamp\":" + msg.getTimestamp()
+            + ",\"message\":\"" + text + "\"}";
     }
 
     /**
@@ -727,6 +870,27 @@ public class DecoderFactory
             List<State> activeStates = new ArrayList<>();
             activeStates.add(State.CONTROL);
             modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay()));
+        }
+
+        final String safeDmrSystem = getSafeSystemName(channel);
+        NetworkStreamManager dmrStreamManager = loadNetworkStreamManager(settings);
+        if(dmrStreamManager != null)
+        {
+            modules.add(new NetworkEventBroadcastModule(safeDmrSystem, dmrStreamManager));
+            final NetworkStreamManager dmrMgr = dmrStreamManager;
+            state1.setRawStreamListener(msg ->
+                    dmrMgr.broadcastRaw(formatDmrRawMessage(safeDmrSystem, DMRMessage.TIMESLOT_1, msg)));
+            state2.setRawStreamListener(msg ->
+                    dmrMgr.broadcastRaw(formatDmrRawMessage(safeDmrSystem, DMRMessage.TIMESLOT_2, msg)));
+        }
+
+        //Talker alias CSV logger (per-system OTA alias capture, same as P25/NXDN)
+        if(dmrTrafficChannelManager != null)
+        {
+            Path dmrEventLogDir = settings.getDirectorySettings().getDirectoryEventLog();
+            TalkerAliasLogger dmrAliasLogger = new TalkerAliasLogger(dmrEventLogDir, safeDmrSystem);
+            dmrTrafficChannelManager.getTalkerAliasManager().setChangeListener(dmrAliasLogger::onAliasUpdate);
+            dmrAliasLogger.bootstrap(dmrTrafficChannelManager.getTalkerAliasManager());
         }
     }
 

@@ -29,10 +29,12 @@ import io.github.dsheirer.identifier.radio.RadioIdentifier;
 import io.github.dsheirer.module.decode.event.ActivitySummary;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * Talker alias cache manager.  Collects observed talker aliases and inserts them into an identifier collection when
@@ -44,6 +46,7 @@ public class TalkerAliasManager
 {
     private Map<Integer,TalkerAliasIdentifier> mAliasMap = new ConcurrentHashMap<>();
     private volatile BiConsumer<RadioIdentifier,TalkerAliasIdentifier> mTalkerAliasListener;
+    private volatile Consumer<Map<Integer, TalkerAliasIdentifier>> mChangeListener;
 
     /**
      * Constructs an instance
@@ -63,6 +66,27 @@ public class TalkerAliasManager
     }
 
     /**
+     * Sets a listener that will be called whenever the alias map changes.
+     * @param listener consumer to notify with a copy of the current map
+     */
+    public void setChangeListener(Consumer<Map<Integer, TalkerAliasIdentifier>> listener)
+    {
+        mChangeListener = listener;
+    }
+
+    /**
+     * Preloads aliases from a persisted source (e.g. a CSV file) without overwriting existing entries.
+     * @param aliases to preload
+     */
+    public void preload(Map<Integer, TalkerAliasIdentifier> aliases)
+    {
+        for(Map.Entry<Integer, TalkerAliasIdentifier> entry : aliases.entrySet())
+        {
+            mAliasMap.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+    }
+
+    /**
      * Updates the alias for the radio identifier
      *
      * @param identifier to update
@@ -72,7 +96,14 @@ public class TalkerAliasManager
     {
         if(identifier.getRole() == Role.FROM)
         {
-            mAliasMap.put(identifier.getValue(), alias);
+            TalkerAliasIdentifier previous = mAliasMap.put(identifier.getValue(), alias);
+
+            Consumer<Map<Integer, TalkerAliasIdentifier>> changeListener = mChangeListener;
+
+            if(changeListener != null && alias != null && !alias.equals(previous))
+            {
+                changeListener.accept(new HashMap<>(mAliasMap));
+            }
 
             BiConsumer<RadioIdentifier,TalkerAliasIdentifier> listener = mTalkerAliasListener;
 

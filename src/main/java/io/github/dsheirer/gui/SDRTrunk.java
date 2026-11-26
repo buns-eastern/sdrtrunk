@@ -35,6 +35,10 @@ import io.github.dsheirer.icon.IconModel;
 import io.github.dsheirer.log.ApplicationLog;
 import io.github.dsheirer.map.MapService;
 import io.github.dsheirer.module.log.EventLogManager;
+import io.github.dsheirer.module.decode.p25.phase1.ImbeStreamManager;
+import io.github.dsheirer.module.decode.p25.phase1.NetworkStreamManager;
+import io.github.dsheirer.module.decode.p25.phase1.PcmStreamManager;
+import io.github.dsheirer.module.decode.p25.phase1.StandaloneChannelStreamManager;
 import io.github.dsheirer.monitor.DiagnosticMonitor;
 import io.github.dsheirer.monitor.ResourceMonitor;
 import io.github.dsheirer.playlist.PlaylistManager;
@@ -116,6 +120,41 @@ public class SDRTrunk implements Listener<TunerEvent>
                     "sdrtrunk is unzipped over an older one, and it can load the older library code.  Delete the " +
                     "sdrtrunk folder and unzip the release into an empty folder.\n" +
                     DuplicateLibraryDetector.describe(duplicateLibraries));
+        }
+
+        //Start the PCM JSON stream TCP server (port 9503 by default) at app startup if enabled.
+        //This makes the listener available immediately and independent of channel types -- previously
+        //the server was only lazily started by P25 Phase 1 channel setup, so a setup with only NBFM,
+        //AM, DMR, P25 Phase 2, etc. channels would never open the port and clients would get
+        //connection refused indefinitely.  Once running, every protocol broadcasts through it because
+        //all audio modules extend AbstractAudioModule, which owns the broadcast call sites.
+        if(mSettings.getPcmStreamSettings().isEnabled())
+        {
+            int pcmPort = mSettings.getPcmStreamSettings().getPort();
+            PcmStreamManager.getInstance(pcmPort);
+        }
+
+        //Start the Standalone Channel Heartbeat TCP server (port 9504 by default) at app startup if enabled,
+        //so the listener is open immediately and independent of channel lifecycle.
+        if(mSettings.getStandaloneStreamSettings().isEnabled())
+        {
+            int standalonePort = mSettings.getStandaloneStreamSettings().getPort();
+            StandaloneChannelStreamManager.getInstance(standalonePort);
+        }
+
+        //Start the event/raw-message stream servers (ports 9500/9501 by default) and the IMBE frame
+        //stream server (port 9502 by default) at app startup when enabled -- same rationale as the PCM
+        //server above: the listeners open at launch and stay open, independent of channel lifecycle,
+        //so clients never see connection-refused while waiting for the first qualifying channel to start.
+        if(mSettings.getNetworkStreamSettings().isEnabled())
+        {
+            NetworkStreamManager.getInstance(mSettings.getNetworkStreamSettings().getEventPort(),
+                mSettings.getNetworkStreamSettings().getRawPort());
+        }
+
+        if(mSettings.getImbeStreamSettings().isEnabled())
+        {
+            ImbeStreamManager.getInstance(mSettings.getImbeStreamSettings().getPort());
         }
 
         mResourceMonitor = new ResourceMonitor(mSettings);

@@ -30,6 +30,10 @@ import io.github.dsheirer.settings.identifier.TalkgroupFormatSettings;
 import io.github.dsheirer.settings.javafx.JavaFxSettings;
 import io.github.dsheirer.settings.map.MapSettings;
 import io.github.dsheirer.settings.mp3.MP3Settings;
+import io.github.dsheirer.settings.network.ImbeStreamSettings;
+import io.github.dsheirer.settings.network.NetworkStreamSettings;
+import io.github.dsheirer.settings.network.PcmStreamSettings;
+import io.github.dsheirer.settings.network.StandaloneStreamSettings;
 import io.github.dsheirer.settings.playback.PlaybackSettings;
 import io.github.dsheirer.settings.playlist.PlaylistSettings;
 import io.github.dsheirer.settings.radioreference.RadioReferenceSettings;
@@ -64,6 +68,10 @@ public class Settings implements Listener<SettingsType>
     private JmbeLibrarySettings mJmbeLibrarySettings;
     private MapSettings mMapSettings;
     private MP3Settings mMP3Settings;
+    private NetworkStreamSettings mNetworkStreamSettings;
+    private ImbeStreamSettings mImbeStreamSettings;
+    private PcmStreamSettings mPcmStreamSettings;
+    private StandaloneStreamSettings mStandaloneStreamSettings;
     private PlaybackSettings mPlaybackSettings;
     private PlaylistSettings mPlaylistSettings;
     private RadioReferenceSettings mRadioReferenceSettings;
@@ -174,6 +182,38 @@ public class Settings implements Listener<SettingsType>
     }
 
     /**
+     * Network event (9500) and raw message (9501) stream settings
+     */
+    public NetworkStreamSettings getNetworkStreamSettings()
+    {
+        return mNetworkStreamSettings;
+    }
+
+    /**
+     * IMBE audio stream (9502) settings
+     */
+    public ImbeStreamSettings getImbeStreamSettings()
+    {
+        return mImbeStreamSettings;
+    }
+
+    /**
+     * PCM audio stream (9503) settings
+     */
+    public PcmStreamSettings getPcmStreamSettings()
+    {
+        return mPcmStreamSettings;
+    }
+
+    /**
+     * Standalone channel heartbeat stream (9504) settings
+     */
+    public StandaloneStreamSettings getStandaloneStreamSettings()
+    {
+        return mStandaloneStreamSettings;
+    }
+
+    /**
      * Identifier settings
      */
     public TalkgroupFormatSettings getTalkgroupFormatSettings()
@@ -227,6 +267,10 @@ public class Settings implements Listener<SettingsType>
         mJmbeLibrarySettings = new JmbeLibrarySettings(this::receive);
         mMapSettings = new MapSettings(this::receive);
         mMP3Settings = new MP3Settings(this::receive);
+        mNetworkStreamSettings = new NetworkStreamSettings(this::receive);
+        mImbeStreamSettings = new ImbeStreamSettings(this::receive);
+        mPcmStreamSettings = new PcmStreamSettings(this::receive);
+        mStandaloneStreamSettings = new StandaloneStreamSettings(this::receive);
         mPlaybackSettings = new PlaybackSettings(this::receive);
         mPlaylistSettings = new PlaylistSettings(this::receive, mDirectorySettings);
         mRadioReferenceSettings = new RadioReferenceSettings(this::receive);

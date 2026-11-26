@@ -42,6 +42,7 @@ import io.github.dsheirer.identifier.talkgroup.TalkgroupIdentifier;
 import io.github.dsheirer.log.LoggingSuppressor;
 import io.github.dsheirer.message.EmptyTimeslotPlaceholderMessage;
 import io.github.dsheirer.message.IMessage;
+import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.message.TimeslotMessage;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.dmr.channel.DMRAbsoluteChannel;
@@ -119,6 +120,7 @@ import org.slf4j.LoggerFactory;
  */
 public class DMRDecoderState extends TimeslotDecoderState
 {
+    private Listener<IMessage> mRawStreamListener;
     private final static Logger mLog = LoggerFactory.getLogger(DMRDecoderState.class);
     private static final LoggingSuppressor LOGGING_SUPPRESSOR = new LoggingSuppressor(mLog);
     private static final long MAX_VALID_CALL_DURATION_MS = 30000;
@@ -298,11 +300,27 @@ public class DMRDecoderState extends TimeslotDecoderState
     /**
      * Primary message processing method.
      */
+    /**
+     * Sets a listener to receive raw messages (for TCP streaming).
+     */
+    public void setRawStreamListener(Listener<IMessage> listener)
+    {
+        mRawStreamListener = listener;
+    }
+
     @Override
     public void receive(IMessage message)
     {
         if(message.getTimeslot() == getTimeslot())
         {
+            if(mRawStreamListener != null
+                    && isValid(message)
+                    && !(message instanceof VoiceMessage)
+                    && !(message instanceof EmptyTimeslotPlaceholderMessage))
+            {
+                mRawStreamListener.receive(message);
+            }
+
             if(message instanceof VoiceMessage voice)
             {
                 if(isValid(voice))
