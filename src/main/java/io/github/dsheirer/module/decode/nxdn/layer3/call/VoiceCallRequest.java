@@ -93,7 +93,6 @@ public class VoiceCallRequest extends VoiceCallWithOptionalLocation
                 break;
         }
 
-        sb.append(" ").append(getEncryptionKeyIdentifier());
         sb.append(getCallOption());
 
         return sb.toString();
@@ -161,6 +160,6 @@ public class VoiceCallRequest extends VoiceCallWithOptionalLocation
     @Override
     public List<Identifier> getIdentifiers()
     {
-        return List.of(getSource(), getDestination(), getEncryptionKeyIdentifier());
+        return List.of(getSource(), getDestination());
     }
 }

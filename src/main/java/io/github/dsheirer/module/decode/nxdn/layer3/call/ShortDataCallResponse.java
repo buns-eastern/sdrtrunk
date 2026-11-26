@@ -72,11 +72,6 @@ public class ShortDataCallResponse extends DataCallWithOptionalLocation
             sb.append(" ").append(getErrorBlockFlag());
         }
 
-        if(getEncryptionKeyIdentifier().isEncrypted())
-        {
-            sb.append(" ").append(getEncryptionKeyIdentifier());
-        }
-
         return sb.toString();
     }
 
@@ -111,6 +106,6 @@ public class ShortDataCallResponse extends DataCallWithOptionalLocation
     @Override
     public List<Identifier> getIdentifiers()
     {
-        return List.of(getSource(), getDestination(), getEncryptionKeyIdentifier());
+        return List.of(getSource(), getDestination());
     }
 }

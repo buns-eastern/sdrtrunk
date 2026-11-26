@@ -79,7 +79,6 @@ public class DataCallAssignmentDuplicateTraffic extends DataCall implements ICha
         sb.append(getCallType()).append(" VOICE CALL ASSIGNMENT");
         sb.append(" FROM:").append(getSource());
         sb.append(" TO:").append(getDestination());
-        sb.append(" ").append(getEncryptionKeyIdentifier());
         sb.append(getCallOption());
         if(hasChannel())
         {
@@ -135,6 +134,6 @@ public class DataCallAssignmentDuplicateTraffic extends DataCall implements ICha
     @Override
     public List<Identifier> getIdentifiers()
     {
-        return List.of(getSource(), getDestination(), getEncryptionKeyIdentifier());
+        return List.of(getSource(), getDestination());
     }
 }

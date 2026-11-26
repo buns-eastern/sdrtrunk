@@ -102,7 +102,6 @@ public class VoiceCallResponse extends VoiceCallWithOptionalLocation
         }
         sb.append(" FROM:").append(getSource());
         sb.append(" TO:").append(getDestination());
-        sb.append(" ").append(getEncryptionKeyIdentifier());
         sb.append(" ").append(getCallOption());
 
         return sb.toString();
@@ -215,12 +214,6 @@ public class VoiceCallResponse extends VoiceCallWithOptionalLocation
     @Override
     public List<Identifier> getIdentifiers()
     {
-        if(isTypeD())
-        {
-            //Type-D call response doesn't carry an encryption key
-            return List.of(getSource(), getDestination());
-        }
-
-        return List.of(getSource(), getDestination(), getEncryptionKeyIdentifier());
+        return List.of(getSource(), getDestination());
     }
 }

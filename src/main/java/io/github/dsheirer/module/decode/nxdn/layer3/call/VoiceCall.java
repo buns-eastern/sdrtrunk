@@ -48,6 +48,12 @@ public class VoiceCall extends Call
     }
 
     @Override
+    public boolean hasEncryptionInformation()
+    {
+        return true;
+    }
+
+    @Override
     public String toString()
     {
         StringBuilder sb = getMessageBuilder();

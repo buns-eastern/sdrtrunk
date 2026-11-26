@@ -56,6 +56,12 @@ public class ShortDataCallRequestHeader extends DataCallWithOptionalLocation imp
     }
 
     @Override
+    public boolean hasEncryptionInformation()
+    {
+        return true;
+    }
+
+    @Override
     public String toString()
     {
         StringBuilder sb = getMessageBuilder();

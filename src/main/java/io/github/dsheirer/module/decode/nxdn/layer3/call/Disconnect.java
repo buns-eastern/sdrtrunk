@@ -69,7 +69,6 @@ public class Disconnect extends CallWithOptionalLocation
         sb.append(getCallType()).append(" DISCONNECT RESPONSE:").append(getCause());
         sb.append(" FROM:").append(getSource());
         sb.append(" TO:").append(getDestination());
-        sb.append(" ").append(getEncryptionKeyIdentifier());
         sb.append(" ").append(getCallOption());
         return sb.toString();
     }

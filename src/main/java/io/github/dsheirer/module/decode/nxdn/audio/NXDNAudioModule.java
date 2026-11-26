@@ -96,8 +96,9 @@ public class NXDNAudioModule extends AmbeAudioModule
             }
             else if(message.isValid())
             {
-                if(message instanceof VoiceCall voiceCall)
+                if(message instanceof VoiceCall voiceCall && voiceCall.hasEncryptionInformation())
                 {
+                    //Voice call (VCALL) carries the cipher type and sets the encryption state for the call
                     mEncryptedCall = voiceCall.getEncryptionKeyIdentifier().isEncrypted();
                     mEncryptedCallStateEstablished = true;
                     mAudioCodec = voiceCall.getCallOption().getCodec();

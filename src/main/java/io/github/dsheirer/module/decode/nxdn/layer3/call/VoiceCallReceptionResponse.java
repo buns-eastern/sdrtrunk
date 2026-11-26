@@ -83,7 +83,6 @@ public class VoiceCallReceptionResponse extends VoiceCallWithOptionalLocation
         }
         sb.append(" FROM:").append(getSource());
         sb.append(" TO:").append(getDestination());
-        sb.append(" ").append(getEncryptionKeyIdentifier());
         sb.append(getCallOption());
         return sb.toString();
     }
@@ -99,6 +98,6 @@ public class VoiceCallReceptionResponse extends VoiceCallWithOptionalLocation
     @Override
     public List<Identifier> getIdentifiers()
     {
-        return List.of(getSource(), getDestination(), getEncryptionKeyIdentifier());
+        return List.of(getSource(), getDestination());
     }
 }
