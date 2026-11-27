@@ -241,6 +241,14 @@ public class SDRTrunk implements Listener<TunerEvent>
             mMainWindow = FxToolkit.callAndWait(() -> new MainWindow(mSettings, mPlaylistManager,
                 mTunerManager, audioPlaybackManager, aliasModel, mIconModel, mapService, mResourceMonitor,
                 mDiagnosticMonitor, this::processShutdown));
+
+            if(mDiscoveryManager != null)
+            {
+                FxToolkit.callAndWait(() -> {
+                    mMainWindow.addDiscoveryTab(mDiscoveryManager);
+                    return null;
+                });
+            }
         }
 
         TunerSpectralDisplayManager tunerSpectralDisplayManager = new TunerSpectralDisplayManager(

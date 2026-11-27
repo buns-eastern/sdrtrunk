@@ -1211,6 +1211,22 @@ public class MainWindow
 
 
     /**
+     * Adds the Discovery tab after the Tuners tab.  Call on the JavaFX thread.
+     * @param discoveryManager for the tab, or null to skip it
+     */
+    public void addDiscoveryTab(io.github.dsheirer.discovery.DiscoveryManager discoveryManager)
+    {
+        if(discoveryManager == null)
+        {
+            return;
+        }
+
+        Tab discovery = new Tab("Discovery", new io.github.dsheirer.gui.discovery.DiscoveryView(discoveryManager));
+        int index = mTabPane.getTabs().indexOf(mTunersTab);
+        mTabPane.getTabs().add(index >= 0 ? index + 1 : mTabPane.getTabs().size(), discovery);
+    }
+
+    /**
      * Closes the application the same way as closing the main window.  Call on the JavaFX thread.
      */
     public void exitApplication()
