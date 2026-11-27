@@ -20,6 +20,7 @@ package io.github.dsheirer.module.decode.am;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+import io.github.dsheirer.dsp.am.AmAudioLeveler;
 import io.github.dsheirer.dsp.squelch.ISquelchConfiguration;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.analog.DecodeConfigAnalog;
@@ -30,9 +31,10 @@ import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
  */
 public class DecodeConfigAM extends DecodeConfigAnalog implements ISquelchConfiguration
 {
-    public static final Bandwidth DEFAULT_BANDWIDTH = Bandwidth.BW_6_0;
     private int mSquelchThreshold = -78;
     private boolean mSquelchAutoTrack = true;
+    private boolean mAudioAutoLevel = true;
+    private float mAudioOutputGain = AmAudioLeveler.DEFAULT_OUTPUT_GAIN;
 
 	public DecodeConfigAM()
     {
@@ -47,7 +49,7 @@ public class DecodeConfigAM extends DecodeConfigAnalog implements ISquelchConfig
     @Override
     protected Bandwidth getDefaultBandwidth()
     {
-        return DEFAULT_BANDWIDTH;
+        return Bandwidth.BW_15_0;
     }
 
     /**
@@ -63,14 +65,12 @@ public class DecodeConfigAM extends DecodeConfigAnalog implements ISquelchConfig
                 return new ChannelSpecification(25000.0, 3000, 1500.0, 1700.0);
             case BW_5_0:
                 return new ChannelSpecification(25000.0, 5000, 2500.0, 2700.0);
-            case BW_6_0:
-                return new ChannelSpecification(25000.0, 6000, 3000.0, 3200.0);
             case BW_8_33:
                 return new ChannelSpecification(25000.0, 10000, 5000.0, 7000.0);
             case BW_15_0:
-                return new ChannelSpecification(30000.0, 15000, 7500.0, 9500.0);
+                return new ChannelSpecification(25000.0, 15000, 7500.0, 9500.0);
             case BW_25_0:
-                return new ChannelSpecification(50000.0, 25000, 12500.0, 14500.0);
+                return new ChannelSpecification(25000.0, 25000, 12500.0, 14500.0);
             default:
                 throw new IllegalArgumentException("Unrecognized AM bandwidth value: " + getBandwidth());
         }
@@ -116,5 +116,43 @@ public class DecodeConfigAM extends DecodeConfigAnalog implements ISquelchConfig
     public boolean isSquelchAutoTrack()
     {
         return mSquelchAutoTrack;
+    }
+
+    /**
+     * Indicates if audio auto level is enabled so that weak and strong transmissions have the same loudness.
+     * @return true if enabled (default).
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "audioAutoLevel")
+    public boolean isAudioAutoLevel()
+    {
+        return mAudioAutoLevel;
+    }
+
+    /**
+     * Enables or disables audio auto level.
+     * @param autoLevel true to enable.
+     */
+    public void setAudioAutoLevel(boolean autoLevel)
+    {
+        mAudioAutoLevel = autoLevel;
+    }
+
+    /**
+     * Linear output gain applied to the channel audio where 1.0 is unity.
+     * @return output gain
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "audioOutputGain")
+    public float getAudioOutputGain()
+    {
+        return mAudioOutputGain;
+    }
+
+    /**
+     * Sets the linear output gain applied to the channel audio.  Out of range values are constrained.
+     * @param gain where 1.0 is unity.
+     */
+    public void setAudioOutputGain(float gain)
+    {
+        mAudioOutputGain = AmAudioLeveler.constrain(gain);
     }
 }

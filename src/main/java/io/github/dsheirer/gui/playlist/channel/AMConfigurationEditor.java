@@ -19,14 +19,13 @@
 
 package io.github.dsheirer.gui.playlist.channel;
 
-import io.github.dsheirer.gui.control.AccessibilityUtil;
-import io.github.dsheirer.gui.control.AccessibleToggleSwitch;
 import io.github.dsheirer.gui.power.PowerMeter;
 import io.github.dsheirer.gui.control.HexFormatter;
 import io.github.dsheirer.gui.control.IntegerFormatter;
 import io.github.dsheirer.gui.playlist.eventlog.EventLogConfigurationEditor;
 import io.github.dsheirer.gui.playlist.source.FrequencyEditor;
 import io.github.dsheirer.gui.playlist.source.SourceConfigurationEditor;
+import io.github.dsheirer.dsp.am.AmAudioLeveler;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.am.DecodeConfigAM;
 import io.github.dsheirer.module.decode.config.AuxDecodeConfiguration;
@@ -50,6 +49,7 @@ import javafx.collections.ListChangeListener;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
+import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TitledPane;
@@ -79,19 +79,22 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
     private TextField mTalkgroupField;
     private TextField mSquelchThresholdField;
     private ToggleSwitch mSquelchAutoTrackSwitch;
+    private ToggleSwitch mAudioAutoLevelSwitch;
+    private Slider mAudioOutputGainSlider;
+    private Label mAudioOutputGainValueLabel;
     private TextFormatter<Integer> mTalkgroupTextFormatter;
     private IntegerFormatter mSquelchTextFormatter = new IntegerFormatter((int)PowerMeter.DEFAULT_MINIMUM_POWER,
             (int)PowerMeter.DEFAULT_MAXIMUM_POWER);
     private EventLogConfigurationEditor mEventLogConfigurationEditor;
     private TalkgroupValueChangeListener mTalkgroupValueChangeListener = new TalkgroupValueChangeListener();
-    private IntegerFormatter mDecimalFormatter = new IntegerFormatter(1, 65535);
-    private HexFormatter mHexFormatter = new HexFormatter(1, 65535);
+    private IntegerFormatter mDecimalFormatter = new IntegerFormatter(1, 999999);
+    private HexFormatter mHexFormatter = new HexFormatter(1, 999999);
 
     /**
      * Constructs an instance
      * @param playlistManager for playlists
      * @param tunerManager for tuners
-     * @param settings for preferences
+     * @param settings for the application
      */
     public AMConfigurationEditor(PlaylistManager playlistManager, TunerManager tunerManager,
                                  Settings settings, IFilterProcessor filterProcessor)
@@ -136,7 +139,6 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
             int row = 0;
 
             Label bandwidthLabel = new Label("Channel Bandwidth");
-            AccessibilityUtil.labelGroup(bandwidthLabel, getBandwidthButton());
             GridPane.setHalignment(bandwidthLabel, HPos.RIGHT);
             GridPane.setConstraints(bandwidthLabel, 0, row);
             gridPane.getChildren().add(bandwidthLabel);
@@ -145,7 +147,6 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(getBandwidthButton());
 
             Label squelchLabel = new Label("Squelch Threshold");
-            squelchLabel.setLabelFor(getSquelchThresholdField());
             GridPane.setHalignment(squelchLabel, HPos.RIGHT);
             GridPane.setConstraints(squelchLabel, 0, row);
             gridPane.getChildren().add(squelchLabel);
@@ -154,7 +155,6 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(getSquelchThresholdField());
 
             Label autoTrackLabel = new Label("Squelch Auto-Track");
-            autoTrackLabel.setLabelFor(getSquelchAutoTrackSwitch());
             GridPane.setHalignment(autoTrackLabel, HPos.RIGHT);
             GridPane.setConstraints(autoTrackLabel, 2, row);
             gridPane.getChildren().add(autoTrackLabel);
@@ -164,13 +164,33 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(getSquelchAutoTrackSwitch());
 
             Label talkgroupLabel = new Label("Talkgroup To Assign");
-            talkgroupLabel.setLabelFor(getTalkgroupField());
             GridPane.setHalignment(talkgroupLabel, HPos.RIGHT);
             GridPane.setConstraints(talkgroupLabel, 4, row);
             gridPane.getChildren().add(talkgroupLabel);
 
-            GridPane.setConstraints(getTalkgroupField(), 5, row);
+            GridPane.setConstraints(getTalkgroupField(), 5, row++);
             gridPane.getChildren().add(getTalkgroupField());
+
+            Label autoLevelLabel = new Label("Auto Level");
+            GridPane.setHalignment(autoLevelLabel, HPos.RIGHT);
+            GridPane.setConstraints(autoLevelLabel, 0, row);
+            gridPane.getChildren().add(autoLevelLabel);
+
+            GridPane.setConstraints(getAudioAutoLevelSwitch(), 1, row);
+            GridPane.setHalignment(getAudioAutoLevelSwitch(), HPos.LEFT);
+            gridPane.getChildren().add(getAudioAutoLevelSwitch());
+
+            Label outputGainLabel = new Label("Output Gain");
+            GridPane.setHalignment(outputGainLabel, HPos.RIGHT);
+            GridPane.setConstraints(outputGainLabel, 2, row);
+            gridPane.getChildren().add(outputGainLabel);
+
+            GridPane.setConstraints(getAudioOutputGainSlider(), 3, row, 2, 1);
+            gridPane.getChildren().add(getAudioOutputGainSlider());
+
+            GridPane.setConstraints(getAudioOutputGainValueLabel(), 5, row);
+            GridPane.setHalignment(getAudioOutputGainValueLabel(), HPos.LEFT);
+            gridPane.getChildren().add(getAudioOutputGainValueLabel());
 
             mDecoderPane.setContent(gridPane);
 
@@ -216,7 +236,6 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(getBasebandRecordSwitch());
 
             Label recordBasebandLabel = new Label("Channel (Baseband I&Q)");
-            recordBasebandLabel.setLabelFor(getBasebandRecordSwitch());
             GridPane.setHalignment(recordBasebandLabel, HPos.LEFT);
             GridPane.setConstraints(recordBasebandLabel, 1, 1);
             gridPane.getChildren().add(recordBasebandLabel);
@@ -261,7 +280,7 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
     {
         if(mBasebandRecordSwitch == null)
         {
-            mBasebandRecordSwitch = new AccessibleToggleSwitch();
+            mBasebandRecordSwitch = new ToggleSwitch();
             mBasebandRecordSwitch.setDisable(true);
             mBasebandRecordSwitch.setTextAlignment(TextAlignment.RIGHT);
             mBasebandRecordSwitch.selectedProperty()
@@ -308,7 +327,7 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
                         DecodeConfigAM.Bandwidth bandwidth = config.getBandwidth();
                         if(bandwidth == null)
                         {
-                            bandwidth = DecodeConfigAM.DEFAULT_BANDWIDTH;
+                            bandwidth = DecodeConfigNBFM.Bandwidth.BW_15_0;
                         }
 
                         for(Toggle toggle: getBandwidthButton().getToggleGroup().getToggles())
@@ -355,11 +374,75 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
     {
         if(mSquelchAutoTrackSwitch == null)
         {
-            mSquelchAutoTrackSwitch = new AccessibleToggleSwitch();
+            mSquelchAutoTrackSwitch = new ToggleSwitch();
             mSquelchAutoTrackSwitch.selectedProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
         }
 
         return mSquelchAutoTrackSwitch;
+    }
+
+    /**
+     * Audio auto level feature.
+     */
+    private ToggleSwitch getAudioAutoLevelSwitch()
+    {
+        if(mAudioAutoLevelSwitch == null)
+        {
+            mAudioAutoLevelSwitch = new ToggleSwitch();
+            mAudioAutoLevelSwitch.setDisable(true);
+            mAudioAutoLevelSwitch.setTooltip(new Tooltip("Evens out loudness between weak and strong transmissions"));
+            mAudioAutoLevelSwitch.selectedProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+        }
+
+        return mAudioAutoLevelSwitch;
+    }
+
+    /**
+     * Audio output gain control.
+     */
+    private Slider getAudioOutputGainSlider()
+    {
+        if(mAudioOutputGainSlider == null)
+        {
+            mAudioOutputGainSlider = new Slider(AmAudioLeveler.MINIMUM_OUTPUT_GAIN, AmAudioLeveler.MAXIMUM_OUTPUT_GAIN,
+                    AmAudioLeveler.DEFAULT_OUTPUT_GAIN);
+            mAudioOutputGainSlider.setDisable(true);
+            mAudioOutputGainSlider.setMajorTickUnit(1.0);
+            mAudioOutputGainSlider.setMinorTickCount(4);
+            mAudioOutputGainSlider.setShowTickMarks(true);
+            mAudioOutputGainSlider.setShowTickLabels(true);
+            mAudioOutputGainSlider.setPrefWidth(300);
+            mAudioOutputGainSlider.setTooltip(new Tooltip("Output gain applied to the channel audio\n1.0 = unity"));
+            mAudioOutputGainSlider.valueProperty().addListener((observable, oldValue, newValue) -> {
+                updateAudioOutputGainValueLabel(newValue.doubleValue());
+                modifiedProperty().set(true);
+            });
+        }
+
+        return mAudioOutputGainSlider;
+    }
+
+    /**
+     * Displays the current audio output gain value.
+     */
+    private Label getAudioOutputGainValueLabel()
+    {
+        if(mAudioOutputGainValueLabel == null)
+        {
+            mAudioOutputGainValueLabel = new Label();
+            updateAudioOutputGainValueLabel(AmAudioLeveler.DEFAULT_OUTPUT_GAIN);
+        }
+
+        return mAudioOutputGainValueLabel;
+    }
+
+    /**
+     * Updates the audio output gain value label.
+     * @param gain linear value
+     */
+    private void updateAudioOutputGainValueLabel(double gain)
+    {
+        getAudioOutputGainValueLabel().setText(String.format("%.1fx (%.1f dB)", gain, 20.0 * Math.log10(gain)));
     }
 
     /**
@@ -383,12 +466,12 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
         if(format == IntegerFormat.DECIMAL)
         {
             mTalkgroupTextFormatter = mDecimalFormatter;
-            getTalkgroupField().setTooltip(new Tooltip("1 - 65,535"));
+            getTalkgroupField().setTooltip(new Tooltip("1 - 999,999"));
         }
         else
         {
             mTalkgroupTextFormatter = mDecimalFormatter;
-            getTalkgroupField().setTooltip(new Tooltip("1 - FFFF"));
+            getTalkgroupField().setTooltip(new Tooltip("1 - F423F"));
         }
 
         mTalkgroupTextFormatter.setValue(value);
@@ -416,7 +499,7 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
         {
             getBandwidthButton().setDisable(false);
             final DecodeConfigAM.Bandwidth bandwidth = (decodeConfigAM.getBandwidth() != null ?
-                    decodeConfigAM.getBandwidth() : DecodeConfigAM.DEFAULT_BANDWIDTH);
+                    decodeConfigAM.getBandwidth() : DecodeConfigNBFM.Bandwidth.BW_15_0);
 
             for(Toggle toggle: getBandwidthButton().getToggleGroup().getToggles())
             {
@@ -428,7 +511,11 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
             mSquelchTextFormatter.setValue(decodeConfigAM.getSquelchThreshold());
             getSquelchAutoTrackSwitch().setDisable(false);
             getSquelchAutoTrackSwitch().setSelected(decodeConfigAM.isSquelchAutoTrack());
-
+            getAudioAutoLevelSwitch().setDisable(false);
+            getAudioAutoLevelSwitch().setSelected(decodeConfigAM.isAudioAutoLevel());
+            getAudioOutputGainSlider().setDisable(false);
+            getAudioOutputGainSlider().setValue(decodeConfigAM.getAudioOutputGain());
+            updateAudioOutputGainValueLabel(decodeConfigAM.getAudioOutputGain());
         }
         else
         {
@@ -444,6 +531,10 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
             getSquelchThresholdField().setDisable(true);
             getSquelchAutoTrackSwitch().setDisable(true);
             getSquelchAutoTrackSwitch().setSelected(false);
+            getAudioAutoLevelSwitch().setDisable(true);
+            getAudioAutoLevelSwitch().setSelected(true);
+            getAudioOutputGainSlider().setDisable(true);
+            getAudioOutputGainSlider().setValue(AmAudioLeveler.DEFAULT_OUTPUT_GAIN);
         }
     }
 
@@ -461,7 +552,7 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
             config = new DecodeConfigAM();
         }
 
-        DecodeConfigAM.Bandwidth bandwidth = DecodeConfigAM.DEFAULT_BANDWIDTH;
+        DecodeConfigAM.Bandwidth bandwidth = DecodeConfigAM.Bandwidth.BW_15_0;
 
         if(getBandwidthButton().getToggleGroup().getSelectedToggle() != null)
         {
@@ -480,6 +571,9 @@ public class AMConfigurationEditor extends ChannelConfigurationEditor
         config.setTalkgroup(talkgroup);
         config.setSquelchThreshold(mSquelchTextFormatter.getValue());
         config.setSquelchAutoTrack(getSquelchAutoTrackSwitch().isSelected());
+        config.setAudioAutoLevel(getAudioAutoLevelSwitch().isSelected());
+        //Round to the displayed precision so the saved value matches what the user sees
+        config.setAudioOutputGain(Math.round(getAudioOutputGainSlider().getValue() * 10.0) / 10.0f);
         getItem().setDecodeConfiguration(config);
     }
 

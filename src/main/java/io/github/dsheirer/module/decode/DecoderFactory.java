@@ -1068,6 +1068,8 @@ public class DecoderFactory
                     copyAM.setTalkgroup(origAM.getTalkgroup());
                     copyAM.setSquelchThreshold(origAM.getSquelchThreshold());
                     copyAM.setSquelchAutoTrack(origAM.isSquelchAutoTrack());
+                    copyAM.setAudioAutoLevel(origAM.isAudioAutoLevel());
+                    copyAM.setAudioOutputGain(origAM.getAudioOutputGain());
                     return copyAM;
                 case DMR:
                     DecodeConfigDMR originalDMR = (DecodeConfigDMR)config;
@@ -1102,6 +1104,7 @@ public class DecoderFactory
                     copyNBFM.setSquelchNoiseOpenThreshold(origNBFM.getSquelchNoiseOpenThreshold());
                     copyNBFM.setSquelchNoiseCloseThreshold(origNBFM.getSquelchNoiseCloseThreshold());
                     copyNBFM.setTalkgroup(origNBFM.getTalkgroup());
+                    copyNBFM.setMdcSquawkRemoval(origNBFM.isMdcSquawkRemoval());
                     return copyNBFM;
                 case NXDN:
                     DecodeConfigNXDN origNXDN = (DecodeConfigNXDN)config;
