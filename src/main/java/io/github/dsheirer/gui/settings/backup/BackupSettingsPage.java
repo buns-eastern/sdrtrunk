@@ -90,7 +90,7 @@ public class BackupSettingsPage extends SettingsPage
 
         SettingsSection inBackup = new SettingsSection("What’s in the backup");
         inBackup.addContent(bullets(
-            "All settings in this Preferences window",
+            "All settings in this Settings window",
             "Look and layout (theme, fonts, table columns)",
             "Playlists (channels, aliases, streaming)",
             "Tuner settings (matched to each tuner by serial number)",

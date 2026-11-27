@@ -96,9 +96,9 @@ public class HeartbeatMonitorSettingsPage extends OutputSettingsPage
         findIds.addContent(paragraph(
             "1.  Start SDRTrunk and let the control channel lock on your P25 system.\n" +
             "2.  Click the channel in the main window and open the Details tab.\n" +
-            "3.  Look for lines like:  SYSTEM: 1674   and   SITE: 1\n" +
+            "3.  Look for lines like:  SYSTEM: 291   and   SITE: 1\n" +
             "4.  Use those decimal numbers in the System ID and Site ID fields below.\n\n" +
-            "Note: SDRTrunk sometimes shows both decimal and hex (e.g. SYSTEM: 1674 / 0x68A).\n" +
+            "Note: SDRTrunk sometimes shows both decimal and hex (e.g. SYSTEM: 291 / 0x123).\n" +
             "Always use the decimal number — the one before the slash."));
         findIds.addContent(warningNote("Changes take effect after restarting SDRTrunk."));
 

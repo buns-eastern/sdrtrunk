@@ -123,7 +123,7 @@ public class PcmStreamSettingsPage extends OutputSettingsPage
             "    t = msg['type']\n\n" +
             "    if t == 'voice_id':\n" +
             "        # Fires ~180ms after squelch -- fastest possible unit ID\n" +
-            "        print(f'[ID]    TG {msg[\"talkgroup\"]} | FROM {msg[\"from\"]} | {msg[\"system\"]} / {msg[\"site\"]}')\\n" +
+            "        print(f'[ID]    TG {msg[\"talkgroup\"]} | FROM {msg[\"from\"]} | {msg[\"system\"]} / {msg[\"site\"]}')\n" +
             "    elif t == 'call_start':\n" +
             "        print(f'[START] TG {msg[\"talkgroup\"]} | FROM {msg[\"from\"]} | call {msg[\"callId\"]}')\n" +
             "    elif t == 'pcm':\n" +

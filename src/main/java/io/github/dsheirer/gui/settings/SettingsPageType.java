@@ -95,7 +95,7 @@ public enum SettingsPageType
         "Confirm that SDRTrunk itself is alive by pushing a periodic heartbeat to your monitoring tools.  " +
             "If the application stops or crashes, the heartbeats stop and your monitors alert.",
         context -> new SoftwareHeartbeatSettingsPage(context.settings())),
-    HEARTBEAT_MONITOR(Group.EXTERNAL_OUTPUTS, "Heartbeat Monitor", FontAwesome.BELL,
+    HEARTBEAT_MONITOR(Group.EXTERNAL_OUTPUTS, "CC Heartbeat Monitor", FontAwesome.BELL,
         "Continuously verify that your P25 trunking control channels are alive and actively " +
             "decoding — not just tuned but actually receiving valid messages from the tower.",
         context -> new HeartbeatMonitorSettingsPage(context.settings())),
