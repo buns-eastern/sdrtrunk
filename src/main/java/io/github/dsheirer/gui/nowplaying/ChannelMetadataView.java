@@ -58,6 +58,7 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
@@ -78,20 +79,20 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
     private static final String SWING_TABLE_KEY = "channel.metadata.panel";
     private static final String EMPTY_IDENTIFIER = "-----";
     private static final String EMPTY_STATE = "----";
-    private static final Map<State,String> STATE_STYLES = new EnumMap<>(State.class);
+    //Channel state pills: fixed background and text color pairs that read the same in light and dark themes.  Idle
+    //and any state without a pair show as plain text.
+    private static final Map<State,String> STATE_CLASSES = new EnumMap<>(State.class);
 
     static
     {
-        //Colors match the Swing version of the table (java.awt.Color constants)
-        STATE_STYLES.put(State.ACTIVE, style("#00FFFF", "#0000FF"));
-        STATE_STYLES.put(State.CALL, style("#0000FF", "#FFFF00"));
-        STATE_STYLES.put(State.CONTROL, style("#FFC800", "#0000FF"));
-        STATE_STYLES.put(State.DATA, style("#00FF00", "#0000FF"));
-        STATE_STYLES.put(State.ENCRYPTED, style("#FF00FF", "#FFFFFF"));
-        STATE_STYLES.put(State.FADE, style("#C0C0C0", "#404040"));
-        STATE_STYLES.put(State.IDLE, style("#FFFFFF", "#404040"));
-        STATE_STYLES.put(State.RESET, style("#FFAFAF", "#FFFF00"));
-        STATE_STYLES.put(State.TEARDOWN, style("#404040", "#FFFFFF"));
+        STATE_CLASSES.put(State.ACTIVE, "np-state-active");
+        STATE_CLASSES.put(State.CALL, "np-state-call");
+        STATE_CLASSES.put(State.CONTROL, "np-state-control");
+        STATE_CLASSES.put(State.DATA, "np-state-data");
+        STATE_CLASSES.put(State.ENCRYPTED, "np-state-encrypted");
+        STATE_CLASSES.put(State.FADE, "np-state-fade");
+        STATE_CLASSES.put(State.RESET, "np-state-reset");
+        STATE_CLASSES.put(State.TEARDOWN, "np-state-teardown");
     }
 
     private final ChannelProcessingManager mChannelProcessingManager;
@@ -124,6 +125,13 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
         mTalkgroupFormatSettings = settings.getTalkgroupFormatSettings();
 
         mTableView.getColumns().addAll(createColumns());
+        java.net.URL stylesheet = ChannelMetadataView.class.getResource("/now_playing.css");
+
+        if(stylesheet != null)
+        {
+            mTableView.getStylesheets().add(stylesheet.toExternalForm());
+        }
+
         mTableView.setItems(mRows);
         mTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_SUBSEQUENT_COLUMNS);
         mTableView.setPlaceholder(new javafx.scene.control.Label("No channels are processing"));
@@ -303,6 +311,12 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
             }, Row::revisionProperty);
         status.setCellFactory(column -> new NowPlayingCells.AlignedCell<>(column)
         {
+            private final Label mChip = new Label();
+
+            {
+                mChip.getStyleClass().add("np-state-chip");
+            }
+
             @Override
             protected void updateItem(State state, boolean empty)
             {
@@ -311,17 +325,21 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
                 if(empty)
                 {
                     setText(null);
-                    setStyle(null);
+                    setGraphic(null);
                 }
                 else if(state == null)
                 {
                     setText(EMPTY_STATE);
-                    setStyle(null);
+                    setGraphic(null);
                 }
                 else
                 {
-                    setText(state.getDisplayValue());
-                    setStyle(STATE_STYLES.get(state));
+                    setText(null);
+                    mChip.setText(state.getDisplayValue());
+                    mChip.getStyleClass().removeIf(styleClass -> styleClass.startsWith("np-state-") &&
+                        !styleClass.equals("np-state-chip"));
+                    mChip.getStyleClass().add(STATE_CLASSES.getOrDefault(state, "np-state-plain"));
+                    setGraphic(mChip);
                 }
             }
         });
@@ -459,10 +477,6 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
         return identifier != null ? identifier.toString() : null;
     }
 
-    private static String style(String background, String foreground)
-    {
-        return "-fx-background-color: " + background + "; -fx-text-fill: " + foreground + ";";
-    }
 
     /**
      * Table row item for a channel metadata.  The revision increments each time the channel metadata changes so that

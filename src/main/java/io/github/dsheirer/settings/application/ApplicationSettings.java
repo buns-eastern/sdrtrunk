@@ -131,12 +131,45 @@ public class ApplicationSettings extends AbstractSettings
             }
             else
             {
-                //Migrate from the older boolean setting so existing users keep their setting.
-                mTheme = Setting.APPLICATION_DARK_MODE.getBoolean(false) ? Theme.DARK : DEFAULT_THEME;
+                Theme forkTheme = getLegacyForkTheme();
+
+                if(forkTheme != null)
+                {
+                    mTheme = forkTheme;
+                }
+                else
+                {
+                    //Migrate from the older boolean setting so existing users keep their setting.
+                    mTheme = Setting.APPLICATION_DARK_MODE.getBoolean(false) ? Theme.DARK : DEFAULT_THEME;
+                }
             }
         }
 
         return mTheme;
+    }
+
+    /**
+     * Theme chosen in earlier fork builds, or null when there isn't one.  Only read, so a rollback to an earlier
+     * build keeps that build's choice.
+     */
+    private static Theme getLegacyForkTheme()
+    {
+        String stored = Setting.APPLICATION_THEME_LEGACY_FORK.get(null);
+
+        if(stored == null)
+        {
+            return null;
+        }
+
+        return switch(stored.trim().toLowerCase())
+        {
+            case "arc-dark" -> Theme.ARC_DARK;
+            case "one-dark" -> Theme.ONE_DARK;
+            case "dracula" -> Theme.DRACULA;
+            case "nord" -> Theme.NORD;
+            case "light" -> Theme.LIGHT;
+            default -> null;
+        };
     }
 
     /**

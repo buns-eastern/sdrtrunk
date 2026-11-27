@@ -1,0 +1,116 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2014-2026 Dennis Sheirer
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+/* Now Playing channel state pills.  Fixed color pairs so they read the same in light and dark themes.  The dark theme
+   fills each label's .text node directly, so the text colors are set on the .text node as well. */
+.np-state-chip
+{
+    -fx-background-radius: 9;
+    -fx-padding: 1 9 1 9;
+    -fx-min-width: 7em;
+    -fx-alignment: center;
+}
+
+.np-state-chip.np-state-active
+{
+    -fx-background-color: #78c3e6;
+    -fx-text-fill: #000000;
+}
+
+.np-state-chip.np-state-active .text
+{
+    -fx-fill: #000000;
+}
+
+.np-state-chip.np-state-call
+{
+    -fx-background-color: #285abe;
+    -fx-text-fill: #ffffff;
+}
+
+.np-state-chip.np-state-call .text
+{
+    -fx-fill: #ffffff;
+}
+
+.np-state-chip.np-state-control
+{
+    -fx-background-color: #ebc832;
+    -fx-text-fill: #000000;
+}
+
+.np-state-chip.np-state-control .text
+{
+    -fx-fill: #000000;
+}
+
+.np-state-chip.np-state-data
+{
+    -fx-background-color: #78c378;
+    -fx-text-fill: #000000;
+}
+
+.np-state-chip.np-state-data .text
+{
+    -fx-fill: #000000;
+}
+
+.np-state-chip.np-state-encrypted
+{
+    -fx-background-color: #a546af;
+    -fx-text-fill: #ffffff;
+}
+
+.np-state-chip.np-state-encrypted .text
+{
+    -fx-fill: #ffffff;
+}
+
+.np-state-chip.np-state-fade
+{
+    -fx-background-color: #828282;
+    -fx-text-fill: #ffffff;
+}
+
+.np-state-chip.np-state-fade .text
+{
+    -fx-fill: #ffffff;
+}
+
+.np-state-chip.np-state-reset
+{
+    -fx-background-color: #e18ca5;
+    -fx-text-fill: #000000;
+}
+
+.np-state-chip.np-state-reset .text
+{
+    -fx-fill: #000000;
+}
+
+.np-state-chip.np-state-teardown
+{
+    -fx-background-color: #505050;
+    -fx-text-fill: #ffffff;
+}
+
+.np-state-chip.np-state-teardown .text
+{
+    -fx-fill: #ffffff;
+}

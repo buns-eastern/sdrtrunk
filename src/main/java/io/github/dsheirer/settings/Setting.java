@@ -42,6 +42,8 @@ public enum Setting
     APPLICATION_DARK_MODE(Node.APPLICATION, "dark.mode"),
     APPLICATION_GUI_SCALE(Node.APPLICATION, "ui.gui.scale"),
     APPLICATION_THEME(Node.APPLICATION, "ui.theme"),
+    //Theme chosen in earlier fork builds, read once to carry the choice over.  Never written.
+    APPLICATION_THEME_LEGACY_FORK(Node.SWING, "application.appearance.theme"),
 
     //Call management and duplicate call detection
     CALL_DETECT_DUPLICATE_RADIO(Node.CALL_MANAGEMENT, "duplicate.call.detect.radio"),
