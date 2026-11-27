@@ -31,6 +31,7 @@ import io.github.dsheirer.gui.status.CpuStatusItem;
 import io.github.dsheirer.gui.status.MemoryStatusItem;
 import io.github.dsheirer.gui.status.StatusBar;
 import io.github.dsheirer.gui.status.StorageStatusItem;
+import io.github.dsheirer.gui.status.UptimeStatusItem;
 import io.github.dsheirer.gui.status.StreamingStatusItem;
 import io.github.dsheirer.gui.status.TunerStatusItem;
 import io.github.dsheirer.gui.icon.ViewIconManagerRequest;
@@ -697,7 +698,7 @@ public class MainWindow
         eventLogs.setAction(() -> openFolder(() -> mSettings.getDirectorySettings().getDirectoryEventLog()));
 
         StatusBar statusBar = new StatusBar(mResourceMonitor, List.of(streaming, tuners, channels),
-            List.of(cpu, memory, recordings, eventLogs));
+            List.of(cpu, memory, recordings, eventLogs, UptimeStatusItem.computer(), UptimeStatusItem.sdrtrunk()));
         statusBar.setHideAction(() -> mStatusBarMenuItem.setSelected(false));
         return statusBar;
     }

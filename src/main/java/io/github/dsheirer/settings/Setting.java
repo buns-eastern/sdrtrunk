@@ -92,10 +92,12 @@ public enum Setting
     //The status bar was the resource status bar, so it keeps that key
     MAIN_WINDOW_STATUS_BAR_VISIBLE(Node.GUI, "sdrtrunk.resource.status.visible"),
     MAIN_WINDOW_STATUS_ITEM_CHANNELS(Node.GUI, "sdrtrunk.main.window.status.item.channels"),
+    MAIN_WINDOW_STATUS_ITEM_COMPUTER_UPTIME(Node.GUI, "sdrtrunk.main.window.status.item.computer.uptime"),
     MAIN_WINDOW_STATUS_ITEM_CPU(Node.GUI, "sdrtrunk.main.window.status.item.cpu"),
     MAIN_WINDOW_STATUS_ITEM_EVENT_LOGS(Node.GUI, "sdrtrunk.main.window.status.item.event.logs"),
     MAIN_WINDOW_STATUS_ITEM_MEMORY(Node.GUI, "sdrtrunk.main.window.status.item.memory"),
     MAIN_WINDOW_STATUS_ITEM_RECORDINGS(Node.GUI, "sdrtrunk.main.window.status.item.recordings"),
+    MAIN_WINDOW_STATUS_ITEM_SDRTRUNK_UPTIME(Node.GUI, "sdrtrunk.main.window.status.item.sdrtrunk.uptime"),
     MAIN_WINDOW_STATUS_ITEM_STREAMING(Node.GUI, "sdrtrunk.main.window.status.item.streaming"),
     MAIN_WINDOW_STATUS_ITEM_TUNERS(Node.GUI, "sdrtrunk.main.window.status.item.tuners"),
     MAIN_WINDOW_TOOLBAR_LABELS(Node.GUI, "sdrtrunk.main.window.toolbar.labels"),

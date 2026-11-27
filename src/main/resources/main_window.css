@@ -197,3 +197,21 @@
     -fx-min-width: 3em;
     -fx-alignment: center-right;
 }
+
+/* Computer and sdrtrunk uptime */
+.main-window .status-bar .status-uptime-icon
+{
+    -fx-background-color: -fx-text-base-color;
+    -fx-opacity: 0.7;
+}
+
+.main-window .status-bar .status-uptime-name
+{
+    -fx-opacity: 0.75;
+}
+
+.main-window .status-bar .status-uptime-value
+{
+    -fx-font-family: monospace;
+    -fx-font-weight: bold;
+}
