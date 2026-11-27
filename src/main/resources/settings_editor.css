@@ -361,3 +361,65 @@
 {
     -fx-fill: white;
 }
+
+/* Code samples and tips on the External Outputs pages */
+
+.settings-editor .settings-code
+{
+    -fx-font-family: monospace;
+    -fx-font-size: 0.9em;
+    -fx-control-inner-background: #1e2329;
+    -fx-text-fill: #abb2bf;
+    -fx-highlight-fill: #3e4451;
+    -fx-highlight-text-fill: #e6e6e6;
+    -fx-background-color: #444444, #1e2329;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4, 3;
+}
+
+.settings-editor .settings-code .content
+{
+    -fx-background-color: #1e2329;
+}
+
+.settings-editor .settings-code .text
+{
+    -fx-fill: #abb2bf;
+}
+
+.settings-editor .settings-tip
+{
+    -fx-background-color: ladder(-fx-background, derive(-fx-background, 12%) 49%, #f0f4f0 50%);
+    -fx-background-radius: 4;
+    -fx-padding: 8;
+}
+
+.settings-editor .settings-tip-text
+{
+    -fx-font-size: 0.9em;
+}
+
+.settings-editor .settings-tip-icon
+{
+    -fx-fill: ladder(-fx-background, #e0b050 49%, #996600 50%);
+}
+
+.settings-editor .settings-callout
+{
+    -fx-background-color: ladder(-fx-background, derive(-fx-background, 12%) 49%, derive(-fx-background, -4%) 50%);
+    -fx-background-radius: 4;
+    -fx-padding: 8 10 8 10;
+}
+
+.settings-editor .settings-column-header
+{
+    -fx-font-weight: bold;
+    -fx-font-size: 0.9em;
+}
+
+.settings-editor .settings-warning-text,
+.settings-editor .settings-warning-text .text
+{
+    -fx-text-fill: ladder(-fx-background, #e0b050 49%, #996600 50%);
+    -fx-fill: ladder(-fx-background, #e0b050 49%, #996600 50%);
+}
