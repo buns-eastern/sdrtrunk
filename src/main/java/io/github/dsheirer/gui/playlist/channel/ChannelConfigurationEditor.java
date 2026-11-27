@@ -86,6 +86,7 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class ChannelConfigurationEditor extends Editor<Channel>
 {
+    private boolean mSaving;
     private Slider mJmbeAudioBoostSlider;
     private final static Logger mLog = LoggerFactory.getLogger(ChannelConfigurationEditor.class);
 
@@ -277,40 +278,64 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
     {
         if(modifiedProperty().get())
         {
-            getItem().setSystem(getSystemField().getText());
-            getItem().setSite(getSiteField().getText());
+            boolean alreadySaving = mSaving;
+            mSaving = true;
 
-            //Hack - change the name to something else and then set it to the real value to trigger change events
-            getItem().setName(" ");
-            getItem().setName(getNameField().getText());
-            getItem().setAliasListName(getAliasListComboBox().getSelectionModel().getSelectedItem());
-
-            if(providesTalkerAlias())
+            try
             {
-                getItem().setAutoAddTalkerAliases(getAutoAddTalkerAliasesCheckBox().isSelected());
+                saveChannel();
             }
-
-            getItem().setAutoStart(getAutoStartSwitch().isSelected());
-
-            Integer order = getAutoStartOrderSpinner().getValue();
-
-            if(order == null || order < 1)
+            finally
             {
-                getItem().setAutoStartOrder(null);
+                mSaving = alreadySaving;
             }
-            else
-            {
-                getItem().setAutoStartOrder(getAutoStartOrderSpinner().getValue());
-            }
-
-            saveDecoderConfiguration();
-            saveAuxDecoderConfiguration();
-            saveEventLogConfiguration();
-            saveRecordConfiguration();
-            saveSourceConfiguration();
-
-            modifiedProperty().set(false);
         }
+    }
+
+    /**
+     * Indicates if a save is in progress.  Saving renames the channel briefly to refresh the channel table, which
+     * the table reports as a selection change: that change must not reload this editor part way through the save.
+     */
+    public boolean isSaving()
+    {
+        return mSaving;
+    }
+
+    private void saveChannel()
+    {
+        getItem().setSystem(getSystemField().getText());
+        getItem().setSite(getSiteField().getText());
+
+        //Hack - change the name to something else and then set it to the real value to trigger change events
+        getItem().setName(" ");
+        getItem().setName(getNameField().getText());
+        getItem().setAliasListName(getAliasListComboBox().getSelectionModel().getSelectedItem());
+
+        if(providesTalkerAlias())
+        {
+            getItem().setAutoAddTalkerAliases(getAutoAddTalkerAliasesCheckBox().isSelected());
+        }
+
+        getItem().setAutoStart(getAutoStartSwitch().isSelected());
+
+        Integer order = getAutoStartOrderSpinner().getValue();
+
+        if(order == null || order < 1)
+        {
+            getItem().setAutoStartOrder(null);
+        }
+        else
+        {
+            getItem().setAutoStartOrder(getAutoStartOrderSpinner().getValue());
+        }
+
+        saveDecoderConfiguration();
+        saveAuxDecoderConfiguration();
+        saveEventLogConfiguration();
+        saveRecordConfiguration();
+        saveSourceConfiguration();
+
+        modifiedProperty().set(false);
     }
 
     protected abstract void setAuxDecoderConfiguration(AuxDecodeConfiguration config);
@@ -951,8 +976,20 @@ public abstract class ChannelConfigurationEditor extends Editor<Channel>
             mSaveButton.setOnAction(event -> {
                 if(mFilterProcessor != null)
                 {
-                    mFilterProcessor.clearFilter();
-                    save();
+                    //Clearing the filter changes the channel table selection, which must not prompt to save or
+                    //reload this editor before the save
+                    mSaving = true;
+
+                    try
+                    {
+                        mFilterProcessor.clearFilter();
+                        save();
+                    }
+                    finally
+                    {
+                        mSaving = false;
+                    }
+
                     mFilterProcessor.restoreFilter();
                 }
                 else

@@ -160,6 +160,13 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
 
     private void setChannel(Channel channel)
     {
+        //Saving briefly renames the channel to refresh the table, which arrives here as a selection change.  Ignore it so
+        //the save isn't interrupted by a save prompt and the editor isn't reloaded part way through the save.
+        if(getChannelConfigurationEditor().isSaving())
+        {
+            return;
+        }
+
         //Prompt the user to save if the contents of the current channel editor have been modified
         if(getChannelConfigurationEditor().modifiedProperty().get())
         {
