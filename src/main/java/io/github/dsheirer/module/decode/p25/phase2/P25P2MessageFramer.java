@@ -18,6 +18,7 @@
  */
 package io.github.dsheirer.module.decode.p25.phase2;
 
+import io.github.dsheirer.dsp.symbol.ISyncDetectListener;
 import io.github.dsheirer.module.decode.BitErrorReport;
 import io.github.dsheirer.alias.AliasList;
 import io.github.dsheirer.alias.AliasModel;
@@ -56,6 +57,7 @@ public class P25P2MessageFramer extends C4FMMessageFramer
 {
     private final static Logger mLog = LoggerFactory.getLogger(P25P2MessageFramer.class);
     private final P25P2SuperFrameDetector mSuperFrameDetector = new P25P2SuperFrameDetector();
+    private ISyncDetectListener mSyncDetectListener;
     private boolean mRunning = false;
 
     /**
@@ -132,6 +134,20 @@ public class P25P2MessageFramer extends C4FMMessageFramer
     public void syncDetected()
     {
         mSuperFrameDetector.syncDetected();
+
+        if(mSyncDetectListener != null)
+        {
+            mSyncDetectListener.syncDetected(0);
+        }
+    }
+
+    /**
+     * Registers an optional listener to be notified each time the symbol processor detects a sync pattern.
+     * @param listener to notify, or null to clear.
+     */
+    public void setSyncDetectListener(ISyncDetectListener listener)
+    {
+        mSyncDetectListener = listener;
     }
 
     /**

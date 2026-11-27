@@ -73,6 +73,7 @@ public class SDRTrunk implements Listener<TunerEvent>
     private final static Logger mLog = LoggerFactory.getLogger(SDRTrunk.class);
 
     private AudioRecordingManager mAudioRecordingManager;
+    private io.github.dsheirer.discovery.DiscoveryManager mDiscoveryManager;
     private AudioStreamingManager mAudioStreamingManager;
     private DiagnosticMonitor mDiagnosticMonitor;
     private IconModel mIconModel = new IconModel();
@@ -222,6 +223,20 @@ public class SDRTrunk implements Listener<TunerEvent>
 
         if(!headless)
         {
+            //Signal discovery (only with a screen, as before).  A failure here never stops startup.
+            try
+            {
+                mDiscoveryManager = new io.github.dsheirer.discovery.DiscoveryManager(mTunerManager, mPlaylistManager,
+                    mSettings);
+            }
+            catch(Throwable t)
+            {
+                mLog.error("Error creating signal discovery", t);
+            }
+        }
+
+        if(!headless)
+        {
             //The main window's status bar starts the resource monitor while it shows resource usage
             mMainWindow = FxToolkit.callAndWait(() -> new MainWindow(mSettings, mPlaylistManager,
                 mTunerManager, audioPlaybackManager, aliasModel, mIconModel, mapService, mResourceMonitor,
@@ -365,6 +380,18 @@ public class SDRTrunk implements Listener<TunerEvent>
         }
 
         mLog.info("Stopping channels ...");
+        if(mDiscoveryManager != null)
+        {
+            try
+            {
+                mDiscoveryManager.shutdown();
+            }
+            catch(Throwable t)
+            {
+                mLog.error("Error shutting down signal discovery", t);
+            }
+        }
+
         mPlaylistManager.getChannelProcessingManager().shutdown();
         mAudioRecordingManager.stop();
         mResourceMonitor.stop();

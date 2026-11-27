@@ -85,6 +85,8 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
     private NativeBufferReceiver mNativeBufferReceiver = new NativeBufferReceiver();
     private Dispatcher<INativeBuffer> mBufferDispatcher;
     private boolean mRunning = true;
+    private final List<IChannelResultsListener> mChannelResultsListeners = new CopyOnWriteArrayList<>();
+    private boolean mPipelineRunning = false;
 
     /**
      * Creates a polyphase channel manager for the tuner controller
@@ -226,14 +228,115 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
             mPolyphaseChannelizer.addChannel(channelSource);
             mSourceEventBroadcaster.broadcast(SourceEvent.channelCountChange(getTunerChannelCount()));
 
-            //If this is the first channel, register to start the sample buffers flowing
-            if(mPolyphaseChannelizer.getRegisteredChannelCount() == 1)
+            startPipelineIfNeeded();
+        }
+    }
+
+    /**
+     * Starts the tuner buffer -> channelizer pipeline if it is not already running.  Caller must hold the
+     * mBufferDispatcher monitor.
+     */
+    private void startPipelineIfNeeded()
+    {
+        if(!mPipelineRunning && mPolyphaseChannelizer != null)
+        {
+            mTunerController.addBufferListener(mBufferDispatcher);
+            mPolyphaseChannelizer.start();
+            mBufferDispatcher.start();
+            mPipelineRunning = true;
+        }
+    }
+
+    /**
+     * Stops the pipeline when there are no channel sources and no raw channel results listeners remaining.  Caller
+     * must hold the mBufferDispatcher monitor.
+     */
+    private void stopPipelineIfIdle()
+    {
+        if(mPipelineRunning && mPolyphaseChannelizer != null &&
+           mPolyphaseChannelizer.getRegisteredChannelCount() == 0 &&
+           mPolyphaseChannelizer.getChannelResultsListenerCount() == 0)
+        {
+            mTunerController.removeBufferListener(mBufferDispatcher);
+            mBufferDispatcher.stop();
+            mPolyphaseChannelizer.stop();
+            mPipelineRunning = false;
+        }
+    }
+
+    /**
+     * Registers a listener to receive raw channelizer output for every channel (used by signal discovery).  The
+     * channelizer pipeline is started if it is not already running so that results flow even with no channels sourced.
+     */
+    public void addChannelResultsListener(IChannelResultsListener listener)
+    {
+        if(listener == null)
+        {
+            return;
+        }
+
+        synchronized(mBufferDispatcher)
+        {
+            if(!mChannelResultsListeners.contains(listener))
             {
-                mTunerController.addBufferListener(mBufferDispatcher);
-                mPolyphaseChannelizer.start();
-                mBufferDispatcher.start();
+                mChannelResultsListeners.add(listener);
+            }
+
+            try
+            {
+                checkChannelizerConfiguration();
+            }
+            catch(IllegalStateException ise)
+            {
+                //Channels are sourced at a different rate than the calculator - fall through and attach to the
+                //existing channelizer.
+            }
+
+            if(mPolyphaseChannelizer != null)
+            {
+                mPolyphaseChannelizer.addChannelResultsListener(listener);
+                startPipelineIfNeeded();
             }
         }
+    }
+
+    /**
+     * Removes a raw channel results listener and stops the pipeline if nothing else is consuming it.
+     */
+    public void removeChannelResultsListener(IChannelResultsListener listener)
+    {
+        if(listener == null)
+        {
+            return;
+        }
+
+        synchronized(mBufferDispatcher)
+        {
+            mChannelResultsListeners.remove(listener);
+
+            if(mPolyphaseChannelizer != null)
+            {
+                mPolyphaseChannelizer.removeChannelResultsListener(listener);
+                stopPipelineIfIdle();
+            }
+        }
+    }
+
+    /**
+     * Channel calculator for mapping channelizer indexes to frequencies.  Reflects the current tuner center
+     * frequency and sample rate.
+     */
+    public ChannelCalculator getChannelCalculator()
+    {
+        return mChannelCalculator;
+    }
+
+    /**
+     * Output sample rate of each channelizer channel in Hertz.
+     */
+    public double getChannelSampleRate()
+    {
+        return mChannelCalculator.getChannelSampleRate();
     }
 
     /**
@@ -255,13 +358,8 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
 
             mSourceEventBroadcaster.broadcast(SourceEvent.channelCountChange(getTunerChannelCount()));
 
-            //If this is the last/only channel, deregister to stop the sample buffers
-            if(mPolyphaseChannelizer != null && mPolyphaseChannelizer.getRegisteredChannelCount() == 0)
-            {
-                mTunerController.removeBufferListener(mBufferDispatcher);
-                mBufferDispatcher.stop();
-                mPolyphaseChannelizer.stop();
-            }
+            //If this is the last/only consumer, deregister to stop the sample buffers
+            stopPipelineIfIdle();
         }
 
         try
@@ -295,6 +393,7 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
                 int channelCount = ComplexPolyphaseChannelizerM2.getChannelCount(sampleRate);
                 mChannelCalculator.setRates(sampleRate, channelCount);
                 mBufferDispatcher.setMaximumQueuedWeight(getMaximumQueuedSamples(sampleRate));
+                rebuildChannelizerForListeners();
                 break;
             case NOTIFICATION_FREQUENCY_AND_SAMPLE_RATE_LOCKED:
             case NOTIFICATION_FREQUENCY_AND_SAMPLE_RATE_UNLOCKED:
@@ -343,6 +442,11 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
             {
                 mPolyphaseChannelizer = new ComplexPolyphaseChannelizerM2(tunerSampleRate,
                     POLYPHASE_CHANNELIZER_TAPS_PER_CHANNEL);
+
+                for(IChannelResultsListener listener : mChannelResultsListeners)
+                {
+                    mPolyphaseChannelizer.addChannelResultsListener(listener);
+                }
             }
             catch(IllegalArgumentException iae)
             {
@@ -351,6 +455,49 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
             catch(FilterDesignException fde)
             {
                 mLog.error("Could not create filter for polyphase channelizer for sample rate [" + tunerSampleRate + "]", fde);
+            }
+        }
+    }
+
+    /**
+     * When only raw channel results listeners (no channel sources) are holding the pipeline open and the tuner sample
+     * rate changes, tear down and rebuild the channelizer at the new rate so the listeners keep receiving results.
+     */
+    private void rebuildChannelizerForListeners()
+    {
+        synchronized(mBufferDispatcher)
+        {
+            if(mPolyphaseChannelizer == null || mChannelResultsListeners.isEmpty() ||
+               mPolyphaseChannelizer.getRegisteredChannelCount() > 0)
+            {
+                return;
+            }
+
+            if(FastMath.abs(mPolyphaseChannelizer.getSampleRate() - mChannelCalculator.getSampleRate()) <= 0.5)
+            {
+                return;
+            }
+
+            boolean wasRunning = mPipelineRunning;
+
+            if(wasRunning)
+            {
+                mTunerController.removeBufferListener(mBufferDispatcher);
+                mBufferDispatcher.stop();
+                mPolyphaseChannelizer.stop();
+                mPipelineRunning = false;
+            }
+
+            for(IChannelResultsListener listener : mChannelResultsListeners)
+            {
+                mPolyphaseChannelizer.removeChannelResultsListener(listener);
+            }
+
+            checkChannelizerConfiguration();
+
+            if(wasRunning)
+            {
+                startPipelineIfNeeded();
             }
         }
     }

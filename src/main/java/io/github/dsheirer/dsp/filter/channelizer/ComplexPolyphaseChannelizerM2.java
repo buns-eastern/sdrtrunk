@@ -496,7 +496,8 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
                     float[] samples = batch.getSamples();
                     int[] channels = prepareChannels();
 
-                    if(channels.length > 0 && channels.length <= mChannelDFT.getMaximumChannels())
+                    if(channels.length > 0 && channels.length <= mChannelDFT.getMaximumChannels() &&
+                        !hasChannelResultsListeners())
                     {
                         //Rotate only the channels that are in use to the correct phase
                         mChannelDFT.process(samples, channels);

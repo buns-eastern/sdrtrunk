@@ -84,7 +84,7 @@ public class P25P2DecoderHDQPSK extends FeedbackDecoder implements ISourceEventL
     private static final int SYMBOL_RATE = 6000;
     private final P25P2SymbolProcessor mSymbolProcessor;
     private final DQPSKDifferentialDemodulator mDemodulator = new DQPSKDifferentialDemodulator();
-    private final P25P2MessageFramer mMessageFramer = new P25P2MessageFramer();
+    protected final P25P2MessageFramer mMessageFramer = new P25P2MessageFramer();
     private final P25P2MessageProcessor mMessageProcessor = new P25P2MessageProcessor();
     private final DecodeConfigP25Phase2 mDecodeConfigP25Phase2;
     private IRealDecimationFilter mDecimationFilterI;

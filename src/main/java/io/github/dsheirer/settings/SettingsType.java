@@ -29,6 +29,7 @@ public enum SettingsType
     CALIBRATION,
     DECODE_EVENT,
     DIRECTORY,
+    DISCOVERY,
     DUPLICATE_CALL_DETECTION,
     JMBE_LIBRARY,
     MAP,

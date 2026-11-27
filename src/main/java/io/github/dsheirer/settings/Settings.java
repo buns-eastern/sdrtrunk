@@ -77,6 +77,7 @@ public class Settings implements Listener<SettingsType>
     private ImbeStreamSettings mImbeStreamSettings;
     private PcmStreamSettings mPcmStreamSettings;
     private StandaloneStreamSettings mStandaloneStreamSettings;
+    private io.github.dsheirer.discovery.DiscoveryPreference mDiscoveryPreference;
     private IssiCallMergeSettings mIssiCallMergeSettings;
     private HeartbeatSettings mHeartbeatSettings;
     private StreamHeartbeatSettings mStreamHeartbeatSettings;
@@ -224,6 +225,14 @@ public class Settings implements Listener<SettingsType>
     }
 
     /**
+     * Signal discovery settings
+     */
+    public io.github.dsheirer.discovery.DiscoveryPreference getDiscoveryPreference()
+    {
+        return mDiscoveryPreference;
+    }
+
+    /**
      * ISSI call merge settings
      */
     public IssiCallMergeSettings getIssiCallMergeSettings()
@@ -321,6 +330,7 @@ public class Settings implements Listener<SettingsType>
         mImbeStreamSettings = new ImbeStreamSettings(this::receive);
         mPcmStreamSettings = new PcmStreamSettings(this::receive);
         mStandaloneStreamSettings = new StandaloneStreamSettings(this::receive);
+        mDiscoveryPreference = new io.github.dsheirer.discovery.DiscoveryPreference(this::receive);
         mIssiCallMergeSettings = new IssiCallMergeSettings(this::receive);
         mHeartbeatSettings = new HeartbeatSettings(this::receive);
         mStreamHeartbeatSettings = new StreamHeartbeatSettings(this::receive);

@@ -24,6 +24,7 @@ import io.github.dsheirer.sample.complex.InterleavedComplexSamples;
 import io.github.dsheirer.source.ISourceEventListener;
 import io.github.dsheirer.source.SourceEvent;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -36,6 +37,7 @@ public abstract class AbstractComplexPolyphaseChannelizer implements Listener<In
     private Broadcaster<SourceEvent> mSourceChangeBroadcaster = new Broadcaster();
     private List<PolyphaseChannelSource> mChannels = new CopyOnWriteArrayList<>();
     private List<PolyphaseChannelSource> mDispatchChannels = List.of();
+    private List<IChannelResultsListener> mChannelResultsListeners = new CopyOnWriteArrayList<>();
     private double mSampleRate;
     private int mChannelCount;
     private int mSubChannelCount;
@@ -140,6 +142,71 @@ public abstract class AbstractComplexPolyphaseChannelizer implements Listener<In
                 mLog.error("Error dispatching channel results to polyphase channel source", t);
             }
         }
+
+        if(!mChannelResultsListeners.isEmpty())
+        {
+            //Output sample rate is 2x the channel spacing for this 2x oversampled channelizer
+            double outputSampleRate = getChannelSampleRate() * 2.0;
+
+            //Raw listeners receive a copy of each block since the batch arrays are reused after dispatch.  The full
+            //transform is applied to every block whenever a raw listener is registered (see hasChannelResultsListeners)
+            float[] samples = channelResults.getSamples();
+            int blockLength = channelResults.getBlockLength();
+            List<float[]> channelResultsList = new ArrayList<>(channelResults.getBlockCount());
+
+            for(int offset = 0; offset + blockLength <= samples.length; offset += blockLength)
+            {
+                channelResultsList.add(Arrays.copyOfRange(samples, offset, offset + blockLength));
+            }
+
+            for(IChannelResultsListener listener : mChannelResultsListeners)
+            {
+                try
+                {
+                    listener.receiveChannelResults(channelResultsList, outputSampleRate, channelResults.getTimestamp());
+                }
+                catch(Throwable t)
+                {
+                    mLog.error("Error in channel results listener", t);
+                }
+            }
+        }
+    }
+
+    /**
+     * Registers a listener to receive raw channelizer output for all channels (e.g. signal discovery).
+     */
+    public void addChannelResultsListener(IChannelResultsListener listener)
+    {
+        if(listener != null && !mChannelResultsListeners.contains(listener))
+        {
+            mChannelResultsListeners.add(listener);
+        }
+    }
+
+    /**
+     * Removes a raw channel results listener.
+     */
+    public void removeChannelResultsListener(IChannelResultsListener listener)
+    {
+        mChannelResultsListeners.remove(listener);
+    }
+
+    /**
+     * Indicates if any raw channel results listeners are registered.  When true, the channelizer must transform every
+     * channel, not only the channels in use, so that the raw listeners receive valid results for all channels.
+     */
+    protected boolean hasChannelResultsListeners()
+    {
+        return !mChannelResultsListeners.isEmpty();
+    }
+
+    /**
+     * Count of registered raw channel results listeners.
+     */
+    public int getChannelResultsListenerCount()
+    {
+        return mChannelResultsListeners.size();
     }
 
     /**

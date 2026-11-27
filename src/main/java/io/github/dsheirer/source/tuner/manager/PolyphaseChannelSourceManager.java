@@ -513,4 +513,10 @@ public class PolyphaseChannelSourceManager extends ChannelSourceManager
                 break;
         }
     }
+
+    @Override
+    public PolyphaseChannelManager getPolyphaseChannelManager()
+    {
+        return mPolyphaseChannelManager;
+    }
 }

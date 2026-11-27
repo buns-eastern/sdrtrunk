@@ -120,4 +120,13 @@ public abstract class ChannelSourceManager implements ISourceEventProcessor
     {
         mSourceEventBroadcaster.broadcast(sourceEvent);
     }
+
+    /**
+     * Polyphase channel manager backing this source manager, or null if this manager is not polyphase based.
+     * Used by signal discovery to tap raw channelizer output.
+     */
+    public io.github.dsheirer.dsp.filter.channelizer.PolyphaseChannelManager getPolyphaseChannelManager()
+    {
+        return null;
+    }
 }
