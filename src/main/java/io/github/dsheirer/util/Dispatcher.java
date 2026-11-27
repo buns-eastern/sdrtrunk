@@ -226,6 +226,13 @@ public class Dispatcher<E> implements Listener<E>
             {
                 mLog.warn("Dispatcher [" + mThreadName + "] queue is full, consumer is not keeping up - dropped [" +
                     mDroppedCount + "] elements");
+
+                //A channel that keeps dropping is stalled - save a thread snapshot so the cause can be found
+                if(mDroppedCount >= 100)
+                {
+                    io.github.dsheirer.monitor.StallWatch.reportStall("Dispatcher [" + mThreadName +
+                        "] is not keeping up - dropped [" + mDroppedCount + "] elements");
+                }
                 mLastOverflowLogTimestamp = now;
                 mDroppedCount = 0;
             }

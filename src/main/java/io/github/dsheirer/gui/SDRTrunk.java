@@ -37,6 +37,7 @@ import io.github.dsheirer.map.MapService;
 import io.github.dsheirer.module.log.EventLogManager;
 import io.github.dsheirer.module.decode.p25.phase1.ImbeStreamManager;
 import io.github.dsheirer.module.decode.p25.phase1.NetworkStreamManager;
+import io.github.dsheirer.monitor.StallWatch;
 import io.github.dsheirer.module.decode.p25.phase1.PcmStreamManager;
 import io.github.dsheirer.module.decode.p25.phase1.StandaloneChannelStreamManager;
 import io.github.dsheirer.monitor.DiagnosticMonitor;
@@ -238,6 +239,10 @@ public class SDRTrunk implements Listener<TunerEvent>
         if(!headless)
         {
             //The main window's status bar starts the resource monitor while it shows resource usage
+            //Saves a thread snapshot to the log folder if the user interface freezes or a channel stalls
+            FxToolkit.ensureStarted();
+            StallWatch.start(mSettings.getDirectorySettings().getDirectoryApplicationLog());
+
             mMainWindow = FxToolkit.callAndWait(() -> new MainWindow(mSettings, mPlaylistManager,
                 mTunerManager, audioPlaybackManager, aliasModel, mIconModel, mapService, mResourceMonitor,
                 mDiagnosticMonitor, this::processShutdown));
