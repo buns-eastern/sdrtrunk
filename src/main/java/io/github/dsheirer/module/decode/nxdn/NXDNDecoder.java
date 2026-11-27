@@ -19,6 +19,7 @@
 
 package io.github.dsheirer.module.decode.nxdn;
 
+import io.github.dsheirer.module.decode.BitErrorReport;
 import com.google.common.eventbus.Subscribe;
 import io.github.dsheirer.dsp.filter.FilterFactory;
 import io.github.dsheirer.dsp.filter.decimate.DecimationFilterFactory;
@@ -81,7 +82,7 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
     {
         mConfig = config;
         mMessageProcessor = new NXDNMessageProcessor(config);
-        mMessageProcessor.setMessageListener(getMessageListener());
+        mMessageProcessor.setMessageListener(this::tapMessage);
         mMessageFramer = new NXDNMessageFramer(mMessageProcessor, config.getTransmissionMode());
         mSymbolProcessor = new NXDNSymbolProcessor(this, mMessageFramer, config.getTransmissionMode());
     }
@@ -150,7 +151,7 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
         mBasebandFilterQ = FilterFactory.getRealFilter(basebandTaps);
         mDemodulator = FmDemodulatorFactory.getFmDemodulator();
         mSymbolProcessor.setSamplesPerSymbol(samplesPerSymbol);
-        mMessageProcessor.setMessageListener(getMessageListener());
+        mMessageProcessor.setMessageListener(this::tapMessage);
     }
 
     /**
@@ -242,6 +243,28 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
     public Listener<ComplexSamples> getComplexSamplesListener()
     {
         return this;
+    }
+
+    /**
+     * Taps decoded NXDN messages to report FEC bit-error counts to the channel-tab BER display, then
+     * forwards the message to the registered downstream listener.  NXDN already computes a corrected-bit
+     * count per frame (analogous to P25 NID); this wires it into the shared BitErrorReport path that
+     * SymbolView already displays for P25 and DMR.
+     * @param message decoded message (BER reported only for valid NXDN frames)
+     */
+    private void tapMessage(IMessage message)
+    {
+        if(message instanceof NXDNMessage nxdn && nxdn.isValid())
+        {
+            broadcast(new BitErrorReport(nxdn.getMessage().getCorrectedBitCount(), nxdn.getMessage().size()));
+        }
+
+        Listener<IMessage> listener = getMessageListener();
+
+        if(listener != null)
+        {
+            listener.receive(message);
+        }
     }
 
     /**

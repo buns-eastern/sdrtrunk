@@ -155,6 +155,8 @@ public class P25P1DecoderC4FM extends FeedbackDecoder implements IByteBufferProv
 
         //TODO: update P25 message Framer and Processor like we do in NXDN constructor
         mMessageFramer.setListener(mMessageProcessor);
+        //Forward FEC bit error reports to an optional registered listener (eg channel tab BER display)
+        mMessageFramer.setBitErrorListener(this::broadcast);
 
         mMessageProcessor.setMessageListener(getMessageListener());
     }

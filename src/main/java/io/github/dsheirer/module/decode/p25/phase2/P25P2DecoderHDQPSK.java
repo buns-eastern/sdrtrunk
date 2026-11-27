@@ -101,6 +101,8 @@ public class P25P2DecoderHDQPSK extends FeedbackDecoder implements ISourceEventL
         mDecodeConfigP25Phase2 = decodeConfigP25Phase2;
         mMessageProcessor.setMessageListener(getMessageListener());
         mMessageFramer.setListener(mMessageProcessor);
+        //Forward sync bit error reports to an optional registered listener (eg channel tab BER display)
+        mMessageFramer.setBitErrorListener(this::broadcast);
         mSymbolProcessor = new P25P2SymbolProcessor(this, mMessageFramer);
 
         if(mDecodeConfigP25Phase2 != null)

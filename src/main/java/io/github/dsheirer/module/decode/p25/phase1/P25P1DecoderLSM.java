@@ -145,6 +145,8 @@ public class P25P1DecoderLSM extends FeedbackDecoder implements IByteBufferProvi
         mSymbolProcessor.setSamplesPerSymbol(samplesPerSymbol);
 
         mMessageFramer.setListener(mMessageProcessor);
+        //Forward FEC bit error reports to an optional registered listener (eg channel tab BER display)
+        mMessageFramer.setBitErrorListener(this::broadcast);
     }
 
     /**

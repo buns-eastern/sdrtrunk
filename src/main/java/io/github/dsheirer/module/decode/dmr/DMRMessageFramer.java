@@ -19,6 +19,7 @@
 
 package io.github.dsheirer.module.decode.dmr;
 
+import io.github.dsheirer.module.decode.BitErrorReport;
 import io.github.dsheirer.bits.CorrectedBinaryMessage;
 import io.github.dsheirer.dsp.c4fm.C4FMMessageFramer;
 import io.github.dsheirer.dsp.symbol.Dibit;
@@ -53,6 +54,11 @@ import java.util.Arrays;
  */
 public class DMRMessageFramer extends C4FMMessageFramer implements Listener<Dibit>
 {
+    //DMR burst sync field: CACH (24 bits) + payload prefix (108 bits) precede the 48-bit sync field
+    private static final int SYNC_BIT_START = 132;
+    private static final int SYNC_BIT_END = 180;
+    private static final int SYNC_BIT_LENGTH = SYNC_BIT_END - SYNC_BIT_START;
+    private static final long SYNC_PATTERN_MASK = 0xFFFFFFFFFFFFL;
     private static final int DIBIT_CACH_START = 0;
     private static final int DIBIT_BURST_END = 144;
     //Dibit delay line sizing: CACH(12) + MESSAGE_PREFIX(54) + SYNC(24)
@@ -63,6 +69,7 @@ public class DMRMessageFramer extends C4FMMessageFramer implements Listener<Dibi
     private int mSoftSymbolDelayLinePointer = 0;
     private DMRSyncPattern mSyncPattern = DMRSyncPattern.UNKNOWN;
     private Listener<IMessage> mMessageListener;
+    private Listener<BitErrorReport> mBitErrorListener;
     private final Dibit[] mBufferA = new Dibit[144];
     private final Dibit[] mBufferB = new Dibit[144];
     //Soft symbols (radians) parallel to the dibit buffers, or NaN when the soft symbol wasn't provided
@@ -245,6 +252,7 @@ public class DMRMessageFramer extends C4FMMessageFramer implements Listener<Dibi
         mDibitCounter = 0;
 
         CorrectedBinaryMessage message = getMessage(mBufferA);
+        reportSyncBitErrors(message, mBufferAPattern);
         float[] softBits = getSoftBits(mSoftBufferA);
         CACH cach = CACH.getCACH(message, softBits);
 
@@ -322,6 +330,7 @@ public class DMRMessageFramer extends C4FMMessageFramer implements Listener<Dibi
         mDibitCounter = 0;
 
         CorrectedBinaryMessage burst = getMessage(mBufferB);
+        reportSyncBitErrors(burst, mBufferBPattern);
         float[] softBits = getSoftBits(mSoftBufferB);
         CACH cach = CACH.getCACH(burst, softBits);
 
@@ -424,6 +433,40 @@ public class DMRMessageFramer extends C4FMMessageFramer implements Listener<Dibi
         }
 
         return softBits;
+    }
+
+    /**
+     * Registers an optional listener to receive FEC/sync bit error reports suitable for deriving a live bit error
+     * rate (BER) measurement (eg the channel tab BER display).
+     * @param listener to receive bit error reports.
+     */
+    public void setBitErrorListener(Listener<BitErrorReport> listener)
+    {
+        mBitErrorListener = listener;
+    }
+
+    /**
+     * Compares the demodulated sync field of the burst against the known sync pattern and reports the quantity of
+     * bit errors to an optional registered listener.  Only bursts captured with an actual sync pattern are compared;
+     * sync-less voice sub-frames (B-F) are ignored.
+     * @param burst containing a demodulated sync field.
+     * @param pattern that was detected for the burst.
+     */
+    private void reportSyncBitErrors(CorrectedBinaryMessage burst, DMRSyncPattern pattern)
+    {
+        if(mBitErrorListener != null && DMRSyncPattern.SYNC_PATTERNS.contains(pattern) &&
+           burst.size() >= SYNC_BIT_END)
+        {
+            long observed = 0;
+
+            for(int i = SYNC_BIT_START; i < SYNC_BIT_END; i++)
+            {
+                observed = (observed << 1) | (burst.get(i) ? 1 : 0);
+            }
+
+            int bitErrors = Long.bitCount((observed ^ pattern.getPattern()) & SYNC_PATTERN_MASK);
+            mBitErrorListener.receive(new BitErrorReport(bitErrors, SYNC_BIT_LENGTH));
+        }
     }
 
     /**

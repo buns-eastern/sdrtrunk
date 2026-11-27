@@ -18,6 +18,7 @@
  */
 package io.github.dsheirer.module.decode.p25.phase2;
 
+import io.github.dsheirer.module.decode.BitErrorReport;
 import io.github.dsheirer.alias.AliasList;
 import io.github.dsheirer.alias.AliasModel;
 import io.github.dsheirer.controller.channel.Channel;
@@ -71,6 +72,16 @@ public class P25P2MessageFramer extends C4FMMessageFramer
     public void setScrambleParameters(ScrambleParameters scrambleParameters)
     {
         mSuperFrameDetector.setScrambleParameters(scrambleParameters);
+    }
+
+    /**
+     * Registers an optional listener to receive sync pattern bit error reports suitable for deriving a live bit
+     * error rate (BER) measurement (eg the channel tab BER display).
+     * @param listener to receive bit error reports.
+     */
+    public void setBitErrorListener(Listener<BitErrorReport> listener)
+    {
+        mSuperFrameDetector.setBitErrorListener(listener);
     }
 
     /**

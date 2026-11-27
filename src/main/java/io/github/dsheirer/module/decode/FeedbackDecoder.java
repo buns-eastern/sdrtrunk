@@ -32,6 +32,7 @@ public abstract class FeedbackDecoder extends PrimaryDecoder implements ISourceE
     private static final double TWO_PI = 2 * Math.PI;
     private Listener<SourceEvent> mSourceEventListener;
     private Listener<Float> mSymbolListener;
+    private Listener<BitErrorReport> mBitErrorListener;
     private double mSampleRate;
 
     /**
@@ -41,6 +42,35 @@ public abstract class FeedbackDecoder extends PrimaryDecoder implements ISourceE
     protected void setDecimatedSampleRate(double rate)
     {
         mSampleRate = rate;
+    }
+
+    /**
+     * Registers the listener to receive FEC bit error reports.
+     * @param listener to receive bit error reports.
+     */
+    public void setBitErrorListener(Listener<BitErrorReport> listener)
+    {
+        mBitErrorListener = listener;
+    }
+
+    /**
+     * Removes any registered bit error report listener
+     */
+    public void removeBitErrorListener()
+    {
+        mBitErrorListener = null;
+    }
+
+    /**
+     * Broadcasts the FEC bit error report to an optional registered listener.
+     * @param report of checked bits and corrected bit errors.
+     */
+    public void broadcast(BitErrorReport report)
+    {
+        if(mBitErrorListener != null)
+        {
+            mBitErrorListener.receive(report);
+        }
     }
 
     /**
