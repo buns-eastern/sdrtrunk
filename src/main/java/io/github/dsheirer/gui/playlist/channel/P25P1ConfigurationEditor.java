@@ -19,6 +19,7 @@
 
 package io.github.dsheirer.gui.playlist.channel;
 
+import io.github.dsheirer.module.decode.config.DecodeConfigJMBE;
 import io.github.dsheirer.gui.control.AccessibilityUtil;
 import io.github.dsheirer.gui.control.AccessibleToggleSwitch;
 import io.github.dsheirer.gui.playlist.eventlog.EventLogConfigurationEditor;
@@ -40,6 +41,7 @@ import io.github.dsheirer.source.config.SourceConfiguration;
 import io.github.dsheirer.source.tuner.manager.TunerManager;
 import java.util.ArrayList;
 import java.util.List;
+import javafx.scene.control.TextField;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.geometry.HPos;
@@ -81,6 +83,13 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
     private ToggleSwitch mJmbeAGCButton;
     private Slider mJmbeToneGainSlider;
     private ToggleSwitch mLegacyToneLevelsButton;
+    private TextField mNacDecField;
+    private TextField mNacHexField;
+    private TextField mSystemDecField;
+    private TextField mSystemHexField;
+    private TextField mSiteDecField;
+    private TextField mSiteHexField;
+    private boolean mUpdatingFilterFields = false;
     private Slider mJmbeNoiseGainSlider;
 
     /**
@@ -175,7 +184,29 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
 
             row++;
 
-            addAudioControls(gridPane, row, "AMBE/IMBE Audio", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
+            //Optional control-channel identity filters (NAC/System/Site).  Leave blank for no filtering (default).
+            GridPane filterPane = new GridPane();
+            filterPane.setHgap(10);
+            filterPane.setVgap(10);
+            filterPane.add(new Label("Site Lock Filters (optional)"), 0, 0, 5, 1);
+            addFilterRow(filterPane, 1, "NAC", getNacDecField(), getNacHexField());
+            addFilterRow(filterPane, 2, "System", getSystemDecField(), getSystemHexField());
+            addFilterRow(filterPane, 3, "Site", getSiteDecField(), getSiteHexField());
+            GridPane.setConstraints(filterPane, 0, row, 8, 1);
+            gridPane.getChildren().add(filterPane);
+
+            row++;
+
+            Label filterHelpLabel = new Label("Leave blank for normal operation.  When set, this channel only locks " +
+                    "onto a control channel matching these values, and voice channels inherit the same filter.  " +
+                    "Enter decimal or hex - the other field auto-fills.");
+            filterHelpLabel.setWrapText(true);
+            GridPane.setConstraints(filterHelpLabel, 0, row, 8, 1);
+            gridPane.getChildren().add(filterHelpLabel);
+
+            row++;
+
+            addAudioControls(gridPane, row, "AMBE/IMBE Audio", "P25 Phase 1 | P25 Phase 2", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
                 getJmbeToneGainSlider(), getLegacyToneLevelsButton());
 
             mDecoderPane.setContent(gridPane);
@@ -420,6 +451,230 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
         return mRecordConfigurationEditor;
     }
 
+    private void addFilterRow(GridPane gridPane, int row, String name, TextField decField, TextField hexField)
+    {
+        Label label = new Label(name);
+        GridPane.setHalignment(label, HPos.RIGHT);
+        GridPane.setConstraints(label, 0, row);
+        gridPane.getChildren().add(label);
+
+        Label decLabel = new Label("Dec:");
+        GridPane.setHalignment(decLabel, HPos.RIGHT);
+        GridPane.setConstraints(decLabel, 1, row);
+        gridPane.getChildren().add(decLabel);
+
+        GridPane.setConstraints(decField, 2, row);
+        gridPane.getChildren().add(decField);
+
+        Label hexLabel = new Label("Hex 0x:");
+        GridPane.setHalignment(hexLabel, HPos.RIGHT);
+        GridPane.setConstraints(hexLabel, 3, row);
+        gridPane.getChildren().add(hexLabel);
+
+        GridPane.setConstraints(hexField, 4, row);
+        gridPane.getChildren().add(hexField);
+    }
+
+    private TextField getNacDecField()
+    {
+        if(mNacDecField == null)
+        {
+            mNacDecField = new TextField();
+            mNacDecField.setPrefWidth(90);
+            mNacDecField.textProperty().addListener((ob, o, n) -> onDecChanged(mNacDecField, getNacHexField()));
+        }
+        return mNacDecField;
+    }
+
+    private TextField getNacHexField()
+    {
+        if(mNacHexField == null)
+        {
+            mNacHexField = new TextField();
+            mNacHexField.setPrefWidth(90);
+            mNacHexField.textProperty().addListener((ob, o, n) -> onHexChanged(mNacHexField, getNacDecField()));
+        }
+        return mNacHexField;
+    }
+
+    private TextField getSystemDecField()
+    {
+        if(mSystemDecField == null)
+        {
+            mSystemDecField = new TextField();
+            mSystemDecField.setPrefWidth(90);
+            mSystemDecField.textProperty().addListener((ob, o, n) -> onDecChanged(mSystemDecField, getSystemHexField()));
+        }
+        return mSystemDecField;
+    }
+
+    private TextField getSystemHexField()
+    {
+        if(mSystemHexField == null)
+        {
+            mSystemHexField = new TextField();
+            mSystemHexField.setPrefWidth(90);
+            mSystemHexField.textProperty().addListener((ob, o, n) -> onHexChanged(mSystemHexField, getSystemDecField()));
+        }
+        return mSystemHexField;
+    }
+
+    private TextField getSiteDecField()
+    {
+        if(mSiteDecField == null)
+        {
+            mSiteDecField = new TextField();
+            mSiteDecField.setPrefWidth(90);
+            mSiteDecField.textProperty().addListener((ob, o, n) -> onDecChanged(mSiteDecField, getSiteHexField()));
+        }
+        return mSiteDecField;
+    }
+
+    private TextField getSiteHexField()
+    {
+        if(mSiteHexField == null)
+        {
+            mSiteHexField = new TextField();
+            mSiteHexField.setPrefWidth(90);
+            mSiteHexField.textProperty().addListener((ob, o, n) -> onHexChanged(mSiteHexField, getSiteDecField()));
+        }
+        return mSiteHexField;
+    }
+
+    /**
+     * Synchronizes the hex field from a decimal entry and flags the editor modified.
+     */
+    private void onDecChanged(TextField decField, TextField hexField)
+    {
+        if(mUpdatingFilterFields)
+        {
+            return;
+        }
+        mUpdatingFilterFields = true;
+        try
+        {
+            String text = decField.getText();
+            if(text == null || text.isBlank())
+            {
+                hexField.setText("");
+            }
+            else
+            {
+                try
+                {
+                    int value = Integer.parseInt(text.trim());
+                    if(value < 0)
+                    {
+                        value = 0;
+                    }
+                    hexField.setText(Integer.toHexString(value).toUpperCase());
+                }
+                catch(NumberFormatException e)
+                {
+                    //Ignore invalid decimal input - leave hex field unchanged
+                }
+            }
+            modifiedProperty().set(true);
+        }
+        finally
+        {
+            mUpdatingFilterFields = false;
+        }
+    }
+
+    /**
+     * Synchronizes the decimal field from a hex entry and flags the editor modified.
+     */
+    private void onHexChanged(TextField hexField, TextField decField)
+    {
+        if(mUpdatingFilterFields)
+        {
+            return;
+        }
+        mUpdatingFilterFields = true;
+        try
+        {
+            String text = hexField.getText();
+            if(text == null || text.isBlank())
+            {
+                decField.setText("");
+            }
+            else
+            {
+                try
+                {
+                    int value = Integer.parseInt(text.trim().replaceFirst("(?i)^0x", ""), 16);
+                    if(value < 0)
+                    {
+                        value = 0;
+                    }
+                    decField.setText(Integer.toString(value));
+                }
+                catch(NumberFormatException e)
+                {
+                    //Ignore invalid hex input - leave decimal field unchanged
+                }
+            }
+            modifiedProperty().set(true);
+        }
+        finally
+        {
+            mUpdatingFilterFields = false;
+        }
+    }
+
+    /**
+     * Loads a filter value (or null) into the decimal and hex fields without flagging the editor modified.
+     */
+    private void setFilterField(TextField decField, TextField hexField, Integer value)
+    {
+        mUpdatingFilterFields = true;
+        try
+        {
+            if(value == null)
+            {
+                decField.setText("");
+                hexField.setText("");
+            }
+            else
+            {
+                decField.setText(Integer.toString(value));
+                hexField.setText(Integer.toHexString(value).toUpperCase());
+            }
+        }
+        finally
+        {
+            mUpdatingFilterFields = false;
+        }
+    }
+
+    private void clearFilterFields()
+    {
+        setFilterField(getNacDecField(), getNacHexField(), null);
+        setFilterField(getSystemDecField(), getSystemHexField(), null);
+        setFilterField(getSiteDecField(), getSiteHexField(), null);
+    }
+
+    /**
+     * Parses a filter field into an Integer, returning null when blank or invalid (no filtering).
+     */
+    private Integer parseFilterField(TextField decField)
+    {
+        String text = decField.getText();
+        if(text == null || text.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            return Integer.parseInt(text.trim());
+        }
+        catch(NumberFormatException e)
+        {
+            return null;
+        }
+    }
+
     @Override
     protected void setDecoderConfiguration(DecodeConfiguration config)
     {
@@ -442,14 +697,19 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
                 getC4FMToggleButton().setSelected(false);
                 getLSMToggleButton().setSelected(true);
             }
+            setFilterField(getNacDecField(), getNacHexField(), decodeConfig.getNacFilter());
+            setFilterField(getSystemDecField(), getSystemHexField(), decodeConfig.getSystemFilter());
+            setFilterField(getSiteDecField(), getSiteHexField(), decodeConfig.getSiteFilter());
             getJmbeAGCButton().setDisable(false);
             getJmbeNoiseGainSlider().setDisable(false);
             getJmbeToneGainSlider().setDisable(false);
             getLegacyToneLevelsButton().setDisable(false);
+            getJmbeAudioBoostSlider().setDisable(false);
             getJmbeAGCButton().setSelected(decodeConfig.isAGC());
             getJmbeNoiseGainSlider().setValue(decodeConfig.getComfortNoiseGain());
             getJmbeToneGainSlider().setValue(decodeConfig.getToneGain());
             getLegacyToneLevelsButton().setSelected(decodeConfig.isLegacyToneLevels());
+            getJmbeAudioBoostSlider().setValue(decodeConfig.getAudioBoost());
 
         }
         else
@@ -457,14 +717,17 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
             getIgnoreDataCallsButton().setSelected(false);
             getIgnoreEncryptedCallsButton().setSelected(false);
             getTrafficChannelPoolSizeSpinner().getValueFactory().setValue(0);
+            clearFilterFields();
             getJmbeAGCButton().setDisable(true);
             getJmbeNoiseGainSlider().setDisable(true);
             getJmbeToneGainSlider().setDisable(true);
             getLegacyToneLevelsButton().setDisable(true);
+            getJmbeAudioBoostSlider().setDisable(true);
             getJmbeAGCButton().setSelected(false);
             getJmbeNoiseGainSlider().setValue(0);
             getJmbeToneGainSlider().setValue(0);
             getLegacyToneLevelsButton().setSelected(false);
+            getJmbeAudioBoostSlider().setValue(DecodeConfigJMBE.DEFAULT_AUDIO_BOOST);
         }
     }
 
@@ -486,10 +749,14 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
         config.setIgnoreEncryptedCalls(getIgnoreEncryptedCallsButton().isSelected());
         config.setTrafficChannelPoolSize(getTrafficChannelPoolSizeSpinner().getValue());
         config.setModulation(getC4FMToggleButton().isSelected() ? Modulation.C4FM : Modulation.CQPSK);
+        config.setNacFilter(parseFilterField(getNacDecField()));
+        config.setSystemFilter(parseFilterField(getSystemDecField()));
+        config.setSiteFilter(parseFilterField(getSiteDecField()));
         config.setAGC(getJmbeAGCButton().selectedProperty().getValue());
         config.setComfortNoiseGain((float)getJmbeNoiseGainSlider().getValue());
         config.setToneGain((float)getJmbeToneGainSlider().getValue());
         config.setLegacyToneLevels(getLegacyToneLevelsButton().isSelected());
+        config.setAudioBoost((float)getJmbeAudioBoostSlider().getValue());
         getItem().setDecodeConfiguration(config);
     }
 

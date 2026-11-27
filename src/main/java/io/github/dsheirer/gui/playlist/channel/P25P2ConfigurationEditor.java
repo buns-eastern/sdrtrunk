@@ -19,6 +19,7 @@
 
 package io.github.dsheirer.gui.playlist.channel;
 
+import io.github.dsheirer.module.decode.config.DecodeConfigJMBE;
 import io.github.dsheirer.gui.control.AccessibleToggleSwitch;
 import io.github.dsheirer.gui.control.IntegerTextField;
 import io.github.dsheirer.gui.playlist.eventlog.EventLogConfigurationEditor;
@@ -186,7 +187,7 @@ public class P25P2ConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(noteLabel);
 
             row++;
-            addAudioControls(gridPane, row, "AMBE Audio", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
+            addAudioControls(gridPane, row, "AMBE Audio", "P25 Phase 2 | DMR | NXDN", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
                 getJmbeToneGainSlider(), getLegacyToneLevelsButton());
 
             mDecoderPane.setContent(gridPane);
@@ -425,6 +426,7 @@ public class P25P2ConfigurationEditor extends ChannelConfigurationEditor
             getJmbeNoiseGainSlider().setDisable(false);
             getJmbeToneGainSlider().setDisable(false);
             getLegacyToneLevelsButton().setDisable(false);
+            getJmbeAudioBoostSlider().setDisable(false);
 
             ScrambleParameters scrambleParameters = decodeConfig.getScrambleParameters();
 
@@ -451,6 +453,7 @@ public class P25P2ConfigurationEditor extends ChannelConfigurationEditor
             getJmbeNoiseGainSlider().setValue(decodeConfig.getComfortNoiseGain());
             getJmbeToneGainSlider().setValue(decodeConfig.getToneGain());
             getLegacyToneLevelsButton().setSelected(decodeConfig.isLegacyToneLevels());
+            getJmbeAudioBoostSlider().setValue(decodeConfig.getAudioBoost());
         }
         else
         {
@@ -468,10 +471,12 @@ public class P25P2ConfigurationEditor extends ChannelConfigurationEditor
             getJmbeNoiseGainSlider().setDisable(true);
             getJmbeToneGainSlider().setDisable(true);
             getLegacyToneLevelsButton().setDisable(true);
+            getJmbeAudioBoostSlider().setDisable(true);
             getJmbeAGCButton().setSelected(false);
             getJmbeNoiseGainSlider().setValue(0);
             getJmbeToneGainSlider().setValue(0);
             getLegacyToneLevelsButton().setSelected(false);
+            getJmbeAudioBoostSlider().setValue(DecodeConfigJMBE.DEFAULT_AUDIO_BOOST);
         }
     }
 
@@ -501,6 +506,7 @@ public class P25P2ConfigurationEditor extends ChannelConfigurationEditor
         config.setComfortNoiseGain((float)getJmbeNoiseGainSlider().getValue());
         config.setToneGain((float)getJmbeToneGainSlider().getValue());
         config.setLegacyToneLevels(getLegacyToneLevelsButton().isSelected());
+        config.setAudioBoost((float)getJmbeAudioBoostSlider().getValue());
         getItem().setDecodeConfiguration(config);
     }
 

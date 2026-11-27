@@ -19,6 +19,7 @@
 
 package io.github.dsheirer.gui.playlist.channel;
 
+import io.github.dsheirer.module.decode.config.DecodeConfigJMBE;
 import io.github.dsheirer.gui.control.AccessibilityUtil;
 import io.github.dsheirer.gui.control.AccessibleToggleSwitch;
 import io.github.dsheirer.gui.control.IntegerTextField;
@@ -222,7 +223,7 @@ public class NXDNConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(editorBox);
 
             row++;
-            addAudioControls(gridPane, row, "AMBE Audio", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
+            addAudioControls(gridPane, row, "AMBE Audio", "P25 Phase 2 | DMR | NXDN", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
                 getJmbeToneGainSlider(), getJmbeLegacyToneLevelsButton());
 
             mDecoderPane.setContent(gridPane);
@@ -672,6 +673,7 @@ public class NXDNConfigurationEditor extends ChannelConfigurationEditor
         getJmbeNoiseGainSlider().setDisable(disable);
         getJmbeToneGainSlider().setDisable(disable);
         getJmbeLegacyToneLevelsButton().setDisable(disable);
+        getJmbeAudioBoostSlider().setDisable(disable);
 
         if(config instanceof DecodeConfigNXDN configNXDN)
         {
@@ -696,6 +698,7 @@ public class NXDNConfigurationEditor extends ChannelConfigurationEditor
             getJmbeNoiseGainSlider().setValue(configNXDN.getComfortNoiseGain());
             getJmbeToneGainSlider().setValue(configNXDN.getToneGain());
             getJmbeLegacyToneLevelsButton().setSelected(configNXDN.isLegacyToneLevels());
+            getJmbeAudioBoostSlider().setValue(configNXDN.getAudioBoost());
         }
         else
         {
@@ -707,6 +710,7 @@ public class NXDNConfigurationEditor extends ChannelConfigurationEditor
             getJmbeNoiseGainSlider().setValue(0);
             getJmbeToneGainSlider().setValue(0);
             getJmbeLegacyToneLevelsButton().setSelected(false);
+            getJmbeAudioBoostSlider().setValue(DecodeConfigJMBE.DEFAULT_AUDIO_BOOST);
         }
     }
 
@@ -743,6 +747,7 @@ public class NXDNConfigurationEditor extends ChannelConfigurationEditor
         config.setComfortNoiseGain((float)getJmbeNoiseGainSlider().getValue());
         config.setToneGain((float)getJmbeToneGainSlider().getValue());
         config.setLegacyToneLevels(getJmbeLegacyToneLevelsButton().isSelected());
+        config.setAudioBoost((float)getJmbeAudioBoostSlider().getValue());
         getItem().setDecodeConfiguration(config);
     }
 

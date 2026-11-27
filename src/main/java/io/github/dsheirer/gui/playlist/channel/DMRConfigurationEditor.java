@@ -19,6 +19,8 @@
 
 package io.github.dsheirer.gui.playlist.channel;
 
+import javafx.scene.control.TextField;
+import io.github.dsheirer.module.decode.config.DecodeConfigJMBE;
 import io.github.dsheirer.gui.control.AccessibleToggleSwitch;
 import io.github.dsheirer.gui.control.IntegerTextField;
 import io.github.dsheirer.gui.playlist.eventlog.EventLogConfigurationEditor;
@@ -92,6 +94,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
     private ToggleSwitch mJmbeAGCButton;
     private Slider mJmbeToneGainSlider;
     private ToggleSwitch mLegacyToneLevelsButton;
+    private TextField mColorCodeFilterField;
     private Slider mJmbeNoiseGainSlider;
 
     /**
@@ -178,6 +181,16 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
             GridPane.setConstraints(useCompressedTalkgroupsLabel, 7, row);
             gridPane.getChildren().add(useCompressedTalkgroupsLabel);
 
+            HBox colorCodeFilterBox = new HBox();
+            colorCodeFilterBox.setAlignment(Pos.CENTER_LEFT);
+            colorCodeFilterBox.setSpacing(10);
+            Label colorCodeFilterLabel = new Label("Color Code Filter");
+            colorCodeFilterLabel.setLabelFor(getColorCodeFilterField());
+            Label colorCodeFilterHelp = new Label("Optional.  Comma separated color codes (0-15) to accept.  Empty accepts all.");
+            colorCodeFilterBox.getChildren().addAll(colorCodeFilterLabel, getColorCodeFilterField(), colorCodeFilterHelp);
+            GridPane.setConstraints(colorCodeFilterBox, 0, ++row, 8, 1);
+            gridPane.getChildren().add(colorCodeFilterBox);
+
             Label timeslotTableLabel = new Label("Logical Channel Number (LCN) to Frequency Map. Required for: Connect Plus and Tier-III systems that don't use absolute frequencies.  LSN = Logical Slot Number");
             GridPane.setHalignment(timeslotTableLabel, HPos.LEFT);
             GridPane.setConstraints(timeslotTableLabel, 0, ++row, 6, 1);
@@ -213,7 +226,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(editorBox);
 
             row++;
-            addAudioControls(gridPane, row, "AMBE Audio", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
+            addAudioControls(gridPane, row, "AMBE Audio", "P25 Phase 2 | DMR | NXDN", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
                 getJmbeToneGainSlider(), getLegacyToneLevelsButton());
 
             mDecoderPane.setContent(gridPane);
@@ -667,6 +680,90 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
         return mRecordConfigurationEditor;
     }
 
+    /**
+     * Text field for the optional list of allowed color codes.  Empty disables the filter.
+     */
+    private TextField getColorCodeFilterField()
+    {
+        if(mColorCodeFilterField == null)
+        {
+            mColorCodeFilterField = new TextField();
+            mColorCodeFilterField.setPrefColumnCount(10);
+            mColorCodeFilterField.setPromptText("all");
+            mColorCodeFilterField.setTooltip(new Tooltip("Optional.  Comma separated list of color codes (0-15) to " +
+                    "accept on this channel.  Leave empty to accept all color codes.  Bursts with a color code that " +
+                    "is not listed are rejected: they produce no events, audio, recording or streaming, but remain " +
+                    "visible in the Messages tab tagged CC REJECT."));
+            mColorCodeFilterField.textProperty()
+                    .addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+        }
+
+        return mColorCodeFilterField;
+    }
+
+    /**
+     * Parses the color code filter field into a list of color codes, ignoring anything that isn't a number in the
+     * valid 0-15 range so that a typo can never produce an invalid configuration.
+     */
+    private List<Integer> parseColorCodeFilter()
+    {
+        List<Integer> colorCodes = new ArrayList<>();
+        String text = getColorCodeFilterField().getText();
+
+        if(text != null)
+        {
+            for(String token : text.split("[,;\\s]+"))
+            {
+                token = token.trim();
+
+                if(!token.isEmpty())
+                {
+                    try
+                    {
+                        int colorCode = Integer.parseInt(token);
+
+                        if(colorCode >= 0 && colorCode <= 15 && !colorCodes.contains(colorCode))
+                        {
+                            colorCodes.add(colorCode);
+                        }
+                    }
+                    catch(NumberFormatException nfe)
+                    {
+                        //Ignore unparseable entries
+                    }
+                }
+            }
+        }
+
+        java.util.Collections.sort(colorCodes);
+        return colorCodes;
+    }
+
+    /**
+     * Formats a list of color codes for display in the filter field.
+     */
+    private static String formatColorCodeFilter(List<Integer> colorCodes)
+    {
+        if(colorCodes == null || colorCodes.isEmpty())
+        {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        for(Integer colorCode : colorCodes)
+        {
+            if(sb.length() > 0)
+            {
+                sb.append(",");
+            }
+
+            sb.append(colorCode);
+        }
+
+        return sb.toString();
+    }
+
     @Override
     protected void setDecoderConfiguration(DecodeConfiguration config)
     {
@@ -674,6 +771,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
         getIgnoreCRCChecksumsButton().setDisable(disable);
         getIgnoreDataCallsButton().setDisable(disable);
         getUseCompressedTalkgroupsToggle().setDisable(disable);
+        getColorCodeFilterField().setDisable(disable);
         getTrafficChannelPoolSizeSpinner().setDisable(disable);
         getTimeslotTable().getItems().clear();
         getTimeslotTable().setDisable(disable);
@@ -688,6 +786,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
         getJmbeNoiseGainSlider().setDisable(disable);
         getJmbeToneGainSlider().setDisable(disable);
         getLegacyToneLevelsButton().setDisable(disable);
+        getJmbeAudioBoostSlider().setDisable(disable);
 
         if(config instanceof DecodeConfigDMR)
         {
@@ -696,6 +795,7 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
             getIgnoreDataCallsButton().setSelected(decodeConfig.getIgnoreDataCalls());
             getIgnoreCRCChecksumsButton().setSelected(decodeConfig.getIgnoreCRCChecksums());
             getUseCompressedTalkgroupsToggle().setSelected(decodeConfig.isUseCompressedTalkgroups());
+            getColorCodeFilterField().setText(formatColorCodeFilter(decodeConfig.getColorCodeFilter()));
             getTrafficChannelPoolSizeSpinner().getValueFactory().setValue(decodeConfig.getTrafficChannelPoolSize());
 
             for(TimeslotFrequency timeslotFrequency: decodeConfig.getTimeslotMap())
@@ -707,18 +807,21 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
             getJmbeNoiseGainSlider().setValue(decodeConfig.getComfortNoiseGain());
             getJmbeToneGainSlider().setValue(decodeConfig.getToneGain());
             getLegacyToneLevelsButton().setSelected(decodeConfig.isLegacyToneLevels());
+            getJmbeAudioBoostSlider().setValue(decodeConfig.getAudioBoost());
         }
         else
         {
             getIgnoreCRCChecksumsButton().setSelected(false);
             getIgnoreDataCallsButton().setSelected(false);
             getUseCompressedTalkgroupsToggle().setSelected(false);
+            getColorCodeFilterField().setText("");
             getTrafficChannelPoolSizeSpinner().getValueFactory().setValue(0);
             getChannelRotationDelaySpinner().getValueFactory().setValue(200);
             getJmbeAGCButton().setSelected(false);
             getJmbeNoiseGainSlider().setValue(0);
             getJmbeToneGainSlider().setValue(0);
             getLegacyToneLevelsButton().setSelected(false);
+            getJmbeAudioBoostSlider().setValue(DecodeConfigJMBE.DEFAULT_AUDIO_BOOST);
         }
     }
 
@@ -740,11 +843,13 @@ public class DMRConfigurationEditor extends ChannelConfigurationEditor
         config.setIgnoreDataCalls(getIgnoreDataCallsButton().isSelected());
         config.setTrafficChannelPoolSize(getTrafficChannelPoolSizeSpinner().getValue());
         config.setUseCompressedTalkgroups(getUseCompressedTalkgroupsToggle().isSelected());
+        config.setColorCodeFilter(parseColorCodeFilter());
         config.setTimeslotMap(new ArrayList<>(getTimeslotTable().getItems()));
         config.setAGC(getJmbeAGCButton().selectedProperty().getValue());
         config.setComfortNoiseGain((float)getJmbeNoiseGainSlider().getValue());
         config.setToneGain((float)getJmbeToneGainSlider().getValue());
         config.setLegacyToneLevels(getLegacyToneLevelsButton().isSelected());
+        config.setAudioBoost((float)getJmbeAudioBoostSlider().getValue());
         getItem().setDecodeConfiguration(config);
     }
 
