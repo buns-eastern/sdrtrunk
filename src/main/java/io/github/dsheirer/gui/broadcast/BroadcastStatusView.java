@@ -82,6 +82,8 @@ public class BroadcastStatusView extends VBox
     private final VBox mFilterPlaceholder = new VBox(4);
     private final Label mFilterHiddenLabel = new Label();
     private boolean mShowOnlyProblems;
+    private static final java.util.function.Predicate<ConfiguredBroadcast> PROBLEMS_ONLY =
+        broadcast -> isProblem(broadcast.getStatus());
     private final Label mSummaryLabel = new Label();
     private final AtomicBoolean mUpdateScheduled = new AtomicBoolean();
     private final Map<BroadcastServerType,Image> mServerTypeImages = new EnumMap<>(BroadcastServerType.class);
@@ -251,7 +253,13 @@ public class BroadcastStatusView extends VBox
     {
         if(mShowOnlyProblems)
         {
-            mFilteredItems.setPredicate(broadcast -> isProblem(broadcast.getStatus()));
+            //A stream's status changes without changing the list, and setting the same predicate again doesn't
+            //filter again, so the predicate is cleared and set again whenever a stream's shown state is out of date.
+            if(mFilteredItems.getPredicate() != PROBLEMS_ONLY || isFilterStale())
+            {
+                mFilteredItems.setPredicate(null);
+                mFilteredItems.setPredicate(PROBLEMS_ONLY);
+            }
         }
         else
         {
@@ -268,6 +276,22 @@ public class BroadcastStatusView extends VBox
         {
             mTableView.setPlaceholder(mPlaceholder);
         }
+    }
+
+    /**
+     * Indicates if any stream is shown or hidden by the problems-only filter differently from its current status.
+     */
+    private boolean isFilterStale()
+    {
+        for(ConfiguredBroadcast broadcast: mItems)
+        {
+            if(isProblem(broadcast.getStatus()) != mFilteredItems.contains(broadcast))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
