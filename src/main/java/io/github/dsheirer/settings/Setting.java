@@ -77,6 +77,7 @@ public enum Setting
     //JMBE library
     JMBE_LIBRARY_ALERT_REQUIRED(Node.JMBE_LIBRARY, "alert.jmbe.required"),
     JMBE_LIBRARY_PATH(Node.JMBE_LIBRARY, "path.jmbe.library.1.0.0"),
+    JMBE_LIBRARY_AMBE_PATH(Node.JMBE_LIBRARY, "path.jmbe.library.ambe"),
 
     //Main window
     MAIN_WINDOW_BROADCAST_DIVIDER(Node.GUI, "sdrtrunk.main.window.streaming.fraction"),

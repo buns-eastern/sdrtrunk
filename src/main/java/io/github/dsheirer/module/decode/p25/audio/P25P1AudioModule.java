@@ -18,6 +18,7 @@
  */
 package io.github.dsheirer.module.decode.p25.audio;
 
+import io.github.dsheirer.dsp.gain.NonClippingGain;
 import io.github.dsheirer.alias.AliasList;
 import io.github.dsheirer.audio.codec.mbe.ImbeAudioModule;
 import io.github.dsheirer.audio.squelch.SquelchState;
@@ -35,6 +36,8 @@ import jmbe.frame.CorrectedIMBEFrame;
 
 public class P25P1AudioModule extends ImbeAudioModule
 {
+    //Fixed gain for audio from JMBE 1.x libraries, which have no AGC
+    private final NonClippingGain mLegacyGain = new NonClippingGain(5.0f, 0.95f);
     private boolean mEncryptedCall = false;
     private boolean mEncryptedCallStateEstablished = false;
 
@@ -141,7 +144,16 @@ public class P25P1AudioModule extends ImbeAudioModule
 
             for(int x = 0; x < frames.size(); x++)
             {
-                addAudio(getAudio(frames.get(x), correctedFrames != null ? correctedFrames.get(x) : null));
+                float[] audio = getAudio(frames.get(x), correctedFrames != null ? correctedFrames.get(x) : null);
+
+                //JMBE 1.x libraries have no AGC, so their audio gets the same fixed gain as before.  Version 2 and
+                //later libraries set the level with their own AGC.
+                if(!isJmbeVersion2())
+                {
+                    audio = mLegacyGain.apply(audio);
+                }
+
+                addAudio(audio);
             }
         }
         else

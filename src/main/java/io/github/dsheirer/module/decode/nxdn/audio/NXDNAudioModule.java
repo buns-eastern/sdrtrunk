@@ -18,6 +18,7 @@
  */
 package io.github.dsheirer.module.decode.nxdn.audio;
 
+import io.github.dsheirer.dsp.gain.NonClippingGain;
 import io.github.dsheirer.alias.AliasList;
 import io.github.dsheirer.audio.codec.mbe.AmbeAudioModule;
 import io.github.dsheirer.audio.squelch.SquelchState;
@@ -42,6 +43,8 @@ import jmbe.frame.CorrectedAMBEFrame;
  */
 public class NXDNAudioModule extends AmbeAudioModule
 {
+    //Fixed gain for audio from JMBE 1.x libraries, which have no AGC
+    private final NonClippingGain mLegacyGain = new NonClippingGain(5.0f, 0.95f);
     private final SquelchStateListener mSquelchStateListener = new SquelchStateListener();
     private final List<Audio> mCachedAudioMessages = new ArrayList<>();
     private boolean mEncryptedCall = false;
@@ -156,7 +159,16 @@ public class NXDNAudioModule extends AmbeAudioModule
 
             for(int x = 0; x < frames.size(); x++)
             {
-                addAudio(getAudio(frames.get(x), correctedFrames != null ? correctedFrames.get(x) : null));
+                float[] generatedAudio = getAudio(frames.get(x), correctedFrames != null ? correctedFrames.get(x) : null);
+
+                //JMBE 1.x libraries have no AGC, so their audio gets the same fixed gain as before.  Version 2 and
+                //later libraries set the level with their own AGC.
+                if(!isJmbeVersion2())
+                {
+                    generatedAudio = mLegacyGain.apply(generatedAudio);
+                }
+
+                addAudio(generatedAudio);
             }
         }
         else

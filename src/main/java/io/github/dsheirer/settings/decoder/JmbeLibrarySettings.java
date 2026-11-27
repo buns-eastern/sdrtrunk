@@ -46,6 +46,7 @@ public class JmbeLibrarySettings extends AbstractSettings
 
     private final Pattern VERSION_PATTERN = Pattern.compile(".*jmbe-(\\d{1,5}.\\d{1,5}.\\d{1,5}\\w*)\\.jar");
     private Path mPathJmbeLibrary;
+    private Path mPathJmbeAmbeLibrary;
     private Boolean mAlertIfMissingLibraryRequired;
 
     /**
@@ -120,6 +121,72 @@ public class JmbeLibrarySettings extends AbstractSettings
         Setting.JMBE_LIBRARY_PATH.remove();
         mPathJmbeLibrary = null;
         notifySettingsUpdated();
+    }
+
+    /**
+     * Version of the optional AMBE (DMR, NXDN and P25 Phase 2) JMBE library, parsed from the library file name.
+     * @return version or null if the AMBE library is not set or the version can't be determined.
+     */
+    public Version getCurrentAmbeVersion()
+    {
+        Path path = getPathJmbeAmbeLibrary();
+
+        if(path != null)
+        {
+            Matcher m = VERSION_PATTERN.matcher(path.toString());
+
+            if(m.matches())
+            {
+                return Version.fromString(m.group(1));
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Path to the optional JMBE library used for AMBE (DMR, NXDN and P25 Phase 2) audio.  When not set, AMBE audio
+     * uses the main JMBE library.
+     * @return path or null if not set.
+     */
+    public Path getPathJmbeAmbeLibrary()
+    {
+        if(mPathJmbeAmbeLibrary == null)
+        {
+            mPathJmbeAmbeLibrary = getPath(Setting.JMBE_LIBRARY_AMBE_PATH, null);
+        }
+
+        return mPathJmbeAmbeLibrary;
+    }
+
+    /**
+     * Sets the path to the optional AMBE JMBE library
+     */
+    public void setPathJmbeAmbeLibrary(Path path)
+    {
+        mPathJmbeAmbeLibrary = path;
+        Setting.JMBE_LIBRARY_AMBE_PATH.put(path.toString());
+        notifySettingsUpdated();
+    }
+
+    /**
+     * Resets (removes) the optional AMBE JMBE library path so that AMBE audio uses the main JMBE library.
+     */
+    public void resetPathJmbeAmbeLibrary()
+    {
+        Setting.JMBE_LIBRARY_AMBE_PATH.remove();
+        mPathJmbeAmbeLibrary = null;
+        notifySettingsUpdated();
+    }
+
+    /**
+     * JMBE library to use for AMBE (DMR, NXDN and P25 Phase 2) audio: the optional AMBE library when set, otherwise
+     * the main JMBE library.
+     */
+    public Path getEffectivePathJmbeAmbeLibrary()
+    {
+        Path ambe = getPathJmbeAmbeLibrary();
+        return ambe != null ? ambe : getPathJmbeLibrary();
     }
 
     /**
