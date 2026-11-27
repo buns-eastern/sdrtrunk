@@ -75,6 +75,7 @@ public abstract class TunerConfiguration
     private long mMaximumFrequency;
     private double mFrequencyCorrection = 0.0d;
     private boolean mAutoPPMCorrection = true;
+    private boolean mInService = true;
 
     /**
      * Default constructor to support Jackson
@@ -138,6 +139,28 @@ public abstract class TunerConfiguration
     }
 
     /**
+     * Indicates if the tuner is in service and available to source channels.  A tuner that is out of service stays
+     * powered and streaming but is skipped during channel allocation.  Defaults to true so that existing
+     * configurations load as in-service.
+     *
+     * @return true if in service.
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "in_service")
+    public boolean isInService()
+    {
+        return mInService;
+    }
+
+    /**
+     * Sets the in-service state for the tuner.
+     * @param inService true to allow channel allocation on this tuner.
+     */
+    public void setInService(boolean inService)
+    {
+        mInService = inService;
+    }
+
+    /**
      * Indicates if automatic correction of PPM from measured frequency error is enabled/disabled.
      *
      * @return true if autocorrection is enabled.
@@ -156,6 +179,30 @@ public abstract class TunerConfiguration
     public void setAutoPPMCorrectionEnabled(boolean enabled)
     {
         mAutoPPMCorrection = enabled;
+    }
+
+    /**
+     * Free-form user notes for this tuner. Stored locally and tied to the tuner's unique ID (serial number).
+     */
+    private String mNotes = "";
+
+    /**
+     * User notes for this tuner.
+     * @return notes text (never null).
+     */
+    @JacksonXmlProperty(localName = "notes")
+    public String getNotes()
+    {
+        return mNotes;
+    }
+
+    /**
+     * Sets the user notes for this tuner.
+     * @param notes text, may be null (treated as empty).
+     */
+    public void setNotes(String notes)
+    {
+        mNotes = (notes != null) ? notes : "";
     }
 
     /**

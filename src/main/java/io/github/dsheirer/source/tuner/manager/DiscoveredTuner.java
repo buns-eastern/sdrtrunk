@@ -37,6 +37,7 @@ public abstract class DiscoveredTuner implements ITunerErrorListener
     private Logger mLog = LoggerFactory.getLogger(DiscoveredTuner.class);
     private TunerStatus mTunerStatus = TunerStatus.ENABLED;
     private boolean mEnabled = true;
+    private boolean mInService = true;
     private String mErrorMessage;
     private List<IDiscoveredTunerStatusListener> mListeners = new CopyOnWriteArrayList();
     protected Tuner mTuner;
@@ -115,6 +116,42 @@ public abstract class DiscoveredTuner implements ITunerErrorListener
             {
                 broadcast(this, previous, mTunerStatus);
             }
+        }
+    }
+
+    /**
+     * Indicates if this tuner is in service, meaning it is available to source channels.  A tuner that is out of
+     * service remains fully powered and streaming (spectrum, recording and frequency/sample rate controls all keep
+     * working) but is skipped when the tuner manager allocates a channel to a tuner.
+     *
+     * Note: this is deliberately independent of the enabled/disabled state.  Disabling a tuner tears down the tuner
+     * instance and releases the device; taking a tuner out of service does not touch the hardware at all.
+     *
+     * @return true if in service (the default).
+     */
+    public boolean isInService()
+    {
+        if(hasTunerConfiguration())
+        {
+            return getTunerConfiguration().isInService();
+        }
+
+        return mInService;
+    }
+
+    /**
+     * Sets the in-service state of this tuner.  This does not start, stop, or otherwise touch the tuner hardware -
+     * it only controls whether the tuner manager will consider this tuner when allocating channels.
+     *
+     * @param inService true to allow channel allocation on this tuner.
+     */
+    public void setInService(boolean inService)
+    {
+        mInService = inService;
+
+        if(hasTunerConfiguration())
+        {
+            getTunerConfiguration().setInService(inService);
         }
     }
 

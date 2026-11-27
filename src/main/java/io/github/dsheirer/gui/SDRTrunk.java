@@ -175,6 +175,9 @@ public class SDRTrunk implements Listener<TunerEvent>
         EventLogManager eventLogManager = new EventLogManager(aliasModel, mSettings);
         mPlaylistManager = new PlaylistManager(mSettings, mTunerManager, aliasModel, eventLogManager, mIconModel);
 
+        //Provides the tuner UI with the ability to take tuners in and out of service for channel allocation
+        io.github.dsheirer.source.tuner.manager.TunerServiceManager.initialize(mPlaylistManager);
+
         boolean headless = GraphicsEnvironment.isHeadless();
 
         mDiagnosticMonitor = new DiagnosticMonitor(mSettings, mPlaylistManager.getChannelProcessingManager(),
