@@ -139,11 +139,11 @@ public class AppearanceSettingsPage extends SettingsPage
                     ApplicationSettings.MAX_GUI_SCALE,
                     mApplicationSettings.getGuiScale());
             mGuiScaleSlider.setMajorTickUnit(0.25d);
-            mGuiScaleSlider.setMinorTickCount(1);
+            mGuiScaleSlider.setMinorTickCount(4); //5% steps
             mGuiScaleSlider.setSnapToTicks(true);
             mGuiScaleSlider.setShowTickMarks(true);
             mGuiScaleSlider.setShowTickLabels(false);
-            mGuiScaleSlider.setBlockIncrement(0.1d);
+            mGuiScaleSlider.setBlockIncrement(0.05d);
 
             //Update the live percentage label as the user drags.
             mGuiScaleSlider.valueProperty().addListener((obs, oldV, newV) -> {

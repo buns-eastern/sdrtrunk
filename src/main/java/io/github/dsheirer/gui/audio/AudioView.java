@@ -85,7 +85,7 @@ public class AudioView extends HBox
     private final ToggleButton mMuteButton = new ToggleButton();
     private final IconNode mMuteIcon = new IconNode(FontAwesome.VOLUME_UP);
     private final Button mSettingsButton = new Button();
-    private final VBox mVolumeBox;
+    private final HBox mVolumeBox;
     private final Slider mVolumeSlider = new Slider(0, 100, 50);
     private final Timeline mTimeline;
     private FloatControl mGainControl;
@@ -125,7 +125,7 @@ public class AudioView extends HBox
         Label title = new Label("AUDIO");
         title.getStyleClass().add("audio-master-title");
 
-        mMuteIcon.setIconSize(22);
+        mMuteIcon.setIconSize(14);
         mMuteIcon.getStyleClass().add("audio-button-icon");
         mMuteButton.setGraphic(mMuteIcon);
         mMuteButton.getStyleClass().addAll("audio-icon-button", "audio-master-mute");
@@ -133,7 +133,7 @@ public class AudioView extends HBox
         mMuteButton.setOnAction(event -> setOutputMuted(mMuteButton.isSelected()));
 
         IconNode settingsIcon = new IconNode(FontAwesome.COG);
-        settingsIcon.setIconSize(16);
+        settingsIcon.setIconSize(13);
         settingsIcon.getStyleClass().add("audio-button-icon");
         mSettingsButton.setGraphic(settingsIcon);
         mSettingsButton.getStyleClass().add("audio-icon-button");
@@ -145,10 +145,9 @@ public class AudioView extends HBox
         volumeIcon.setIconSize(12);
         volumeIcon.getStyleClass().add("audio-detail-icon");
         mVolumeSlider.getStyleClass().add("audio-volume");
-        mVolumeSlider.setOrientation(Orientation.VERTICAL);
-        mVolumeSlider.setMinHeight(40);
-        mVolumeSlider.setPrefHeight(60);
-        VBox.setVgrow(mVolumeSlider, Priority.ALWAYS);
+        mVolumeSlider.setOrientation(Orientation.HORIZONTAL);
+        mVolumeSlider.setMinWidth(50);
+        mVolumeSlider.setPrefWidth(80);
         mVolumeSlider.setTooltip(new Tooltip("Volume (double-click to reset)"));
         mVolumeSlider.setAccessibleText("Volume");
         mVolumeSlider.valueProperty().addListener((observable, oldValue, newValue) -> applyVolume(newValue.intValue()));
@@ -158,14 +157,15 @@ public class AudioView extends HBox
                 mVolumeSlider.setValue(50);
             }
         });
-        mVolumeBox = new VBox(4, mVolumeSlider, volumeIcon);
-        mVolumeBox.setAlignment(Pos.TOP_CENTER);
+        mVolumeBox = new HBox(4, volumeIcon, mVolumeSlider);
+        mVolumeBox.setAlignment(Pos.CENTER_LEFT);
 
-        VBox controls = new VBox(6, title, mMuteButton, mSettingsButton);
-        controls.setAlignment(Pos.TOP_CENTER);
-        controls.setFillWidth(true);
+        //Master controls side by side to keep the audio display one line tall
+        HBox controls = new HBox(6, title, mMuteButton, mSettingsButton);
+        controls.setAlignment(Pos.CENTER_LEFT);
 
-        HBox master = new HBox(4, controls, mVolumeBox);
+        HBox master = new HBox(6, controls, mVolumeBox);
+        master.setAlignment(Pos.CENTER_LEFT);
         master.getStyleClass().add("audio-master");
         master.setMinWidth(HBox.USE_PREF_SIZE);
 

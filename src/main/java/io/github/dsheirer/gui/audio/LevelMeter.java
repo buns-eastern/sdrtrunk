@@ -37,7 +37,7 @@ public class LevelMeter extends Region
     private static final double CLIP_DB = -3.0;
     private static final double SEGMENT_WIDTH = 4.0;
     private static final double SEGMENT_GAP = 2.0;
-    private static final double PREFERRED_HEIGHT = 8.0;
+    private static final double PREFERRED_HEIGHT = 4.0;
 
     private static final Color NORMAL_ON = Color.web("#3ddc84");
     private static final Color WARNING_ON = Color.web("#f5c542");

@@ -128,15 +128,15 @@ public class AudioChannelView extends HBox
         mAccentStrip.setMaxHeight(Double.MAX_VALUE);
 
         mAliasImage.setPreserveRatio(true);
-        mAliasImage.setFitHeight(36);
-        mAliasImage.setFitWidth(36);
+        mAliasImage.setFitHeight(18);
+        mAliasImage.setFitWidth(18);
         mAliasImage.setSmooth(true);
-        mPlaceholderIcon.setIconSize(26);
+        mPlaceholderIcon.setIconSize(13);
         mPlaceholderIcon.getStyleClass().add("audio-placeholder-icon");
         mIconPane.getStyleClass().add("audio-icon-pane");
-        mIconPane.setMinSize(52, 52);
-        mIconPane.setPrefSize(52, 52);
-        mIconPane.setMaxSize(52, 52);
+        mIconPane.setMinSize(24, 24);
+        mIconPane.setPrefSize(24, 24);
+        mIconPane.setMaxSize(24, 24);
         mIconPane.getChildren().addAll(mPlaceholderIcon, mAliasImage);
         VBox iconColumn = new VBox(mIconPane);
         iconColumn.setAlignment(Pos.CENTER);
@@ -154,18 +154,15 @@ public class AudioChannelView extends HBox
             mAudioChannel.setMuted(mMuteButton.isSelected());
             updateMuted();
         });
-        Region headerSpacer = new Region();
-        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
-        HBox header = new HBox(8, mChannelTag, mStatusLabel, headerSpacer, mElapsedLabel, mMuteButton);
-        header.setAlignment(Pos.CENTER_LEFT);
 
         mToLabel.getStyleClass().add("audio-to");
         mToLabel.setTextOverrun(OverrunStyle.ELLIPSIS);
         mToLabel.setMinWidth(0);
         mToDetailLabel.getStyleClass().add("audio-to-detail");
         mToDetailLabel.setMinWidth(Region.USE_PREF_SIZE);
-        HBox toBox = new HBox(10, mToLabel, mToDetailLabel);
+        HBox toBox = new HBox(6, mToLabel, mToDetailLabel);
         toBox.setAlignment(Pos.BASELINE_LEFT);
+        toBox.setMinWidth(0);
 
         IconNode fromIcon = new IconNode(FontAwesome.MICROPHONE);
         fromIcon.setIconSize(12);
@@ -184,15 +181,23 @@ public class AudioChannelView extends HBox
         HBox.setHgrow(mContextLabel, Priority.ALWAYS);
         mContextLabel.setMaxWidth(Double.MAX_VALUE);
         mContextLabel.setAlignment(Pos.CENTER_RIGHT);
-        HBox detailBox = new HBox(14, mFromBox, mContextLabel);
-        detailBox.setAlignment(Pos.CENTER_LEFT);
+        //Slim card: everything on one line, with the level meter as a thin bar under it.  The system/site/channel
+        //text shrinks first, then the talkgroup.
+        HBox row = new HBox(8, mChannelTag, mStatusLabel, toBox, mFromBox, mContextLabel, mElapsedLabel,
+            mMuteButton);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setMinWidth(0);
+        mChannelTag.setMinWidth(Region.USE_PREF_SIZE);
+        mStatusLabel.setMinWidth(Region.USE_PREF_SIZE);
+        mElapsedLabel.setMinWidth(Region.USE_PREF_SIZE);
+        mMuteButton.setMinWidth(Region.USE_PREF_SIZE);
 
         mLevelMeter.setMaxWidth(Double.MAX_VALUE);
 
-        VBox content = new VBox(2, header, toBox, detailBox, mLevelMeter);
+        VBox content = new VBox(2, row, mLevelMeter);
         content.getStyleClass().add("audio-channel-content");
         content.setMinWidth(0);
-        VBox.setMargin(mLevelMeter, new javafx.geometry.Insets(6, 0, 0, 0));
+        content.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(content, Priority.ALWAYS);
 
         getChildren().addAll(mAccentStrip, iconColumn, content);
