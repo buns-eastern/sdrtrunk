@@ -169,6 +169,22 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
     }
 
     /**
+     * Wraps the timer processing so that any unexpected error is logged rather than silently cancelling all
+     * future executions of this repeating scheduled task (which would disable Auto-PPM without warning).
+     */
+    private void processSafely()
+    {
+        try
+        {
+            process();
+        }
+        catch(Throwable t)
+        {
+            LOG.error("Error processing tuner frequency error correction - Auto-PPM continues", t);
+        }
+    }
+
+    /**
      * Tuner frequency error correction in parts-per-million (ppm).
      */
     public double getTunerPPM()
@@ -270,7 +286,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
     {
         if(!mShutdown && mScheduledFuture == null)
         {
-            mScheduledFuture = ThreadPool.SCHEDULED.scheduleAtFixedRate(this::process, TIMER_INTERVAL_SECONDS,
+            mScheduledFuture = ThreadPool.SCHEDULED.scheduleAtFixedRate(this::processSafely, TIMER_INTERVAL_SECONDS,
                     TIMER_INTERVAL_SECONDS, TimeUnit.SECONDS);
         }
     }
