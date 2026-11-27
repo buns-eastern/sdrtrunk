@@ -183,6 +183,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import io.github.dsheirer.map.GeoPosition;
 import org.slf4j.Logger;
@@ -205,6 +206,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private final Listener<ChannelEvent> mChannelEventListener;
     private final P25TrafficChannelManager mTrafficChannelManager;
     private ServiceOptions mCurrentServiceOptions;
+    private List<ControlChannelHeartbeat> mHeartbeatMonitors = new ArrayList<>();
     private Listener<IMessage> mRawStreamListener;
     private final DecodeConfigP25 mDecodeConfigP25;
     private Integer mObservedSystem;
@@ -323,6 +325,14 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     /**
      * Primary message processing method.
      */
+    /**
+     * Sets heartbeat monitors to fire on RFSS status broadcasts.
+     */
+    public void setHeartbeatMonitors(List<ControlChannelHeartbeat> monitors)
+    {
+        mHeartbeatMonitors = monitors;
+    }
+
     /**
      * Sets a listener to receive raw valid messages (for TCP streaming).
      */
@@ -821,6 +831,15 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                         }
                     }
                     mNetworkConfigurationMonitor.process(ambtc);
+                    if(!mHeartbeatMonitors.isEmpty() && ambtc instanceof AMBTCRFSSStatusBroadcast rsHb
+                            && rsHb.getSystem() instanceof IntegerIdentifier sysIdent
+                            && rsHb.getSite() instanceof IntegerIdentifier siteIdent)
+                    {
+                        for(ControlChannelHeartbeat hb : mHeartbeatMonitors)
+                        {
+                            hb.onRFSSStatusBroadcast(sysIdent.getValue(), siteIdent.getValue());
+                        }
+                    }
                     break;
 
                 //Channel grants
@@ -1491,6 +1510,15 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                         }
                     }
                     mNetworkConfigurationMonitor.process(tsbk);
+                    if(!mHeartbeatMonitors.isEmpty() && tsbk instanceof RFSSStatusBroadcast rsHb
+                            && rsHb.getSystem() instanceof IntegerIdentifier sysIdent
+                            && rsHb.getSite() instanceof IntegerIdentifier siteIdent)
+                    {
+                        for(ControlChannelHeartbeat hb : mHeartbeatMonitors)
+                        {
+                            hb.onRFSSStatusBroadcast(sysIdent.getValue(), siteIdent.getValue());
+                        }
+                    }
                     break;
 
                 case OSP_UNIT_TO_UNIT_ANSWER_REQUEST:

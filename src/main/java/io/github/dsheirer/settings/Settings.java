@@ -34,6 +34,10 @@ import io.github.dsheirer.settings.network.ImbeStreamSettings;
 import io.github.dsheirer.settings.network.NetworkStreamSettings;
 import io.github.dsheirer.settings.network.PcmStreamSettings;
 import io.github.dsheirer.settings.network.StandaloneStreamSettings;
+import io.github.dsheirer.settings.network.HeartbeatSettings;
+import io.github.dsheirer.settings.network.StreamHeartbeatSettings;
+import io.github.dsheirer.settings.network.ChannelHeartbeatSettings;
+import io.github.dsheirer.settings.network.SoftwareHeartbeatSettings;
 import io.github.dsheirer.settings.playback.PlaybackSettings;
 import io.github.dsheirer.settings.playlist.PlaylistSettings;
 import io.github.dsheirer.settings.radioreference.RadioReferenceSettings;
@@ -72,6 +76,10 @@ public class Settings implements Listener<SettingsType>
     private ImbeStreamSettings mImbeStreamSettings;
     private PcmStreamSettings mPcmStreamSettings;
     private StandaloneStreamSettings mStandaloneStreamSettings;
+    private HeartbeatSettings mHeartbeatSettings;
+    private StreamHeartbeatSettings mStreamHeartbeatSettings;
+    private ChannelHeartbeatSettings mChannelHeartbeatSettings;
+    private SoftwareHeartbeatSettings mSoftwareHeartbeatSettings;
     private PlaybackSettings mPlaybackSettings;
     private PlaylistSettings mPlaylistSettings;
     private RadioReferenceSettings mRadioReferenceSettings;
@@ -214,6 +222,38 @@ public class Settings implements Listener<SettingsType>
     }
 
     /**
+     * Heartbeat settings
+     */
+    public HeartbeatSettings getHeartbeatSettings()
+    {
+        return mHeartbeatSettings;
+    }
+
+    /**
+     * StreamHeartbeat settings
+     */
+    public StreamHeartbeatSettings getStreamHeartbeatSettings()
+    {
+        return mStreamHeartbeatSettings;
+    }
+
+    /**
+     * ChannelHeartbeat settings
+     */
+    public ChannelHeartbeatSettings getChannelHeartbeatSettings()
+    {
+        return mChannelHeartbeatSettings;
+    }
+
+    /**
+     * SoftwareHeartbeat settings
+     */
+    public SoftwareHeartbeatSettings getSoftwareHeartbeatSettings()
+    {
+        return mSoftwareHeartbeatSettings;
+    }
+
+    /**
      * Identifier settings
      */
     public TalkgroupFormatSettings getTalkgroupFormatSettings()
@@ -271,6 +311,10 @@ public class Settings implements Listener<SettingsType>
         mImbeStreamSettings = new ImbeStreamSettings(this::receive);
         mPcmStreamSettings = new PcmStreamSettings(this::receive);
         mStandaloneStreamSettings = new StandaloneStreamSettings(this::receive);
+        mHeartbeatSettings = new HeartbeatSettings(this::receive);
+        mStreamHeartbeatSettings = new StreamHeartbeatSettings(this::receive);
+        mChannelHeartbeatSettings = new ChannelHeartbeatSettings(this::receive);
+        mSoftwareHeartbeatSettings = new SoftwareHeartbeatSettings(this::receive);
         mPlaybackSettings = new PlaybackSettings(this::receive);
         mPlaylistSettings = new PlaylistSettings(this::receive, mDirectorySettings);
         mRadioReferenceSettings = new RadioReferenceSettings(this::receive);

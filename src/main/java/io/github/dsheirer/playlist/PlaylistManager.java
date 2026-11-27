@@ -18,6 +18,11 @@
  */
 package io.github.dsheirer.playlist;
 
+import io.github.dsheirer.audio.broadcast.StreamHeartbeatManager;
+import io.github.dsheirer.monitor.ChannelHeartbeatManager;
+import io.github.dsheirer.monitor.SoftwareHeartbeatManager;
+import io.github.dsheirer.monitor.StandaloneChannelKumaManager;
+import io.github.dsheirer.monitor.TunerErrorMonitor;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -73,6 +78,11 @@ public class PlaylistManager implements Listener<ChannelEvent>
     private IconModel mIconModel;
 
     private BroadcastModel mBroadcastModel;
+    private StreamHeartbeatManager mStreamHeartbeatManager;
+    private SoftwareHeartbeatManager mSoftwareHeartbeatManager;
+    private TunerErrorMonitor mTunerErrorMonitor;
+    private ChannelHeartbeatManager mChannelHeartbeatManager;
+    private StandaloneChannelKumaManager mStandaloneChannelKumaManager;
     private ChannelModel mChannelModel;
     private ChannelProcessingManager mChannelProcessingManager;
     private TunerManager mTunerManager;
@@ -105,12 +115,19 @@ public class PlaylistManager implements Listener<ChannelEvent>
         mIconModel = iconModel;
 
         mBroadcastModel = new BroadcastModel(mAliasModel, mIconModel, settings);
+        mStreamHeartbeatManager = new StreamHeartbeatManager(mSettings, mBroadcastModel);
+        mSoftwareHeartbeatManager = new SoftwareHeartbeatManager(mSettings);
+        mTunerErrorMonitor = new TunerErrorMonitor(mSettings, mTunerManager);
         mRadioReference = new RadioReference(mSettings);
         mAliasListSynchronizer = new AliasListSynchronizer(mAliasModel, mRadioReference, mSettings);
 
         mChannelModel = new ChannelModel(mAliasModel);
         mChannelProcessingManager = new ChannelProcessingManager(mChannelMapModel, eventLogManager, mTunerManager,
             mAliasModel, mSettings);
+        mChannelHeartbeatManager = new ChannelHeartbeatManager(mSettings,
+            mChannelProcessingManager.getChannelMetadataModel());
+        mStandaloneChannelKumaManager = new StandaloneChannelKumaManager(mSettings, mChannelModel,
+            mChannelProcessingManager);
 
         //Register the channel processing manager to receive global channel stop processing requests so that it can
         //respond to tuner shutdown (ie error) events
@@ -278,6 +295,11 @@ public class PlaylistManager implements Listener<ChannelEvent>
     {
         PlaylistV2 playlist = load();
         transferPlaylistToModels(playlist);
+        mStreamHeartbeatManager.start();
+        mSoftwareHeartbeatManager.start();
+        mTunerErrorMonitor.start();
+        mChannelHeartbeatManager.start();
+        mStandaloneChannelKumaManager.start();
         mAliasListSynchronizer.start();
     }
 

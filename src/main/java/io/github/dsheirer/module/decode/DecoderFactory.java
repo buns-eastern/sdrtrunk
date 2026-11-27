@@ -96,6 +96,8 @@ import io.github.dsheirer.module.decode.p25.audio.P25P1AudioModule;
 import io.github.dsheirer.identifier.alias.TalkerAliasLogger;
 import io.github.dsheirer.module.decode.p25.audio.ImbeAudioStreamModule;
 import io.github.dsheirer.module.decode.p25.phase1.ChannelHeartbeatModule;
+import io.github.dsheirer.module.decode.p25.phase1.ControlChannelHeartbeat;
+import io.github.dsheirer.settings.network.HeartbeatEntry;
 import io.github.dsheirer.module.decode.p25.phase1.ImbeStreamManager;
 import io.github.dsheirer.module.decode.p25.phase1.NetworkEventBroadcastModule;
 import io.github.dsheirer.module.decode.p25.phase1.NetworkStreamManager;
@@ -371,6 +373,8 @@ public class DecoderFactory
                 TalkerAliasLogger aliasLogger = new TalkerAliasLogger(eventLogDir, safeSystemName);
                 primaryTCM.getTalkerAliasManager().setChangeListener(aliasLogger::onAliasUpdate);
                 aliasLogger.bootstrap(primaryTCM.getTalkerAliasManager());
+
+                p25DecoderState.setHeartbeatMonitors(loadHeartbeatMonitors(settings));
 
                 NetworkStreamManager streamManager = loadNetworkStreamManager(settings);
                 if(streamManager != null)
@@ -699,6 +703,21 @@ public class DecoderFactory
         }
         int port = settings.getPcmStreamSettings().getPort();
         return PcmStreamManager.getInstance(port);
+    }
+
+    private static List<ControlChannelHeartbeat> loadHeartbeatMonitors(Settings settings)
+    {
+        List<ControlChannelHeartbeat> monitors = new ArrayList<>();
+        for(HeartbeatEntry entry : settings.getHeartbeatSettings().getEntries())
+        {
+            if(entry.isEnabled())
+            {
+                monitors.add(new ControlChannelHeartbeat(
+                    entry.getSystemId(), entry.getSiteId(), entry.getChannelName(),
+                    entry.getPushUrl2(), entry.getKumaUrl(), entry.getIntervalSeconds()));
+            }
+        }
+        return monitors;
     }
 
     private static NetworkStreamManager loadNetworkStreamManager(Settings settings)
