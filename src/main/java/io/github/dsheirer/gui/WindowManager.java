@@ -304,7 +304,7 @@ public class WindowManager
         {
             mSettingsEditor = new SettingsEditor(mSettings,
                 mPlaylistManager != null ? mPlaylistManager.getRadioReference() : null,
-                mPlaylistManager != null ? mPlaylistManager.getChannelProcessingManager() : null);
+                mPlaylistManager != null ? mPlaylistManager.getChannelProcessingManager() : null, mPlaylistManager);
         }
 
         return mSettingsEditor;

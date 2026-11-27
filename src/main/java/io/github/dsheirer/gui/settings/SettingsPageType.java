@@ -23,6 +23,7 @@ import io.github.dsheirer.gui.settings.application.AppearanceSettingsPage;
 import io.github.dsheirer.gui.settings.application.GeneralSettingsPage;
 import io.github.dsheirer.gui.settings.calibration.PerformanceSettingsPage;
 import io.github.dsheirer.gui.settings.call.CallManagementSettingsPage;
+import io.github.dsheirer.gui.settings.call.IssiCallMergeSettingsPage;
 import io.github.dsheirer.gui.settings.decoder.AudioCodecSettingsPage;
 import io.github.dsheirer.gui.settings.directory.StorageSettingsPage;
 import io.github.dsheirer.gui.settings.map.MapSettingsPage;
@@ -65,6 +66,10 @@ public enum SettingsPageType
     CALL_MANAGEMENT(Group.AUDIO, "Call Management", FontAwesome.CLONE,
         "Duplicate call detection and suppression, and patch group streaming.",
         context -> new CallManagementSettingsPage(context.settings())),
+    ISSI_CALL_MERGE(Group.AUDIO, "ISSI Call Merge", FontAwesome.CODE_FORK,
+        "Stream a single copy of a talkgroup that rides on two independent systems (for example via P25 ISSI), no " +
+            "matter which system carries the call.",
+        context -> new IssiCallMergeSettingsPage(context.settings(), context.playlistManager())),
     RECORDING(Group.AUDIO, "Recording", FontAwesome.MICROPHONE,
         "File formats for audio and baseband I/Q recordings, and MP3 encoding.",
         context -> new RecordingSettingsPage(context.settings())),

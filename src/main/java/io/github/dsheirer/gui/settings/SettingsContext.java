@@ -20,6 +20,7 @@
 package io.github.dsheirer.gui.settings;
 
 import io.github.dsheirer.controller.channel.ChannelProcessingManager;
+import io.github.dsheirer.playlist.PlaylistManager;
 import io.github.dsheirer.service.radioreference.RadioReference;
 import io.github.dsheirer.settings.Settings;
 
@@ -29,8 +30,9 @@ import io.github.dsheirer.settings.Settings;
  * @param settings to edit
  * @param radioReference service shared with the playlist editor, or null when there isn't one
  * @param channelProcessingManager for the processing state of channels, or null when there isn't one
+ * @param playlistManager for the channels and aliases that some pages pick from, or null when there isn't one
  */
 public record SettingsContext(Settings settings, RadioReference radioReference,
-                              ChannelProcessingManager channelProcessingManager)
+                              ChannelProcessingManager channelProcessingManager, PlaylistManager playlistManager)
 {
 }

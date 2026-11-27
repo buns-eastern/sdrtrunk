@@ -290,3 +290,27 @@
 {
     -fx-font-weight: bold;
 }
+
+/* Notes and buttons that need a warning or danger color, readable in light and dark themes */
+
+.settings-editor .settings-warning-note
+{
+    -fx-font-size: 0.9em;
+    -fx-text-fill: ladder(-fx-background, #e0b050 49%, #996600 50%);
+}
+
+.settings-editor .settings-warning-note .text,
+.settings-editor .settings-warning-icon
+{
+    -fx-fill: ladder(-fx-background, #e0b050 49%, #996600 50%);
+}
+
+.settings-editor .settings-danger-button
+{
+    -fx-text-fill: ladder(-fx-background, #ff7a7a 49%, #cc0000 50%);
+}
+
+.settings-editor .settings-danger-button .text
+{
+    -fx-fill: ladder(-fx-background, #ff7a7a 49%, #cc0000 50%);
+}
