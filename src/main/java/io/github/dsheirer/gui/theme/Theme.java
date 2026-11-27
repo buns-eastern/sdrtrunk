@@ -29,33 +29,8 @@ public enum Theme
     LIGHT("Light", false,
         new Palette(0xf2f2f2, 0xffffff, 0xfafafa, 0x2675bf, 0x2675bf, 0xffffff, 0x000000, 0xc2c2c2)),
     DARK("Dark", true,
-        new Palette(0x3c3f41, 0x46494b, 0x353739, 0x4b6eaf, 0x4b6eaf, 0xeeeeee, 0xdddddd, 0x616365)),
-    NORD("Nord", true,
-        new Palette(0x2e3440, 0x3b4252, 0x353739, 0x88c0d0, 0x88c0d0, 0x2e3440, 0xeceff4, 0x3b4252)),
-    DRACULA("Dracula", true,
-        new Palette(0x414450, 0x3a3d4c, 0x353739, 0xff79c6, 0x6272a4, 0xf8f8f2, 0xdddddd, 0x6272a4)),
-    SOLARIZED_LIGHT("Solarized Light", false,
-        new Palette(0xeee8d5, 0xfdf6e3, 0xfafafa, 0x3d7ec0, 0x3570cd, 0xffffeb, 0x2e4e58, 0xbac0b8)),
-    SOLARIZED_DARK("Solarized Dark", true,
-        new Palette(0x0e3c4a, 0x1b4854, 0x353739, 0x3985c7, 0x1c62c9, 0xc2c5bc, 0xa9b3ae, 0x49636b)),
-    MATERIAL_DEEP_OCEAN("Material Deep Ocean", true,
-        new Palette(0x0f111a, 0x090b10, 0x353739, 0x84ffff, 0x3d4669, 0xffffff, 0x8f93a2, 0x1f2233)),
-    ARC_DARK("Arc Dark", true,
-        new Palette(0x383c4a, 0x474c5b, 0x353739, 0x2679db, 0x2679db, 0xffffff, 0xd3dae3, 0x2b2e39)),
-    ONE_DARK("One Dark", true,
-        new Palette(0x21252b, 0x282c34, 0x2d3139, 0x61afef, 0x3d5a80, 0xffffff, 0xabb2bf, 0x3b4048));
+        new Palette(0x3c3f41, 0x46494b, 0x353739, 0x4b6eaf, 0x4b6eaf, 0xeeeeee, 0xdddddd, 0x616365));
 
-    /**
-     * Theme colors as 0xRRGGBB values.
-     * @param background of windows and panels
-     * @param inner background of text fields, tables and lists
-     * @param innerAlternate background of alternate table rows
-     * @param accent for focus, default buttons and highlights
-     * @param selectionBackground of selected rows
-     * @param selectionText of selected rows
-     * @param text color
-     * @param border of controls and scroll bar thumbs
-     */
     public record Palette(int background, int inner, int innerAlternate, int accent, int selectionBackground,
                           int selectionText, int text, int border)
     {
@@ -105,6 +80,17 @@ public enum Theme
     {
         if(name != null)
         {
+            //Themes offered by earlier versions map to the light or dark theme
+            switch(name)
+            {
+                case "SOLARIZED_LIGHT":
+                    return LIGHT;
+                case "NORD", "DRACULA", "SOLARIZED_DARK", "MATERIAL_DEEP_OCEAN", "ARC_DARK", "ONE_DARK":
+                    return DARK;
+                default:
+                    break;
+            }
+
             for(Theme t: values())
             {
                 if(t.name().equals(name))

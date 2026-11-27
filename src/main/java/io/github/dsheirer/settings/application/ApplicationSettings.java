@@ -163,10 +163,7 @@ public class ApplicationSettings extends AbstractSettings
 
         return switch(stored.trim().toLowerCase())
         {
-            case "arc-dark" -> Theme.ARC_DARK;
-            case "one-dark" -> Theme.ONE_DARK;
-            case "dracula" -> Theme.DRACULA;
-            case "nord" -> Theme.NORD;
+            case "arc-dark", "one-dark", "dracula", "nord" -> Theme.DARK;
             case "light" -> Theme.LIGHT;
             default -> null;
         };
