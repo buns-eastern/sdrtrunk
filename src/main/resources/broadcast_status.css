@@ -110,3 +110,28 @@
     -fx-background-color: transparent;
     -fx-opacity: 0.6;
 }
+
+/* Same width for every status chip so the column reads evenly; a rare long status grows to fit */
+.broadcast-status-view .broadcast-status-chip
+{
+    -fx-min-width: 8.5em;
+    -fx-alignment: center;
+}
+
+/* Reminder shown when the problems-only filter hides every stream */
+.broadcast-status-view .broadcast-filter-title
+{
+    -fx-font-weight: bold;
+    -fx-font-size: 1.2em;
+    -fx-opacity: 0.7;
+}
+
+.broadcast-status-view .broadcast-filter-detail
+{
+    -fx-opacity: 0.55;
+}
+
+.broadcast-status-view .broadcast-filter-hint
+{
+    -fx-opacity: 0.45;
+}

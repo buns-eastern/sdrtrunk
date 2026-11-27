@@ -30,6 +30,7 @@ import io.github.dsheirer.gui.playlist.streaming.ViewStreamingRequest;
 import io.github.dsheirer.gui.table.ColumnConfigurationButton;
 import io.github.dsheirer.gui.table.TableColumnMonitor;
 import io.github.dsheirer.icon.Icon;
+import io.github.dsheirer.settings.Setting;
 import io.github.dsheirer.settings.swing.SwingSettings;
 import io.github.dsheirer.sample.Listener;
 import java.net.URL;
@@ -43,8 +44,11 @@ import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckMenuItem;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableCell;
@@ -72,7 +76,12 @@ public class BroadcastStatusView extends VBox
 
     private final BroadcastModel mBroadcastModel;
     private final ObservableList<ConfiguredBroadcast> mItems = FXCollections.observableArrayList();
-    private final TableView<ConfiguredBroadcast> mTableView = new TableView<>(mItems);
+    private final FilteredList<ConfiguredBroadcast> mFilteredItems = new FilteredList<>(mItems);
+    private final TableView<ConfiguredBroadcast> mTableView = new TableView<>(mFilteredItems);
+    private final Label mPlaceholder = new Label("No streams are configured.  Use Configure Streams to add a stream.");
+    private final VBox mFilterPlaceholder = new VBox(4);
+    private final Label mFilterHiddenLabel = new Label();
+    private boolean mShowOnlyProblems;
     private final Label mSummaryLabel = new Label();
     private final AtomicBoolean mUpdateScheduled = new AtomicBoolean();
     private final Map<BroadcastServerType,Image> mServerTypeImages = new EnumMap<>(BroadcastServerType.class);
@@ -118,9 +127,25 @@ public class BroadcastStatusView extends VBox
         mTableView.setTableMenuButtonVisible(false);
         mTableView.setFixedCellSize(26);
 
-        Label placeholder = new Label("No streams are configured.  Use Configure Streams to add a stream.");
-        placeholder.getStyleClass().add("broadcast-placeholder");
-        mTableView.setPlaceholder(placeholder);
+        mPlaceholder.getStyleClass().add("broadcast-placeholder");
+        mTableView.setPlaceholder(mPlaceholder);
+
+        //Optional filter: hide streams that are Connected or Disabled so only streams with a problem show.  When
+        //every stream is hidden, a reminder shows so an empty table doesn't look like streaming has stopped.
+        Label filterTitle = new Label("Stream filter active");
+        filterTitle.getStyleClass().add("broadcast-filter-title");
+        mFilterHiddenLabel.getStyleClass().add("broadcast-filter-detail");
+        Label filterHint = new Label("Any stream with a problem will appear here");
+        filterHint.getStyleClass().add("broadcast-filter-hint");
+        mFilterPlaceholder.getChildren().addAll(filterTitle, mFilterHiddenLabel, filterHint);
+        mFilterPlaceholder.setAlignment(Pos.CENTER);
+        mFilterPlaceholder.getStyleClass().add("broadcast-filter-placeholder");
+
+        mShowOnlyProblems = Setting.BROADCAST_STATUS_PROBLEMS_ONLY.getInt(0) == 1;
+        CheckMenuItem problemsOnly = new CheckMenuItem("Show only streams with problems");
+        problemsOnly.setSelected(mShowOnlyProblems);
+        problemsOnly.selectedProperty().addListener((observable, oldValue, selected) -> setShowOnlyProblems(selected));
+        mTableView.setContextMenu(new ContextMenu(problemsOnly));
         VBox.setVgrow(mTableView, Priority.ALWAYS);
 
         TableColumnMonitor<ConfiguredBroadcast> monitor = new TableColumnMonitor<>(mTableView, TABLE_KEY,
@@ -205,6 +230,52 @@ public class BroadcastStatusView extends VBox
         }
 
         mSummaryLabel.setText(getSummary(current));
+        applyFilter();
+    }
+
+    /**
+     * Enables or disables the problems-only filter and persists the choice.
+     */
+    private void setShowOnlyProblems(boolean enabled)
+    {
+        mShowOnlyProblems = enabled;
+        Setting.BROADCAST_STATUS_PROBLEMS_ONLY.putInt(enabled ? 1 : 0);
+        applyFilter();
+    }
+
+    /**
+     * Applies the problems-only filter to the rows.  Reapplied on every update since a stream's status changes
+     * without changing the list.
+     */
+    private void applyFilter()
+    {
+        if(mShowOnlyProblems)
+        {
+            mFilteredItems.setPredicate(broadcast -> isProblem(broadcast.getStatus()));
+        }
+        else
+        {
+            mFilteredItems.setPredicate(null);
+        }
+
+        if(mShowOnlyProblems && !mItems.isEmpty())
+        {
+            mFilterHiddenLabel.setText("Connected and Disabled streams are hidden (" +
+                (mItems.size() - mFilteredItems.size()) + " not shown)");
+            mTableView.setPlaceholder(mFilterPlaceholder);
+        }
+        else
+        {
+            mTableView.setPlaceholder(mPlaceholder);
+        }
+    }
+
+    /**
+     * Indicates if the status is a problem: anything other than Connected or Disabled.
+     */
+    static boolean isProblem(BroadcastState state)
+    {
+        return state != BroadcastState.CONNECTED && state != BroadcastState.DISABLED;
     }
 
     /**

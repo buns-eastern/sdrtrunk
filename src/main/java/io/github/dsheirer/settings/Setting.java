@@ -162,6 +162,10 @@ public enum Setting
     RECORD_AUDIO_FORMAT(Node.RECORD, "audio.record.format"),
     RECORD_BASEBAND_FORMAT(Node.RECORD, "baseband.record.format"),
 
+    //Streaming status: show only streams with problems (1) or all streams (0).  Same key as the Swing panel so
+    //the choice is shared with earlier versions.
+    BROADCAST_STATUS_PROBLEMS_ONLY(Node.SWING, "application.broadcast.status.panel.problems.only"),
+
     //Swing window and table state stored by earlier versions, read only to migrate it: argument is the swing key
     SWING_COLUMN_WIDTH(Node.SWING, "%s.column.%s"), //Arguments: table key and legacy column index
     SWING_HEIGHT(Node.SWING, "%s.height"),
