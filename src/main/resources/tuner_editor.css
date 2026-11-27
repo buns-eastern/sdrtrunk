@@ -290,3 +290,21 @@
     -fx-font-size: 1.3em;
     -fx-font-weight: bold;
 }
+
+/* Tuner out of service: the service button in the editor and the Service column in the tuner table */
+
+.tuner-editor .tuner-out-of-service,
+.tuner-editor .tuner-out-of-service .text
+{
+    -fx-text-fill: ladder(-fx-background, #ff7a7a 49%, #cc0000 50%);
+    -fx-fill: ladder(-fx-background, #ff7a7a 49%, #cc0000 50%);
+    -fx-font-weight: bold;
+}
+
+.tuner-out-of-service-cell,
+.tuner-out-of-service-cell .text
+{
+    -fx-text-fill: ladder(-fx-background, #ff7a7a 49%, #cc0000 50%);
+    -fx-fill: ladder(-fx-background, #ff7a7a 49%, #cc0000 50%);
+    -fx-font-weight: bold;
+}

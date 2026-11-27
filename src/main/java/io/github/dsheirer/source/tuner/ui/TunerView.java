@@ -208,7 +208,26 @@ public class TunerView extends SplitPane implements DiscoveredTunerModel.ModelLi
             return count + (locked ? " (locked)" : "");
         }, 4);
 
-        mTableView.getColumns().addAll(status, tunerClass, type, frequency, channels);
+        TableColumn<DiscoveredTuner,String> service = textColumn("service", "Service",
+            tuner -> tuner.isInService() ? "In Service" : "OUT OF SERVICE", 5);
+        service.setCellFactory(column -> new TableCell<>()
+        {
+            @Override
+            protected void updateItem(String item, boolean empty)
+            {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                getStyleClass().remove("tuner-out-of-service-cell");
+
+                if(!empty && "OUT OF SERVICE".equals(item))
+                {
+                    getStyleClass().add("tuner-out-of-service-cell");
+                }
+            }
+        });
+        service.setPrefWidth(130);
+
+        mTableView.getColumns().addAll(status, tunerClass, type, frequency, channels, service);
         mTableView.getSortOrder().add(type);
     }
 

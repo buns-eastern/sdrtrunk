@@ -440,6 +440,14 @@ public class DiscoveredTunerModel implements Listener<TunerEvent>,
      * Adds a listener for tuners added to, removed from or updated in the model.  Listeners are invoked on the
      * calling thread, which can be any thread.
      */
+    /**
+     * Notifies listeners that the in-service state of the tuner changed, so the tuner table shows the new state.
+     */
+    public void updateServiceState(DiscoveredTuner discoveredTuner)
+    {
+        notifyUpdated(discoveredTuner);
+    }
+
     public void addModelListener(ModelListener listener)
     {
         mModelListeners.add(listener);

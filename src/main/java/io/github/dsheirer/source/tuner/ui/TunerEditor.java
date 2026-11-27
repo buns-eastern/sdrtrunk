@@ -33,11 +33,15 @@ import io.github.dsheirer.source.tuner.configuration.TunerConfiguration;
 import io.github.dsheirer.source.tuner.manager.DiscoveredTuner;
 import io.github.dsheirer.source.tuner.manager.IDiscoveredTunerStatusListener;
 import io.github.dsheirer.source.tuner.manager.TunerManager;
+import io.github.dsheirer.source.tuner.manager.TunerServiceManager;
 import io.github.dsheirer.source.tuner.manager.TunerStatus;
+import io.github.dsheirer.controller.channel.Channel;
 import io.github.dsheirer.util.ThreadPool;
 import java.net.URL;
 import java.text.CharacterIterator;
 import java.text.StringCharacterIterator;
+import java.util.List;
+import java.util.Optional;
 import java.util.function.LongConsumer;
 import javafx.application.Platform;
 import javafx.css.PseudoClass;
@@ -45,9 +49,12 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
@@ -104,6 +111,10 @@ public abstract class TunerEditor<T extends Tuner,C extends TunerConfiguration> 
     private Button mNewSpectrumButton;
     private ToggleButton mRecordButton;
     private Button mRestartTunerButton;
+    private Button mServiceButton;
+    private TextArea mNotesTextArea;
+    private static final String BUTTON_STATUS_IN_SERVICE = "In Service";
+    private static final String BUTTON_STATUS_OUT_OF_SERVICE = "Out of Service";
     private Label mRecordingStatusLabel;
 
     //Sections
@@ -155,6 +166,13 @@ public abstract class TunerEditor<T extends Tuner,C extends TunerConfiguration> 
         if(hasTuningControls())
         {
             mSections.getChildren().addAll(getTuningSection(), getCorrectionSection(), getLimitsPane());
+        }
+
+        if(hasConfiguration())
+        {
+            TunerSection notes = new TunerSection("Notes");
+            notes.addFullRow(getNotesTextArea());
+            mSections.getChildren().add(notes);
         }
 
         if(mDiscoveredTuner != null)
@@ -388,7 +406,7 @@ public abstract class TunerEditor<T extends Tuner,C extends TunerConfiguration> 
         statusRow.setAlignment(Pos.CENTER_LEFT);
 
         FlowPane actions = new FlowPane(getViewSpectrumButton(), getNewSpectrumButton(), getRecordButton(),
-                getRestartTunerButton());
+                getServiceButton(), getRestartTunerButton());
         actions.getStyleClass().add("tuner-actions");
 
         VBox header = new VBox(titleRow, statusRow, mErrorLabel, actions, getRecordingStatusLabel());
@@ -455,6 +473,255 @@ public abstract class TunerEditor<T extends Tuner,C extends TunerConfiguration> 
         {
             getRecordingStatusLabel().setVisible(false);
         }
+
+        updateServiceControls();
+
+        if(mNotesTextArea != null && !mNotesTextArea.isFocused())
+        {
+            String notes = hasConfiguration() ? getConfiguration().getNotes() : "";
+
+            if(!notes.equals(mNotesTextArea.getText()))
+            {
+                mNotesTextArea.setText(notes);
+            }
+        }
+    }
+
+    /**
+     * Free-form notes text area for this tuner. Notes are persisted per-tuner (keyed by serial number) in the
+     * tuner configuration and reloaded whenever the tuner is selected. Text only - has no effect on tuning.
+     * @return the notes text area
+     */
+    protected TextArea getNotesTextArea()
+    {
+        if(mNotesTextArea == null)
+        {
+            mNotesTextArea = new TextArea(hasConfiguration() ? getConfiguration().getNotes() : "");
+            mNotesTextArea.setPrefRowCount(3);
+            mNotesTextArea.setWrapText(true);
+            mNotesTextArea.setTooltip(new Tooltip(
+                "Free-form notes for this tuner. Saved locally and tied to the tuner serial number."));
+            mNotesTextArea.focusedProperty().addListener((observable, wasFocused, focused) -> {
+                if(!focused && !isLoading() && hasConfiguration())
+                {
+                    getConfiguration().setNotes(mNotesTextArea.getText());
+                    saveConfiguration();
+                }
+            });
+        }
+
+        return mNotesTextArea;
+    }
+
+    /**
+     * Button to take the tuner in or out of service for channel allocation.
+     *
+     * A tuner that is out of service stays powered and streaming - spectrum and the frequency/sample rate controls
+     * keep working - but no channel will be allocated to it.  This is deliberately a button with a confirmation
+     * dialog rather than a switch so that it cannot be toggled by an accidental click.
+     */
+    protected Button getServiceButton()
+    {
+        if(mServiceButton == null)
+        {
+            mServiceButton = new Button(BUTTON_STATUS_IN_SERVICE);
+            mServiceButton.setOnAction(e -> {
+                try
+                {
+                    handleServiceButton();
+                }
+                catch(Throwable t)
+                {
+                    mLog.error("Error changing tuner service state", t);
+                    showError("Unable to change the service state for this tuner.  See the application log for " +
+                        "details.");
+                }
+            });
+        }
+
+        return mServiceButton;
+    }
+
+    /**
+     * Updates the service button label to match the tuner's current state.
+     */
+    protected void updateServiceControls()
+    {
+        DiscoveredTuner discoveredTuner = getDiscoveredTuner();
+        boolean serviceAvailable = TunerServiceManager.getInstance() != null && discoveredTuner != null;
+        getServiceButton().setDisable(!serviceAvailable);
+
+        boolean inService = !serviceAvailable || discoveredTuner.isInService();
+        getServiceButton().setText(inService ? BUTTON_STATUS_IN_SERVICE : BUTTON_STATUS_OUT_OF_SERVICE);
+        getServiceButton().getStyleClass().remove("tuner-out-of-service");
+
+        if(!inService)
+        {
+            getServiceButton().getStyleClass().add("tuner-out-of-service");
+        }
+
+        getServiceButton().setTooltip(new Tooltip(inService ?
+            "Tuner is IN SERVICE - channels can be assigned to it.  Click to take it out of service." :
+            "Tuner is OUT OF SERVICE - no channels will be assigned to it.  Click to return it to service."));
+    }
+
+    /**
+     * Confirms and applies a change to the tuner's in-service state.
+     */
+    private void handleServiceButton()
+    {
+        DiscoveredTuner discoveredTuner = getDiscoveredTuner();
+        TunerServiceManager serviceManager = TunerServiceManager.getInstance();
+
+        if(discoveredTuner == null || serviceManager == null)
+        {
+            return;
+        }
+
+        String name = discoveredTuner.hasTuner() ? discoveredTuner.getTuner().getPreferredName() : discoveredTuner.getId();
+
+        if(discoveredTuner.isInService())
+        {
+            List<Channel> running = serviceManager.getRunningChannels(discoveredTuner);
+            StringBuilder sb = new StringBuilder();
+            sb.append("Tuner: ").append(name).append("\n\n");
+            sb.append("No channels will be assigned to this tuner until you return it to service.  The tuner keeps ");
+            sb.append("running, so the spectrum display, recording, and the frequency and sample rate controls all ");
+            sb.append("continue to work.\n\n");
+
+            if(running.isEmpty())
+            {
+                sb.append("No channels are currently running on this tuner.");
+            }
+            else
+            {
+                sb.append(running.size()).append(" running channel(s) will be stopped");
+                sb.append(", and remembered so they can be restarted when the tuner returns to service:\n");
+                sb.append(channelList(running));
+            }
+
+            ButtonType takeOut = new ButtonType("Take Out of Service", ButtonBar.ButtonData.OK_DONE);
+            Optional<ButtonType> choice = confirm(Alert.AlertType.WARNING, "Confirm Tuner Out of Service",
+                "Take this tuner out of service?", sb.toString(), takeOut, ButtonType.CANCEL);
+
+            if(choice.isPresent() && choice.get() == takeOut)
+            {
+                serviceManager.takeOutOfService(discoveredTuner);
+                saveConfiguration();
+                updateServiceControls();
+                getTunerManager().getDiscoveredTunerModel().updateServiceState(discoveredTuner);
+            }
+        }
+        else
+        {
+            List<Channel> stopped = serviceManager.getStoppedChannels(discoveredTuner);
+            StringBuilder sb = new StringBuilder();
+            sb.append("Tuner: ").append(name).append("\n\n");
+            sb.append("Channels will again be assigned to this tuner.\n\n");
+
+            if(stopped.isEmpty())
+            {
+                sb.append("No stopped channels are remembered for this tuner.");
+                ButtonType returnToService = new ButtonType("Return to Service", ButtonBar.ButtonData.OK_DONE);
+                Optional<ButtonType> choice = confirm(Alert.AlertType.CONFIRMATION, "Confirm Tuner In Service",
+                    "Return this tuner to service?", sb.toString(), returnToService, ButtonType.CANCEL);
+
+                if(choice.isPresent() && choice.get() == returnToService)
+                {
+                    serviceManager.returnToService(discoveredTuner, false);
+                }
+                else
+                {
+                    return;
+                }
+            }
+            else
+            {
+                sb.append(stopped.size()).append(" channel(s) were stopped when this tuner went ");
+                sb.append("out of service:\n").append(channelList(stopped));
+                sb.append("\nRestart them now?");
+                ButtonType restart = new ButtonType("Return and Restart Channels", ButtonBar.ButtonData.OK_DONE);
+                ButtonType noRestart = new ButtonType("Return Without Restarting", ButtonBar.ButtonData.OTHER);
+                Optional<ButtonType> choice = confirm(Alert.AlertType.CONFIRMATION, "Confirm Tuner In Service",
+                    "Return this tuner to service?", sb.toString(), restart, noRestart, ButtonType.CANCEL);
+
+                if(choice.isPresent() && choice.get() == restart)
+                {
+                    serviceManager.returnToService(discoveredTuner, true);
+                }
+                else if(choice.isPresent() && choice.get() == noRestart)
+                {
+                    serviceManager.returnToService(discoveredTuner, false);
+                }
+                else
+                {
+                    return;
+                }
+            }
+
+            saveConfiguration();
+            updateServiceControls();
+            getTunerManager().getDiscoveredTunerModel().updateServiceState(discoveredTuner);
+        }
+    }
+
+    /**
+     * Shows a confirmation dialog where Cancel is the default button, so that pressing Enter never changes anything.
+     */
+    private Optional<ButtonType> confirm(Alert.AlertType type, String title, String header, String content,
+                                         ButtonType... buttons)
+    {
+        Alert alert = new Alert(type, content, buttons);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        alert.getDialogPane().setPrefWidth(buttons.length > 2 ? 680 : 520);
+
+        if(getWindow() != null)
+        {
+            alert.initOwner(getWindow());
+        }
+
+        for(ButtonType buttonType: buttons)
+        {
+            Node button = alert.getDialogPane().lookupButton(buttonType);
+
+            if(button instanceof Button b)
+            {
+                b.setDefaultButton(buttonType == ButtonType.CANCEL);
+            }
+        }
+
+        return alert.showAndWait();
+    }
+
+    /**
+     * Formats a channel list for display in a confirmation dialog, capped so a long list stays readable.
+     */
+    private static String channelList(List<Channel> channels)
+    {
+        StringBuilder sb = new StringBuilder();
+        int shown = 0;
+
+        for(Channel channel : channels)
+        {
+            if(shown >= 12)
+            {
+                sb.append("  \u2022 ... and ").append(channels.size() - shown).append(" more\n");
+                break;
+            }
+
+            sb.append("  \u2022 ").append(channel.getName());
+
+            if(channel.isTrafficChannel())
+            {
+                sb.append(" (traffic channel)");
+            }
+
+            sb.append("\n");
+            shown++;
+        }
+
+        return sb.toString();
     }
 
     /**
