@@ -26,7 +26,6 @@ import io.github.dsheirer.dsp.filter.fir.FIRFilterSpecification;
 import io.github.dsheirer.dsp.filter.fir.real.IRealFilter;
 import io.github.dsheirer.dsp.filter.fir.remez.RemezFIRFilterDesigner;
 import io.github.dsheirer.module.decode.Decoder;
-import io.github.dsheirer.module.decode.IAuxiliaryDecoder;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.squelch.SquelchCodeState;
 import io.github.dsheirer.sample.Listener;
@@ -53,7 +52,7 @@ import java.util.Set;
  * channel level DCS detection and muting. This determination is made during instantiation.
  *
  */
-public class DCSDecoder extends Decoder implements IRealBufferListener, Listener<float[]>, IAuxiliaryDecoder
+public class DCSDecoder extends Decoder implements IRealBufferListener, Listener<float[]>
 {
     private static final Logger mLog = LoggerFactory.getLogger(DCSDecoder.class);
     //Slope calculation sumXX value is always the same for 59 evenly spaced samples
