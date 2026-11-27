@@ -67,6 +67,9 @@ public class DuplicateCallDetectionTest
         audioSegment2.addIdentifier(APCO25RadioIdentifier.createFrom(2));
         audioSegment1.addAudio(new float[2]);
 
+        audioSegment1.recordAudioProperty().set(true);
+        audioSegment2.recordAudioProperty().set(true);
+
         boolean testByTalkgroup = true;
         boolean testByRadio = false;
 
@@ -122,6 +125,9 @@ public class DuplicateCallDetectionTest
         audioSegment2.addIdentifier(APCO25Talkgroup.create(2));
         audioSegment2.addIdentifier(APCO25RadioIdentifier.createFrom(2));
         audioSegment1.addAudio(new float[2]);
+
+        audioSegment1.recordAudioProperty().set(true);
+        audioSegment2.recordAudioProperty().set(true);
 
         boolean testByTalkgroup = true;
         boolean testByRadio = true;

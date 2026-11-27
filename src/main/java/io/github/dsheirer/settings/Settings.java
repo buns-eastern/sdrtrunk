@@ -34,6 +34,7 @@ import io.github.dsheirer.settings.network.ImbeStreamSettings;
 import io.github.dsheirer.settings.network.NetworkStreamSettings;
 import io.github.dsheirer.settings.network.PcmStreamSettings;
 import io.github.dsheirer.settings.network.StandaloneStreamSettings;
+import io.github.dsheirer.settings.duplicate.IssiCallMergeSettings;
 import io.github.dsheirer.settings.network.HeartbeatSettings;
 import io.github.dsheirer.settings.network.StreamHeartbeatSettings;
 import io.github.dsheirer.settings.network.ChannelHeartbeatSettings;
@@ -76,6 +77,7 @@ public class Settings implements Listener<SettingsType>
     private ImbeStreamSettings mImbeStreamSettings;
     private PcmStreamSettings mPcmStreamSettings;
     private StandaloneStreamSettings mStandaloneStreamSettings;
+    private IssiCallMergeSettings mIssiCallMergeSettings;
     private HeartbeatSettings mHeartbeatSettings;
     private StreamHeartbeatSettings mStreamHeartbeatSettings;
     private ChannelHeartbeatSettings mChannelHeartbeatSettings;
@@ -222,6 +224,14 @@ public class Settings implements Listener<SettingsType>
     }
 
     /**
+     * ISSI call merge settings
+     */
+    public IssiCallMergeSettings getIssiCallMergeSettings()
+    {
+        return mIssiCallMergeSettings;
+    }
+
+    /**
      * Heartbeat settings
      */
     public HeartbeatSettings getHeartbeatSettings()
@@ -311,6 +321,7 @@ public class Settings implements Listener<SettingsType>
         mImbeStreamSettings = new ImbeStreamSettings(this::receive);
         mPcmStreamSettings = new PcmStreamSettings(this::receive);
         mStandaloneStreamSettings = new StandaloneStreamSettings(this::receive);
+        mIssiCallMergeSettings = new IssiCallMergeSettings(this::receive);
         mHeartbeatSettings = new HeartbeatSettings(this::receive);
         mStreamHeartbeatSettings = new StreamHeartbeatSettings(this::receive);
         mChannelHeartbeatSettings = new ChannelHeartbeatSettings(this::receive);

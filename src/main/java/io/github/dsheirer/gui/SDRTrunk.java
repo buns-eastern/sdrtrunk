@@ -206,6 +206,12 @@ public class SDRTrunk implements Listener<TunerEvent>
 
         DuplicateCallDetector duplicateCallDetector = new DuplicateCallDetector(mSettings);
 
+        //ISSI Call Merge must run before the duplicate detector and streaming so a matched source call is
+        //re-pointed to its primary identity first.  Inert unless the feature is enabled with entries configured.
+        io.github.dsheirer.audio.IssiCallMergeManager issiCallMergeManager = new io.github.dsheirer.audio.IssiCallMergeManager(
+            mSettings, mPlaylistManager.getAliasModel(), mPlaylistManager.getChannelModel());
+        mPlaylistManager.getChannelProcessingManager().addAudioSegmentListener(issiCallMergeManager);
+
         mPlaylistManager.getChannelProcessingManager().addAudioSegmentListener(duplicateCallDetector);
         mPlaylistManager.getChannelProcessingManager().addAudioSegmentListener(audioPlaybackManager);
         mPlaylistManager.getChannelProcessingManager().addAudioSegmentListener(mAudioRecordingManager);

@@ -25,6 +25,7 @@ package io.github.dsheirer.settings;
 public enum SettingsType
 {
     APPLICATION,
+    AUDIO_ISSI_CALL_MERGE,
     CALIBRATION,
     DECODE_EVENT,
     DIRECTORY,
