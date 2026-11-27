@@ -568,6 +568,10 @@ public class SDRTrunk implements Listener<TunerEvent>
      */
     public static void main(String[] args)
     {
+        //A restore staged from Settings > Backup & Migrate is applied here, before any settings, playlist,
+        //tuner settings or icons are loaded
+        io.github.dsheirer.settings.backup.BackupManager.applyPendingRestore();
+
         String version = SDRTrunk.class.getPackage().getImplementationVersion();
         Splash.showVersion(version != null ? "v" + version : null);
 
