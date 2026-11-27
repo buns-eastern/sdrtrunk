@@ -287,6 +287,17 @@ public class SDRTrunk implements Listener<TunerEvent>
                     mMainWindow.showDuplicateLibraries(DuplicateLibraryDetector.describe(duplicateLibraries),
                         String.valueOf(DuplicateLibraryDetector.getFolder(duplicateLibraries)));
                 }
+
+                //"Close SDRTrunk Now" after staging a restore closes the application the normal way
+                io.github.dsheirer.gui.settings.backup.BackupSettingsPage.setCloseApplicationHandler(() ->
+                    Platform.runLater(() -> mMainWindow.exitApplication()));
+
+                //Result of a restore that was applied at this start
+                if(io.github.dsheirer.gui.settings.backup.BackupSettingsPage.hasStartupResults())
+                {
+                    Platform.runLater(() -> io.github.dsheirer.gui.settings.backup.BackupSettingsPage
+                        .showStartupResults(mMainWindow.getStage()));
+                }
             }
             catch(Exception e)
             {

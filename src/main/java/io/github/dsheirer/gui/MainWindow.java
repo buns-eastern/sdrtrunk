@@ -1211,6 +1211,14 @@ public class MainWindow
 
 
     /**
+     * Closes the application the same way as closing the main window.  Call on the JavaFX thread.
+     */
+    public void exitApplication()
+    {
+        exit();
+    }
+
+    /**
      * Hides the window and shuts down the application on a background thread, since stopping the tuners can block.
      */
     private void exit()

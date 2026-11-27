@@ -20,6 +20,7 @@
 package io.github.dsheirer.gui.settings;
 
 import io.github.dsheirer.gui.settings.application.AppearanceSettingsPage;
+import io.github.dsheirer.gui.settings.backup.BackupSettingsPage;
 import io.github.dsheirer.gui.settings.application.GeneralSettingsPage;
 import io.github.dsheirer.gui.settings.calibration.PerformanceSettingsPage;
 import io.github.dsheirer.gui.settings.call.CallManagementSettingsPage;
@@ -77,6 +78,10 @@ public enum SettingsPageType
     STORAGE(Group.DATA, "Storage", FontAwesome.FOLDER_OPEN,
         "Where sdrtrunk stores its files, and disk usage limits.",
         context -> new StorageSettingsPage(context.settings())),
+    BACKUP(Group.DATA, "Backup & Migrate", FontAwesome.ARCHIVE,
+        "Save all of your SDRTrunk settings into one backup file. Use it to restore this computer, or to move your " +
+            "setup to another computer.",
+        context -> new BackupSettingsPage(context.settings())),
 
     RADIO_REFERENCE(Group.SERVICES, "Radio Reference", FontAwesome.GLOBE,
         "Your Radio Reference account, imports and alias list updates.",

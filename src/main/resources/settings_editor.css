@@ -314,3 +314,50 @@
 {
     -fx-fill: ladder(-fx-background, #ff7a7a 49%, #cc0000 50%);
 }
+
+/* Boxed warning, primary button and plain text used on the Backup & Migrate page and its dialogs */
+
+.settings-editor .settings-warning-box
+{
+    -fx-background-color: ladder(-fx-background, #e0b050 49%, #b08a00 50%),
+        ladder(-fx-background, derive(-fx-background, 4%) 49%, derive(-fx-background, 45%) 50%);
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8, 7;
+    -fx-padding: 10 14 10 14;
+}
+
+.settings-editor .settings-warning-title
+{
+    -fx-font-weight: bold;
+    -fx-fill: ladder(-fx-background, #e0b050 49%, #8a6d00 50%);
+}
+
+.settings-editor .settings-text
+{
+    -fx-fill: -fx-text-base-color;
+}
+
+.settings-editor .settings-primary-button
+{
+    -fx-base: -fx-accent;
+    -fx-background-color: derive(-fx-accent, -25%), -fx-accent;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4, 3;
+    -fx-font-weight: bold;
+    -fx-text-fill: white;
+}
+
+.settings-editor .settings-primary-button:hover
+{
+    -fx-background-color: derive(-fx-accent, -25%), derive(-fx-accent, 12%);
+}
+
+.settings-editor .settings-primary-button:disabled
+{
+    -fx-opacity: 0.5;
+}
+
+.settings-editor .settings-primary-button .text
+{
+    -fx-fill: white;
+}
