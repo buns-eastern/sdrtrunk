@@ -95,6 +95,10 @@ public class EventLogManager
         {
             systemName = channel.getName();
         }
+        if(systemName == null || systemName.trim().isEmpty())
+        {
+            systemName = "Unknown";
+        }
         String safeSystemName = StringUtils.replaceIllegalCharacters(systemName.trim());
         RollingSystemEventLogger logger = mSystemLoggers.computeIfAbsent(safeSystemName,
             name -> new RollingSystemEventLogger(mSettings.getDirectorySettings().getDirectoryEventLog(), name));

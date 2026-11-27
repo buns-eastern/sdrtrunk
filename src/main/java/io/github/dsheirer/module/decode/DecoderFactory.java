@@ -682,6 +682,7 @@ public class DecoderFactory
     {
         String systemName = channel.getSystem();
         if(systemName == null || systemName.trim().isEmpty()) { systemName = channel.getName(); }
+        if(systemName == null || systemName.trim().isEmpty()) { systemName = "Unknown"; }
         return StringUtils.replaceIllegalCharacters(systemName.trim());
     }
 
