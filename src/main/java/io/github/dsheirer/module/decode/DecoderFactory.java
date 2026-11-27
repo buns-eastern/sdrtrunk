@@ -550,24 +550,25 @@ public class DecoderFactory
         DecodeConfigNBFM decodeConfigNBFM = (DecodeConfigNBFM)decodeConfig;
         NBFMDecoderState decoderState = new NBFMDecoderState(channel.getName(), decodeConfigNBFM);
         NBFMDecoder decoder = new NBFMDecoder(decodeConfigNBFM);
+        decoder.setDecoderState(decoderState);
+
+        //MDC squawk removal only applies when the MDC1200 additional decoder is also running on this channel
+        boolean mdcDecoder = channel.getAuxDecodeConfiguration() != null &&
+            channel.getAuxDecodeConfiguration().getAuxDecoders().contains(DecoderType.MDC1200);
+        decoder.setMdcSquawkRemoval(decodeConfigNBFM.isMdcSquawkRemoval() && mdcDecoder);
         modules.add(decoder);
         modules.add(decoderState);
+
+        //The NBFM decoder applies its own audio filter chain (de-emphasis, hiss reduction, etc.).  The optional
+        //high-pass audio filter is the same 300 Hz filter as before.
         List<AbstractAudioFilter> filterList = new ArrayList<>();
         if(decodeConfigNBFM.isAudioFilter())
         {
             filterList.add(new HighPassAudioFilter());
         }
-        if(decodeConfigNBFM.getDeemphasis() != null && decodeConfigNBFM.getDeemphasis() != DeemphasisMode.NONE)
-        {
-            float cutoff = (float) decodeConfigNBFM.getDeemphasis().getCutoff();
-            filterList.add(new DeemphasisFilter(8000, cutoff, 1.0f));
-        }
-        if(decodeConfigNBFM.isAudioALC())
-        {
-            filterList.add(new AudioGainFilter(1, 10, 0.90f));
-        }
-
-        modules.add(new AudioModule(aliasList, 0, 60000, filterList));
+        AudioModule audioModule = new AudioModule(aliasList, 0, 60000, filterList);
+        audioModule.setAudioHangtimeMs(decodeConfigNBFM.getAudioHangtimeMs());
+        modules.add(audioModule);
     }
 
     /**

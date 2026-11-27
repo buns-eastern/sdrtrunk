@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2026 Dennis Sheirer
+ * Copyright (C) 2014-2023 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,26 +19,26 @@
 
 package io.github.dsheirer.module.decode.nbfm;
 
-import io.github.dsheirer.module.decode.event.ActivitySummary;
 import io.github.dsheirer.identifier.Form;
 import io.github.dsheirer.identifier.Identifier;
 import io.github.dsheirer.identifier.IdentifierClass;
 import io.github.dsheirer.identifier.Role;
 import io.github.dsheirer.identifier.string.SimpleStringIdentifier;
-import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.analog.AnalogDecoderState;
-import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSMessage;
-import io.github.dsheirer.module.decode.squelch.dcs.DCSMessage;
-import io.github.dsheirer.module.decode.squelch.SquelchDecoderConfig;
-import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSCode;
-import io.github.dsheirer.module.decode.squelch.dcs.DCSCode;
+import io.github.dsheirer.module.decode.config.ChannelToneFilter;
+import io.github.dsheirer.module.decode.ctcss.CTCSSCode;
+import io.github.dsheirer.module.decode.dcs.DCSCode;
+import io.github.dsheirer.module.decode.event.ActivitySummary;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * NBFM decoder state
+ */
 /**
  * NBFM decoder state - tracks channel tone filtering configuration and detected tones
  */
@@ -49,8 +49,8 @@ public class NBFMDecoderState extends AnalogDecoderState
     private Identifier mTalkgroupIdentifier;
 
     // Tone filter configuration (from DecodeConfigNBFM)
-    private boolean mSquelchDecoderEnabled = false;
-    private List<SquelchDecoderConfig> mConfiguredSquelchDecoders = new ArrayList<>();
+    private boolean mToneFilterEnabled = false;
+    private List<ChannelToneFilter> mConfiguredFilters = new ArrayList<>();
 
     // Current status
     private volatile String mToneStatus = "No tone detected";
@@ -69,11 +69,19 @@ public class NBFMDecoderState extends AnalogDecoderState
         mChannelNameIdentifier = new SimpleStringIdentifier(mChannelName, IdentifierClass.CONFIGURATION, Form.CHANNEL_NAME, Role.ANY);
         mTalkgroupIdentifier = new NBFMTalkgroup(decodeConfig.getTalkgroup());
 
-        mSquelchDecoderEnabled = decodeConfig.isSquelchDecoderEnabled();
-        if(mSquelchDecoderEnabled && decodeConfig.getSquelchDecoders() != null)
+        mToneFilterEnabled = decodeConfig.isToneFilterEnabled();
+        if(mToneFilterEnabled && decodeConfig.getToneFilters() != null)
         {
-            mConfiguredSquelchDecoders.addAll(decodeConfig.getSquelchDecoders());
+            mConfiguredFilters.addAll(decodeConfig.getToneFilters());
         }
+    }
+
+    /**
+     * Returns the channel name for this decoder state.
+     */
+    public String getChannelName()
+    {
+        return mChannelName;
     }
 
     @Override
@@ -95,9 +103,9 @@ public class NBFMDecoderState extends AnalogDecoderState
     }
 
     /**
-     * Called by IMessage receive when a matching CTCSS tone is detected (allowed)
+     * Called by NBFMDecoder when a matching CTCSS tone is detected (allowed)
      */
-    public void setAcceptedCTCSS(CTCSSCode code)
+    public void setDetectedCTCSS(CTCSSCode code)
     {
         if(code != null)
         {
@@ -107,9 +115,9 @@ public class NBFMDecoderState extends AnalogDecoderState
     }
 
     /**
-     * Called by IMessage receive when a matching DCS code is detected (allowed)
+     * Called by NBFMDecoder when a matching DCS code is detected (allowed)
      */
-    public void setAcceptedDCS(DCSCode code)
+    public void setDetectedDCS(DCSCode code)
     {
         if(code != null)
         {
@@ -119,7 +127,7 @@ public class NBFMDecoderState extends AnalogDecoderState
     }
 
     /**
-     * Called by IMessage receive when a non-matching CTCSS tone is detected (rejected)
+     * Called by NBFMDecoder when a non-matching CTCSS tone is detected (rejected)
      */
     public void setRejectedCTCSS(CTCSSCode code)
     {
@@ -131,7 +139,7 @@ public class NBFMDecoderState extends AnalogDecoderState
     }
 
     /**
-     * Called by IMessage receive when a non-matching DCS code is detected (rejected)
+     * Called by NBFMDecoder when a non-matching DCS code is detected (rejected)
      */
     public void setRejectedDCS(DCSCode code)
     {
@@ -143,12 +151,11 @@ public class NBFMDecoderState extends AnalogDecoderState
     }
 
     /**
-     * Called by IMessage receive when tone is lost
+     * Called by NBFMDecoder when tone is lost
      */
     public void setToneLost()
     {
         mToneStatus = "No tone detected";
-        getIdentifierCollection().remove(Form.TONE);
     }
 
     private void incrementCount(String toneLabel, boolean accepted)
@@ -158,42 +165,35 @@ public class NBFMDecoderState extends AnalogDecoderState
             int[] counts = mToneCounts.computeIfAbsent(toneLabel, k -> new int[]{0, 0});
             if(accepted)
             {
-                if (counts[0] < Integer.MAX_VALUE)
-                {
-                    counts[0]++;
-                }
+                counts[0]++;
             }
             else
             {
-                if(counts[1] < Integer.MAX_VALUE)
-                {
-                    counts[1]++;
-                }
+                counts[1]++;
             }
         }
     }
 
-    /**
-     *  Provides information for UI display in Now Playing panel.
-     */
     @Override
     public String getActivitySummary()
     {
         ActivitySummary summary = new ActivitySummary("NBFM");
-        summary.section("Squelch Decoder");
-        summary.field("Status", mSquelchDecoderEnabled ? "Enabled" : "Disabled");
+        summary.section("Tone Filter");
+        summary.field("Status", mToneFilterEnabled ? "Enabled" : "Disabled");
 
-        if(mSquelchDecoderEnabled && !mConfiguredSquelchDecoders.isEmpty())
+        if(mToneFilterEnabled && !mConfiguredFilters.isEmpty())
         {
-            summary.field("Configured Decoder", mConfiguredSquelchDecoders.get(0).getDisplayString());
+            summary.field("Configured Filter", mConfiguredFilters.get(0).getDisplayString());
         }
+
+        summary.field("Current Status", mToneStatus);
 
         synchronized(mToneCounts)
         {
             if(!mToneCounts.isEmpty())
             {
-                summary.section("Detected Codes");
-                ActivitySummary.Table table = summary.table("Code", "Status", "Count");
+                summary.section("Detected Tones");
+                ActivitySummary.Table table = summary.table("Tone", "Status", "Count");
 
                 for(Map.Entry<String, int[]> entry : mToneCounts.entrySet())
                 {
@@ -202,54 +202,17 @@ public class NBFMDecoderState extends AnalogDecoderState
 
                     if(accepted > 0)
                     {
-                        table.row(entry.getKey(), "Allowed", accepted < Integer.MAX_VALUE ? accepted : ">Max value");
+                        table.row(entry.getKey(), "Allowed", accepted);
                     }
-                    else
+
+                    if(rejected > 0)
                     {
-                        table.row(entry.getKey(), "Rejected", rejected < Integer.MAX_VALUE ? rejected : ">Max value");
+                        table.row(entry.getKey(), "Rejected", rejected);
                     }
                 }
             }
         }
 
         return summary.toString();
-    }
-
-    /**
-     * Listener for IMessages originating in NBFM decoder. If the squelch decoders are enabled,
-     * the message contains information on decoded squelch code (CTCSS/DCS) which is added to the
-     * identifier collection. A tally is collected for codes accepted and rejected for use
-     * in getActivitySummary.
-     *
-     */
-    @Override
-    public void receive(IMessage message)
-    {
-        if(message instanceof CTCSSMessage ctcssMessage)
-        {
-            getIdentifierCollection().update(ctcssMessage.getIdentifiers());
-            if (ctcssMessage.getCodeState() != null)
-            {
-                switch (ctcssMessage.getCodeState())
-                {
-                    case ACCEPTED -> setAcceptedCTCSS(ctcssMessage.getCTCSSCode());
-                    case REJECTED -> setRejectedCTCSS(ctcssMessage.getCTCSSCode());
-                    case LOST -> setToneLost();
-                }
-            }
-        }
-        if(message instanceof DCSMessage dcsMessage)
-        {
-            getIdentifierCollection().update(dcsMessage.getIdentifiers());
-            if (dcsMessage.getCodeState() != null)
-            {
-                switch (dcsMessage.getCodeState())
-                {
-                    case ACCEPTED -> setAcceptedDCS(dcsMessage.getDCSCode());
-                    case REJECTED -> setRejectedDCS(dcsMessage.getDCSCode());
-                    case LOST -> setToneLost();
-                }
-            }
-        }
     }
 }

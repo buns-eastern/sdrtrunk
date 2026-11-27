@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2026 Dennis Sheirer
+ * Copyright (C) 2014-2025 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,46 +22,64 @@ import io.github.dsheirer.audio.squelch.SquelchState;
 import io.github.dsheirer.channel.state.DecoderStateEvent;
 import io.github.dsheirer.channel.state.IDecoderStateEventProvider;
 import io.github.dsheirer.channel.state.State;
-import io.github.dsheirer.dsp.filter.ChannelFilterDesigner;
 import io.github.dsheirer.dsp.filter.FilterFactory;
 import io.github.dsheirer.dsp.filter.decimate.DecimationFilterFactory;
 import io.github.dsheirer.dsp.filter.decimate.IRealDecimationFilter;
+import io.github.dsheirer.dsp.filter.design.FilterDesignException;
+import io.github.dsheirer.dsp.filter.fir.FIRFilterSpecification;
 import io.github.dsheirer.dsp.filter.fir.real.IRealFilter;
+import io.github.dsheirer.dsp.filter.nbfm.NBFMAudioFilters;
 import io.github.dsheirer.dsp.filter.resample.RealResampler;
 import io.github.dsheirer.dsp.fm.FmDemodulatorFactory;
 import io.github.dsheirer.dsp.fm.IDemodulator;
 import io.github.dsheirer.dsp.squelch.INoiseSquelchController;
 import io.github.dsheirer.dsp.squelch.NoiseSquelch;
 import io.github.dsheirer.dsp.squelch.NoiseSquelchState;
+import io.github.dsheirer.dsp.squelch.MdcSquawkRemover;
+import io.github.dsheirer.dsp.squelch.SquelchTailRemover;
+import io.github.dsheirer.dsp.window.WindowType;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.SquelchControlDecoder;
-import io.github.dsheirer.module.decode.squelch.SquelchCodeState;
-import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSMessage;
-import io.github.dsheirer.module.decode.squelch.dcs.DCSDecoder;
-import io.github.dsheirer.module.decode.squelch.dcs.DCSMessage;
-import io.github.dsheirer.module.decode.squelch.SquelchDecoderConfig;
-import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSCode;
-import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSDetector;
-import io.github.dsheirer.module.decode.squelch.dcs.DCSCode;
+import io.github.dsheirer.module.decode.config.ChannelToneFilter;
+import io.github.dsheirer.module.decode.ctcss.CTCSSCode;
+import io.github.dsheirer.module.decode.dcs.DCSCode;
 import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.sample.complex.ComplexSamples;
 import io.github.dsheirer.sample.complex.IComplexSamplesListener;
+import io.github.dsheirer.sample.real.IAuxiliaryAudioProvider;
 import io.github.dsheirer.sample.real.IRealBufferProvider;
 import io.github.dsheirer.source.ISourceEventListener;
 import io.github.dsheirer.source.SourceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
 
 /**
- * NBFM decoder with integrated noise squelch, channel-level squelch tone decoders.
+ * NBFM decoder with integrated noise squelch, CTCSS tone filtering, and squelch tail removal.
  *
+ * Demodulates complex sample buffers and feeds unfiltered, demodulated audio to Noise Squelch.
+ * Squelch operates on the noise level with open and close thresholds to pass low-noise audio
+ * and block high-noise audio.  Audio is filtered and resampled to 8 kHz for downstream consumers.
+ *
+ * When CTCSS tone filtering is enabled, the resampled audio is analyzed by a CTCSSDetector.
+ * When DCS code filtering is enabled, the resampled audio is analyzed by a DCSDetector.
+ * Audio is only passed downstream when the configured tone/code is confirmed present.
+ * This prevents hearing distant/interfering signals on the same frequency that use a
+ * different CTCSS tone or DCS code. The channel goes fully idle when the wrong tone/code
+ * is detected — just like a real radio with tone squelch.
+ *
+ * When squelch tail removal is enabled, a SquelchTailRemover buffers audio and discards
+ * the trailing noise burst that occurs when a transmitter drops carrier.
  */
 public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventListener, IComplexSamplesListener,
-        Listener<ComplexSamples>, IRealBufferProvider, IDecoderStateEventProvider, INoiseSquelchController
+        Listener<ComplexSamples>, IRealBufferProvider, IAuxiliaryAudioProvider, IDecoderStateEventProvider, INoiseSquelchController
 {
     private final static Logger mLog = LoggerFactory.getLogger(NBFMDecoder.class);
+
+    private NBFMDecoderState mDecoderState;
     private static final double DEMODULATED_AUDIO_SAMPLE_RATE = 8000.0;
     private final IDemodulator mDemodulator = FmDemodulatorFactory.getFmDemodulator();
     private final SourceEventProcessor mSourceEventProcessor = new SourceEventProcessor();
@@ -71,15 +89,46 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
     private IRealDecimationFilter mIDecimationFilter;
     private IRealDecimationFilter mQDecimationFilter;
     private Listener<float[]> mResampledBufferListener;
+    private Listener<float[]> mAuxiliaryAudioListener;
     private Listener<DecoderStateEvent> mDecoderStateEventListener;
     private RealResampler mResampler;
     private final double mChannelBandwidth;
-    private boolean mSquelchDecoderEnabled = false;
-    private List<CTCSSCode> mConfiguredCTCSSCodes = new ArrayList<>();
-    private Set<DCSCode> mConfiguredDCSCodes = new HashSet<>();
-    private CTCSSDetector mCTCSSDetector = null;
-    private DCSDecoder mDCSDetector = null;
-    private boolean mMute = true;
+
+    // CTCSS/DCS tone filtering
+    private final boolean mToneFilterEnabled;
+    private final ChannelToneFilter.ToneType mToneFilterType;
+    private final Set<CTCSSCode> mTargetCTCSSCodes;
+    private final Set<DCSCode> mTargetDCSCodes;
+    private CTCSSDetector mCTCSSDetector;
+    private DCSDetector mDCSDetector;
+    private volatile boolean mToneMatch = false;
+
+    /**
+     * Holdover period (ms) for tone match across brief squelch closures.
+     * When noise squelch flutters closed and re-opens within this window,
+     * the previously confirmed tone match is preserved — avoiding a full
+     * re-detection delay (225ms+ for CTCSS, 340ms+ for DCS) on each flutter.
+     * This mimics real radio behavior where tone squelch has a short holdover.
+     */
+    private static final long TONE_HOLDOVER_MS = 500;
+    private volatile long mLastToneMatchTime = 0;
+
+    // Channel identification for log messages
+    private volatile String mChannelLabel = "";
+    private volatile long mChannelFrequencyHz = 0;
+
+    // Squelch tail/head removal
+    private final boolean mSquelchTailRemovalEnabled;
+    private final int mSquelchTailRemovalMs;
+    private final int mSquelchHeadRemovalMs;
+    private SquelchTailRemover mSquelchTailRemover;
+
+    // MDC-1200 squawk removal (250 ms audio delay, MDC bursts cut out)
+    private MdcSquawkRemover mMdcSquawkRemover;
+
+    // VoxSend audio filter chain (low-pass, de-emphasis, bass boost, voice enhancement, noise gate)
+    private NBFMAudioFilters mAudioFilters;
+    private final DecodeConfigNBFM mNBFMConfig;
 
     /**
      * Constructs an instance
@@ -90,112 +139,252 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
     {
         super(config);
 
+        //Save config reference for audio filter initialization (deferred until sample rate is known)
+        mNBFMConfig = config;
+
         //Save channel bandwidth to setup channel baseband filter.
         mChannelBandwidth = config.getBandwidth().getValue();
         mNoiseSquelch = new NoiseSquelch(config.getSquelchNoiseOpenThreshold(), config.getSquelchNoiseCloseThreshold(),
                 config.getSquelchHysteresisOpenThreshold(), config.getSquelchHysteresisCloseThreshold());
 
-         // Configure squelch code decoders
-        configureSquelchDecoders(config);
+        // Extract CTCSS/DCS tone filter configuration
+        mToneFilterEnabled = config.hasToneFiltering();
+        if(mToneFilterEnabled)
+        {
+            mTargetCTCSSCodes = extractCTCSSCodes(config.getToneFilters());
+            mTargetDCSCodes = extractDCSCodes(config.getToneFilters());
 
-        // Audio pipeline: NoiseSquelch -> Resampler -> CTCSS or DCS -> 1200 baud decoders -> HPF -> De-emphasis -> gain -> Output
+            // Determine which type of filter is configured
+            if(!mTargetCTCSSCodes.isEmpty())
+            {
+                mToneFilterType = ChannelToneFilter.ToneType.CTCSS;
+                mLog.info("[{}] CTCSS tone filtering enabled with {} target code(s)", mChannelLabel, mTargetCTCSSCodes.size());
+            }
+            else if(!mTargetDCSCodes.isEmpty())
+            {
+                mToneFilterType = ChannelToneFilter.ToneType.DCS;
+                mLog.info("[{}] DCS code filtering enabled with {} target code(s)", mChannelLabel, mTargetDCSCodes.size());
+            }
+            else
+            {
+                mToneFilterType = null;
+                mLog.warn("[{}] Tone filtering enabled but no valid CTCSS or DCS codes configured", mChannelLabel);
+            }
+        }
+        else
+        {
+            mTargetCTCSSCodes = null;
+            mTargetDCSCodes = null;
+            mToneFilterType = null;
+        }
 
+        // Extract squelch tail removal configuration
+        mSquelchTailRemovalEnabled = config.isSquelchTailRemovalEnabled();
+        mSquelchTailRemovalMs = config.getSquelchTailRemovalMs();
+        mSquelchHeadRemovalMs = config.getSquelchHeadRemovalMs();
+
+        //Send squelch controlled audio to the resampler.
+        //Only notify call continuation if tone filter is not active, or if tone matches.
+        //This makes the channel behave like a real radio: wrong tone = fully squelched/idle.
+        //PR #2384 fix: pass lastBatch=true when squelch is closing so the resampler
+        //zero-pads and flushes its output buffer, preventing BufferOverflowException.
         mNoiseSquelch.setAudioListener(audio -> {
-            // if squelch is closing (it hasn't propagated yet to mute the audio)
-            //  call the resampler with lastBatch set to true. This will zero pad the input buffer and ensure
-            //  the output buffer gets emptied.
             if(mNoiseSquelch.isSquelched())
             {
                 mResampler.resample(audio, true);
             }
             else
             {
-                mResampler.resample(audio);     // this method will set lastBatch to false
-                if (!mSquelchDecoderEnabled)
+                mResampler.resample(audio);
+
+                // Only signal call activity if tone matches (or no tone filter configured)
+                if(!mToneFilterEnabled || mToneMatch)
                 {
                     notifyCallContinuation();
                 }
             }
         });
 
-        //Notify the decoder state of call starts and ends
+        //Notify the decoder state of call starts and ends, and manage tail remover + tone reset.
+        //When tone filtering is enabled, we defer the call start until the correct tone is confirmed.
+        //The channel stays idle until the CTCSS detector confirms the right tone — just like a real radio.
         mNoiseSquelch.setSquelchStateListener(squelchState -> {
-            if(squelchState == SquelchState.SQUELCH && !mSquelchDecoderEnabled)
+            if(squelchState == SquelchState.SQUELCH)
             {
-                notifyCallEnd();
+                // Squelch closed (end of transmission)
+                // Deliver the audio still held in the MDC squawk remover's delay line before the call ends
+                if(mMdcSquawkRemover != null)
+                {
+                    mMdcSquawkRemover.flush();
+                }
+
+                if(mSquelchTailRemover != null)
+                {
+                    mSquelchTailRemover.squelchClose();
+                }
+
+                // DON'T immediately reset tone match or detectors here.
+                // Brief squelch closures (noise flutter) shouldn't force a full
+                // re-detection cycle. Instead, we preserve the tone match for a
+                // holdover period. The tone match will be cleared either:
+                //   (a) when squelch re-opens and holdover has expired, or
+                //   (b) when the detector reports tone lost or rejected.
+
+                // Only send call end if a call was actually active (tone was matched or no filter)
+                if(!mToneFilterEnabled || mToneMatch)
+                {
+                    notifyCallEnd();
+                }
             }
             else
             {
-                // When tone filtering is enabled, delay call start until tone is matched.
-                // The call start will be triggered from ctcssDetected/dcsDetected instead.
-                if(!mSquelchDecoderEnabled)
+                // Squelch opened (start of transmission)
+                if(mSquelchTailRemover != null)
                 {
+                    mSquelchTailRemover.squelchOpen();
+                }
+
+                if(!mToneFilterEnabled)
+                {
+                    // No tone filter — start call immediately (original behavior)
                     notifyCallStart();
+                }
+                else
+                {
+                    // Tone filter is active. Check if we have a recent tone match
+                    // within the holdover window — if so, preserve it and resume
+                    // audio immediately without waiting for re-detection.
+                    long elapsed = System.currentTimeMillis() - mLastToneMatchTime;
+
+                    if(mToneMatch && elapsed < TONE_HOLDOVER_MS)
+                    {
+                        // Holdover active — continue as if tone is still confirmed.
+                        // The detector keeps running and will reject/lost if tone changes.
+                        notifyCallStart();
+                    }
+                    else
+                    {
+                        // Holdover expired or no previous match — full reset.
+                        // Channel stays idle until detector confirms the correct tone.
+                        mToneMatch = false;
+
+                        if(mCTCSSDetector != null)
+                        {
+                            mCTCSSDetector.reset();
+                        }
+                        if(mDCSDetector != null)
+                        {
+                            mDCSDetector.reset();
+                        }
+                    }
                 }
             }
         });
     }
 
     /**
-     * Configures the set of allowed codes from the channel decode configuration
+     * Extracts CTCSSCode targets from the channel tone filter configuration.
+     * @param filters list of configured tone filters
+     * @return set of CTCSS codes to accept, or empty set if none configured
      */
-    private void configureSquelchDecoders(DecodeConfigNBFM config)
+    private Set<CTCSSCode> extractCTCSSCodes(List<ChannelToneFilter> filters)
     {
-        mSquelchDecoderEnabled = config.isSquelchDecoderEnabled();
+        EnumSet<CTCSSCode> codes = EnumSet.noneOf(CTCSSCode.class);
 
-        if(mSquelchDecoderEnabled)
+        if(filters != null)
         {
-            // at the present time, only a single decoder per channel is configured, however the playlist and other
-            //  storage allows for multiple decoders per channel
-            List<SquelchDecoderConfig> decoders = config.getSquelchDecoders();
-            for(SquelchDecoderConfig decoder : decoders)
+            for(ChannelToneFilter filter : filters)
             {
-                if(!decoder.isValid())
+                if(filter.getToneType() == ChannelToneFilter.ToneType.CTCSS)
                 {
-                    continue;
-                }
-                switch(decoder.getSquelchType())
-                {
-                    case CTCSS:
-                        CTCSSCode ctcss = decoder.getCTCSSCode();
-                        if(ctcss != null && ctcss != CTCSSCode.UNKNOWNH)
-                        {
-                            mConfiguredCTCSSCodes.add(ctcss);
-                        }
-                        break;
-                    case DCS:
-                        DCSCode dcs = decoder.getDCSCode();
-                        if(dcs != null)
-                        {
-                            mConfiguredDCSCodes.add(dcs);
-                        }
-                        break;
-                }
-            }
-
-            // If we configured tone filtering but have no valid tones, disable it
-            if(mConfiguredCTCSSCodes.isEmpty() && mConfiguredDCSCodes.isEmpty())
-            {
-                mLog.warn("Tone filtering enabled but no valid CTCSS/DCS codes configured — disabling tone filter");
-                mSquelchDecoderEnabled = false;
-            }
-            else
-            {
-                // Create CTCSS detector if we have CTCSS codes to detect
-                if(!mConfiguredCTCSSCodes.isEmpty())
-                {
-                    mCTCSSDetector = new CTCSSDetector(mConfiguredCTCSSCodes);
-                }
-
-                // Create DCS detector if we have DCS codes to detect
-                if(!mConfiguredDCSCodes.isEmpty())
-                {
-                    mDCSDetector = new DCSDecoder(mConfiguredDCSCodes);
+                    CTCSSCode code = filter.getCTCSSCode();
+                    if(code != null && code != CTCSSCode.UNKNOWN)
+                    {
+                        codes.add(code);
+                        mLog.info("CTCSS target: {} ({})", code.getDisplayString(), code.name());
+                    }
                 }
             }
         }
+
+        return codes;
     }
 
+    /**
+     * Extracts DCSCode targets from the channel tone filter configuration.
+     * @param filters list of configured tone filters
+     * @return set of DCS codes to accept, or empty set if none configured
+     */
+    private Set<DCSCode> extractDCSCodes(List<ChannelToneFilter> filters)
+    {
+        EnumSet<DCSCode> codes = EnumSet.noneOf(DCSCode.class);
+
+        if(filters != null)
+        {
+            for(ChannelToneFilter filter : filters)
+            {
+                if(filter.getToneType() == ChannelToneFilter.ToneType.DCS)
+                {
+                    DCSCode code = filter.getDCSCode();
+                    if(code != null && code != DCSCode.UNKNOWN)
+                    {
+                        codes.add(code);
+                        mLog.info("DCS target: {}", code.toString());
+                    }
+                }
+            }
+        }
+
+        return codes;
+    }
+
+    /**
+     * Turns MDC-1200 squawk removal on or off.  When on, the channel audio is delayed 250 ms and MDC data bursts are
+     * cut out of it.  Call before the channel starts.
+     * @param enabled true to remove MDC squawks
+     */
+    public void setMdcSquawkRemoval(boolean enabled)
+    {
+        if(enabled)
+        {
+            if(mMdcSquawkRemover == null)
+            {
+                mMdcSquawkRemover = new MdcSquawkRemover();
+                mMdcSquawkRemover.setOutputListener(this::processAudioAfterMdcRemoval);
+            }
+        }
+        else
+        {
+            mMdcSquawkRemover = null;
+        }
+    }
+
+    /**
+     * Sends any audio held in the MDC squawk remover through the rest of the audio chain now, while the tone gate is
+     * still open.  Used when a call ends because the tone/code was lost.
+     */
+    private void flushMdcSquawkRemover()
+    {
+        if(mMdcSquawkRemover != null)
+        {
+            mMdcSquawkRemover.flush();
+        }
+    }
+
+    /**
+     * Sets the decoder state reference for CTCSS/DCS detection integration.
+     * @param decoderState the NBFM decoder state to receive tone notifications
+     */
+    public void setDecoderState(NBFMDecoderState decoderState)
+    {
+        mDecoderState = decoderState;
+        updateChannelLabel();
+    }
+
+    /**
+     * Decoder type.
+     * @return type
+     */
     @Override
     public DecoderType getDecoderType()
     {
@@ -279,7 +468,7 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
     public void start() {}
 
     @Override
-    public void stop()  {}
+    public void stop() {}
 
     /**
      * Broadcasts the demodulated, resampled to 8 kHz audio samples to the registered listener.
@@ -291,6 +480,79 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
         if(mResampledBufferListener != null)
         {
             mResampledBufferListener.receive(demodulatedSamples);
+        }
+    }
+
+    /**
+     * Processes resampled 8 kHz audio through the CTCSS/DCS tone filter and squelch tail remover
+     * before broadcasting to downstream consumers.
+     *
+     * Audio flow: resampler → this method → detector analysis → MDC squawk remover (optional) → tone gate →
+     * audio filters → tail remover → broadcast
+     *
+     * @param resampledAudio 8 kHz audio from the resampler
+     */
+    private void processResampledAudio(float[] resampledAudio)
+    {
+        // Step 0: Auxiliary decoders (MDC-1200, Fleetsync, etc.) receive a copy of the unprocessed audio, ahead of
+        //         the tone gate, audio filters and head/tail trimming, so their data bursts reach them intact.
+        Listener<float[]> auxiliaryAudioListener = mAuxiliaryAudioListener;
+
+        if(auxiliaryAudioListener != null)
+        {
+            auxiliaryAudioListener.receive(resampledAudio.clone());
+        }
+
+        // Step 1: Feed audio to the active tone/code detector for analysis
+        if(mCTCSSDetector != null)
+        {
+            mCTCSSDetector.process(resampledAudio);
+        }
+        if(mDCSDetector != null)
+        {
+            mDCSDetector.process(resampledAudio);
+        }
+
+        // Step 1b: MDC squawk removal (when enabled) holds the audio 250 ms, cuts out MDC data bursts and then
+        //          passes the audio on to the rest of the chain
+        if(mMdcSquawkRemover != null)
+        {
+            mMdcSquawkRemover.process(resampledAudio);
+        }
+        else
+        {
+            processAudioAfterMdcRemoval(resampledAudio);
+        }
+    }
+
+    /**
+     * Tone gate, audio filters and squelch tail remover, then broadcast.
+     * @param resampledAudio 8 kHz audio
+     */
+    private void processAudioAfterMdcRemoval(float[] resampledAudio)
+    {
+        // Step 2: Gate audio based on tone/code match
+        if(mToneFilterEnabled && !mToneMatch)
+        {
+            // Tone/code not confirmed yet — block audio
+            return;
+        }
+
+        // Step 3: Apply VoxSend audio filter chain (low-pass, de-emphasis, bass boost,
+        //         voice enhancement, noise gate) — processes samples in-place
+        if(mAudioFilters != null)
+        {
+            mAudioFilters.process(resampledAudio);
+        }
+
+        // Step 4: Pass through squelch tail remover if enabled, otherwise broadcast directly
+        if(mSquelchTailRemover != null)
+        {
+            mSquelchTailRemover.process(resampledAudio);
+        }
+        else
+        {
+            broadcast(resampledAudio);
         }
     }
 
@@ -312,6 +574,16 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
     public void removeBufferListener()
     {
         mResampledBufferListener = null;
+    }
+
+    /**
+     * Implements the IAuxiliaryAudioProvider interface to register a listener for unprocessed demodulated audio.
+     * @param listener to receive the audio, or null to stop the feed.
+     */
+    @Override
+    public void setAuxiliaryAudioListener(Listener<float[]> listener)
+    {
+        mAuxiliaryAudioListener = listener;
     }
 
     /**
@@ -342,13 +614,7 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
         float[] filteredQ = mQBasebandFilter.filter(decimatedQ);
 
         float[] demodulated = mDemodulator.demodulate(filteredI, filteredQ);
-        /**
-         * The following call completes a series of tasks:
-         *  - determines noise squelch states
-         *  - resamples audio via the squelch listener
-         *  - processes resample audio for squelch decoders via the resampler listener
-         *  - broadcasts audio to downstream registered listeners, such as audioModule as determined by DecoderFactory
-         */
+
         mNoiseSquelch.process(demodulated);
 
         //Once we process the sample buffer, if the ending state is squelch closed, update the decoder state that we
@@ -452,93 +718,270 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
             throw new IllegalStateException(getDecoderType().name() + " demodulator with channel bandwidth [" + mChannelBandwidth + "] requires a channel sample rate of [" + (2.0 * mChannelBandwidth + "] - sample rate of [" + decimatedSampleRate + "] is not supported"));
         }
 
-        float[] coefficients = ChannelFilterDesigner.design(decimatedSampleRate, mChannelBandwidth);
+        mNoiseSquelch.setSampleRate(decimatedSampleRate);
 
-        mNoiseSquelch.setSampleRate(decimatedSampleRate, coefficients);
+        int passBandStop = (int) (mChannelBandwidth * .8);
+        int stopBandStart = (int) mChannelBandwidth;
+
+        float[] coefficients = null;
+
+        FIRFilterSpecification specification = FIRFilterSpecification.lowPassBuilder().sampleRate(decimatedSampleRate * 2).gridDensity(16).oddLength(true).passBandCutoff(passBandStop).passBandAmplitude(1.0).passBandRipple(0.01).stopBandStart(stopBandStart).stopBandAmplitude(0.0).stopBandRipple(0.005) //Approximately 90 dB attenuation
+                .build();
+
+        try
+        {
+            coefficients = FilterFactory.getTaps(specification);
+        }
+        catch(FilterDesignException fde)
+        {
+            mLog.error("Couldn't design demodulator remez filter for sample rate [" + sampleRate + "] pass frequency [" + passBandStop + "] and stop frequency [" + stopBandStart + "] - will proceed using sinc (low-pass) filter");
+        }
+
+        if(coefficients == null)
+        {
+            mLog.info("Unable to use remez filter designer for sample rate [" + decimatedSampleRate + "] pass band stop [" + passBandStop + "] and stop band start [" + stopBandStart + "] - will proceed using simple low pass filter design");
+            coefficients = FilterFactory.getLowPass(decimatedSampleRate, passBandStop, stopBandStart, 60, WindowType.HAMMING, true);
+        }
 
         mIBasebandFilter = FilterFactory.getRealFilter(coefficients);
         mQBasebandFilter = FilterFactory.getRealFilter(coefficients);
 
+        // Create resampler — output goes through our processing chain instead of directly to broadcast
         mResampler = new RealResampler(decimatedSampleRate, DEMODULATED_AUDIO_SAMPLE_RATE, 4192, 512);
-
         mResampler.setListener(NBFMDecoder.this::processResampledAudio);
 
+        // Initialize CTCSS detector at 8 kHz (resampled audio rate) if tone filtering is enabled
+        if(mToneFilterEnabled && mTargetCTCSSCodes != null && !mTargetCTCSSCodes.isEmpty())
+        {
+            mCTCSSDetector = new CTCSSDetector(mTargetCTCSSCodes, (float) DEMODULATED_AUDIO_SAMPLE_RATE);
+            mCTCSSDetector.setListener(new CTCSSDetector.CTCSSDetectorListener()
+            {
+                @Override
+                public void ctcssDetected(CTCSSCode code)
+                {
+                    // Matching tone confirmed — wake up the channel like a real radio unsquelching
+                    boolean wasBlocked = !mToneMatch;
+                    mToneMatch = true;
+                    mLastToneMatchTime = System.currentTimeMillis();
+
+                    // If we were previously blocked, fire a call start now
+                    if(wasBlocked)
+                    {
+                        notifyCallStart();
+                    }
+
+                    if(mDecoderState != null)
+                    {
+                        mDecoderState.setDetectedCTCSS(code);
+                    }
+                }
+
+                @Override
+                public void ctcssRejected(CTCSSCode code)
+                {
+                    // Wrong tone confirmed — fully squelch the channel like a real radio
+                    boolean wasActive = mToneMatch;
+                    if(wasActive)
+                    {
+                        flushMdcSquawkRemover();
+                    }
+                    mToneMatch = false;
+
+                    // If we had an active call, end it and go idle
+                    if(wasActive)
+                    {
+                        notifyCallEnd();
+                    }
+                    notifyIdle();
+
+                    if(mDecoderState != null)
+                    {
+                        mDecoderState.setRejectedCTCSS(code);
+                    }
+                }
+
+                @Override
+                public void ctcssLost()
+                {
+                    // Tone lost — squelch the channel until tone re-confirmed
+                    boolean wasActive = mToneMatch;
+                    if(wasActive)
+                    {
+                        flushMdcSquawkRemover();
+                    }
+                    mToneMatch = false;
+
+                    if(wasActive)
+                    {
+                        notifyCallEnd();
+                    }
+                    notifyIdle();
+
+                    if(mDecoderState != null)
+                    {
+                        mDecoderState.setToneLost();
+                    }
+                }
+            });
+
+            updateChannelLabel();
+            mLog.info("[{}] CTCSSDetector initialized at {} Hz sample rate", mChannelLabel, DEMODULATED_AUDIO_SAMPLE_RATE);
+        }
+
+        // Initialize DCS detector at 8 kHz if DCS filtering is enabled
+        if(mToneFilterEnabled && mToneFilterType == ChannelToneFilter.ToneType.DCS
+                && mTargetDCSCodes != null && !mTargetDCSCodes.isEmpty())
+        {
+            mDCSDetector = new DCSDetector(mTargetDCSCodes);
+            mDCSDetector.setListener(new DCSDetector.DCSDetectorListener()
+            {
+                @Override
+                public void dcsDetected(DCSCode code)
+                {
+                    // Matching code confirmed — wake up the channel
+                    boolean wasBlocked = !mToneMatch;
+                    mToneMatch = true;
+                    mLastToneMatchTime = System.currentTimeMillis();
+
+                    if(wasBlocked)
+                    {
+                        notifyCallStart();
+                    }
+
+                    if(mDecoderState != null)
+                    {
+                        mDecoderState.setDetectedDCS(code);
+                    }
+                }
+
+                @Override
+                public void dcsRejected(DCSCode code)
+                {
+                    // Wrong code confirmed — fully squelch the channel
+                    boolean wasActive = mToneMatch;
+                    if(wasActive)
+                    {
+                        flushMdcSquawkRemover();
+                    }
+                    mToneMatch = false;
+
+                    if(wasActive)
+                    {
+                        notifyCallEnd();
+                    }
+                    notifyIdle();
+
+                    if(mDecoderState != null)
+                    {
+                        mDecoderState.setRejectedDCS(code);
+                    }
+                }
+
+                @Override
+                public void dcsLost()
+                {
+                    // Code lost — squelch until re-confirmed
+                    boolean wasActive = mToneMatch;
+                    if(wasActive)
+                    {
+                        flushMdcSquawkRemover();
+                    }
+                    mToneMatch = false;
+
+                    if(wasActive)
+                    {
+                        notifyCallEnd();
+                    }
+                    notifyIdle();
+
+                    if(mDecoderState != null)
+                    {
+                        mDecoderState.setToneLost();
+                    }
+                }
+            });
+
+            updateChannelLabel();
+            mLog.info("[{}] DCSDetector initialized for channel-level DCS filtering", mChannelLabel);
+        }
+
+        // Initialize squelch tail remover if enabled
+        if(mSquelchTailRemovalEnabled)
+        {
+            mSquelchTailRemover = new SquelchTailRemover(mSquelchTailRemovalMs, mSquelchHeadRemovalMs);
+            mSquelchTailRemover.setOutputListener(NBFMDecoder.this::broadcast);
+            mLog.info("SquelchTailRemover initialized: tail={}ms, head={}ms", mSquelchTailRemovalMs, mSquelchHeadRemovalMs);
+        }
+
+        // Initialize VoxSend audio filter chain at the resampled audio rate (8 kHz)
+        initializeAudioFilters(DEMODULATED_AUDIO_SAMPLE_RATE);
     }
 
     /**
-     * Process the Resampled audio for squelch decoding.  This also where audio is muted if no tone code match.
-     * @param resampled audio buffer
+     * Initializes the VoxSend audio filter chain from the channel configuration.
+     * Applies settings for low-pass, de-emphasis, bass boost, voice enhancement, and noise gate.
+     *
+     * @param sampleRate the audio sample rate (typically 8000 Hz after resampling)
      */
-    private void processResampledAudio(float [] resampled)
+    private void initializeAudioFilters(double sampleRate)
     {
-        if(!mNoiseSquelch.isSquelched())
-        {
-            if(mCTCSSDetector != null)
-            {
-                CTCSSMessage ctcssMessage = mCTCSSDetector.process(resampled);
-                getMessageListener().receive(ctcssMessage);     // sending: one of the listeners is NBFMDecoderState
-                if(ctcssMessage.getCallEvent() != null)
-                {
-                    // handles START, CONTINUATION, END.
-                    broadcast(new DecoderStateEvent(this, ctcssMessage.getCallEvent(), State.CALL, 0));
-                }
-                mMute = ctcssMessage.getMutedStatus();
-            }
-            /*
-             * While the CTCSS decoder can determine a tone in a single buffer of resampled audio, the DCS decoder
-             * requires 2.6 buffers to determine a code. DCSMessage will be null for audio buffers where there is
-             * no state change.
-             */
-            if(mDCSDetector != null)
-            {
-                DCSMessage dcsMessage = mDCSDetector.process(resampled);
-                if (dcsMessage != null)
-                {
-                    getMessageListener().receive(dcsMessage);     // sending: one of the listeners is NBFMDecoderState
-                    if (dcsMessage.getCallEvent() != null)
-                    {
-                        // handles START, CONTINUATION, END.
-                        broadcast(new DecoderStateEvent(this, dcsMessage.getCallEvent(), State.CALL, 0));
-                    }
-                    mMute = dcsMessage.getMutedStatus();
-                }
-            }
-        }
-        else
-        {
-            // there can still be one buffer's worth of resampled audio after .isSquelched()
-            // which may result in two consecutive paths here. While the squelch decoders will mute here,
-            // the noise squelch will mute audio downstream in AudioModule (via broadcast(resampled) below).
-            if(mCTCSSDetector != null)
-            {
-                mCTCSSDetector.reset();
-                CTCSSMessage message = new CTCSSMessage(mConfiguredCTCSSCodes.getFirst(),
-                        "Noise squelch closed.",
-                        DecoderStateEvent.Event.END,
-                        SquelchCodeState.LOST);
-                getMessageListener().receive(message);     // sending: one of the listeners is NBFMDecoderState
-                notifyCallEnd();
-                mMute = true;
-            }
-            if(mDCSDetector != null)
-            {
-                mDCSDetector.inlineReset();
-                DCSMessage message = new DCSMessage(mDCSDetector.getmConfiguredCode(),
-                        "Noise squelch closed.",
-                        DecoderStateEvent.Event.END,
-                        SquelchCodeState.LOST);
-                getMessageListener().receive(message);       // sending: one of the listeners is NBFMDecoderState
-                notifyCallEnd();
-                mMute = true;
-            }
-        }
+        mAudioFilters = new NBFMAudioFilters(sampleRate);
 
-        if(mSquelchDecoderEnabled && mMute)
-        {
-            return;     // drop audio buffer here for muting
-        }
+        // Low-pass filter
+        mAudioFilters.setLowPassEnabled(mNBFMConfig.isLowPassEnabled());
+        mAudioFilters.setLowPassCutoff(mNBFMConfig.getLowPassCutoff());
 
-        broadcast(resampled);
+        // FM de-emphasis
+        mAudioFilters.setDeemphasisEnabled(mNBFMConfig.isDeemphasisEnabled());
+        mAudioFilters.setDeemphasisTimeConstant(mNBFMConfig.getDeemphasisTimeConstant());
+
+        // Bass boost
+        mAudioFilters.setBassBoostEnabled(mNBFMConfig.isBassBoostEnabled());
+        mAudioFilters.setBassBoost(mNBFMConfig.getBassBoostDb());
+
+        // Voice enhancement (stored as AGC target level, mapped from -30...-6 dB to 0...1.0)
+        mAudioFilters.setVoiceEnhanceEnabled(mNBFMConfig.isAgcEnabled());
+        float voiceEnhanceAmount = mapAgcTargetToVoiceEnhancement(mNBFMConfig.getAgcTargetLevel());
+        mAudioFilters.setVoiceEnhancement(voiceEnhanceAmount);
+
+        // Input gain (stored as AGC max gain in dB, map to linear)
+        float inputGainDb = mNBFMConfig.getAgcMaxGain();
+        float inputGainLinear = (float)Math.pow(10.0, inputGainDb / 40.0); // half the dB for reasonable mapping
+        mAudioFilters.setInputGain(inputGainLinear);
+
+        // Noise gate
+        mAudioFilters.setNoiseGateEnabled(mNBFMConfig.isNoiseGateEnabled());
+        mAudioFilters.setSquelchThreshold(mNBFMConfig.getNoiseGateThreshold());
+        mAudioFilters.setSquelchReduction(mNBFMConfig.getNoiseGateReduction());
+        mAudioFilters.setHoldTime(mNBFMConfig.getNoiseGateHoldTime());
+
+        // Hiss reduction (high-shelf cut above corner frequency)
+        mAudioFilters.setHissReductionCornerHz(mNBFMConfig.getHissReductionCornerHz());
+        mAudioFilters.setHissReductionDb(mNBFMConfig.getHissReductionDb());
+        mAudioFilters.setHissReductionEnabled(mNBFMConfig.isHissReductionEnabled());
+
+        mLog.info("VoxSend audio filters initialized: lowPass={} ({}Hz), deemphasis={} ({}μs), " +
+                "hissReduction={} ({}dB@{}Hz), bassBoost={} ({}dB), voiceEnhance={}, " +
+                "noiseGate={} (threshold={})",
+                mNBFMConfig.isLowPassEnabled(), mNBFMConfig.getLowPassCutoff(),
+                mNBFMConfig.isDeemphasisEnabled(), mNBFMConfig.getDeemphasisTimeConstant(),
+                mNBFMConfig.isHissReductionEnabled(), mNBFMConfig.getHissReductionDb(),
+                mNBFMConfig.getHissReductionCornerHz(),
+                mNBFMConfig.isBassBoostEnabled(), mNBFMConfig.getBassBoostDb(),
+                mNBFMConfig.isAgcEnabled(),
+                mNBFMConfig.isNoiseGateEnabled(), mNBFMConfig.getNoiseGateThreshold());
+    }
+
+    /**
+     * Maps the AGC target level (stored as -30 to -6 dB) to voice enhancement amount (0.0 to 1.0).
+     * The AGC target level field is repurposed to store voice enhancement strength.
+     */
+    private float mapAgcTargetToVoiceEnhancement(float agcTargetLevel)
+    {
+        // agcTargetLevel range is -30 to -6 dB, map to 0.0 to 1.0
+        // -30 dB = 0.0 (no enhancement), -6 dB = 1.0 (max enhancement)
+        float normalized = (agcTargetLevel - (-30.0f)) / ((-6.0f) - (-30.0f));
+        return Math.max(0.0f, Math.min(1.0f, normalized));
     }
 
     /**
@@ -553,6 +996,47 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
             {
                 setSampleRate(sourceEvent.getValue().doubleValue());
             }
+            else if(sourceEvent.getEvent() == SourceEvent.Event.NOTIFICATION_FREQUENCY_CHANGE)
+            {
+                mChannelFrequencyHz = sourceEvent.getValue().longValue();
+                updateChannelLabel();
+            }
+        }
+    }
+
+    /**
+     * Builds and propagates the channel label to detectors.
+     * Called when either the decoder state (channel name) or frequency becomes available.
+     * Format: "ChannelName [freq MHz]" e.g. "MetroFire - Red [483.3125]"
+     */
+    private void updateChannelLabel()
+    {
+        String channelName = (mDecoderState != null) ? mDecoderState.getChannelName() : null;
+
+        StringBuilder sb = new StringBuilder();
+        if(channelName != null && !channelName.isEmpty())
+        {
+            sb.append(channelName);
+        }
+        if(mChannelFrequencyHz > 0)
+        {
+            double freqMHz = mChannelFrequencyHz / 1_000_000.0;
+            if(sb.length() > 0)
+            {
+                sb.append(" ");
+            }
+            sb.append(String.format("[%.4f]", freqMHz));
+        }
+
+        mChannelLabel = sb.toString();
+
+        if(mCTCSSDetector != null)
+        {
+            mCTCSSDetector.setChannelLabel(mChannelLabel);
+        }
+        if(mDCSDetector != null)
+        {
+            mDCSDetector.setChannelLabel(mChannelLabel);
         }
     }
 }

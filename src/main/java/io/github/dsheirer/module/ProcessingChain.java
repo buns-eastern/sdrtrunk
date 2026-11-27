@@ -63,6 +63,8 @@ import io.github.dsheirer.sample.buffer.IByteBufferProvider;
 import io.github.dsheirer.sample.complex.ComplexSamples;
 import io.github.dsheirer.sample.complex.IComplexSamplesListener;
 import io.github.dsheirer.sample.real.IRealBufferListener;
+import io.github.dsheirer.module.decode.IAuxiliaryDecoder;
+import io.github.dsheirer.sample.real.IAuxiliaryAudioProvider;
 import io.github.dsheirer.sample.real.IRealBufferProvider;
 import io.github.dsheirer.source.ComplexSource;
 import io.github.dsheirer.source.ISourceEventListener;
@@ -106,6 +108,10 @@ public class ProcessingChain implements Listener<ChannelEvent>
     private final static Logger mLog = LoggerFactory.getLogger(ProcessingChain.class);
 
     private Broadcaster<float[]> mDemodulatedAudioBufferBroadcaster = new Broadcaster();
+    //Auxiliary decoders listen here.  Fed from the demodulated audio unless a primary decoder provides its own
+    //unprocessed auxiliary audio feed.
+    private Broadcaster<float[]> mAuxiliaryAudioBufferBroadcaster = new Broadcaster();
+    private int mAuxiliaryAudioProviderCount = 0;
     private Broadcaster<ComplexSamples> mBasebandComplexSamplesBroadcaster = new Broadcaster<>();
     private Broadcaster<ByteBuffer> mDemodulatedBitstreamBufferBroadcaster = new Broadcaster();
     private Broadcaster<AudioSegment> mAudioSegmentBroadcaster = new AudioSegmentBroadcaster<>();
@@ -136,6 +142,8 @@ public class ProcessingChain implements Listener<ChannelEvent>
      */
     public ProcessingChain(Channel channel, AliasModel aliasModel)
     {
+        updateAuxiliaryAudioSource();
+
         mEventBus = new EventBus("Processing Chain Event Bus - Channel: " + channel.getName());
 
         if(channel.getDecodeConfiguration().getTimeslotCount() == 1)
@@ -467,7 +475,14 @@ public class ProcessingChain implements Listener<ChannelEvent>
 
         if(module instanceof IRealBufferListener)
         {
-            mDemodulatedAudioBufferBroadcaster.addListener(((IRealBufferListener)module).getBufferListener());
+            if(module instanceof IAuxiliaryDecoder)
+            {
+                mAuxiliaryAudioBufferBroadcaster.addListener(((IRealBufferListener)module).getBufferListener());
+            }
+            else
+            {
+                mDemodulatedAudioBufferBroadcaster.addListener(((IRealBufferListener)module).getBufferListener());
+            }
         }
 
         if(module instanceof IByteBufferListener)
@@ -535,6 +550,7 @@ public class ProcessingChain implements Listener<ChannelEvent>
         if(module instanceof IRealBufferListener)
         {
             mDemodulatedAudioBufferBroadcaster.removeListener(((IRealBufferListener)module).getBufferListener());
+            mAuxiliaryAudioBufferBroadcaster.removeListener(((IRealBufferListener)module).getBufferListener());
         }
 
         if(module instanceof IByteBufferListener)
@@ -619,6 +635,13 @@ public class ProcessingChain implements Listener<ChannelEvent>
             ((IRealBufferProvider)module).setBufferListener(mDemodulatedAudioBufferBroadcaster);
         }
 
+        if(module instanceof IAuxiliaryAudioProvider)
+        {
+            ((IAuxiliaryAudioProvider)module).setAuxiliaryAudioListener(mAuxiliaryAudioBufferBroadcaster);
+            mAuxiliaryAudioProviderCount++;
+            updateAuxiliaryAudioSource();
+        }
+
         if(module instanceof ISourceEventProvider)
         {
             ((ISourceEventProvider)module).setSourceEventListener(mSourceEventBroadcaster);
@@ -684,6 +707,13 @@ public class ProcessingChain implements Listener<ChannelEvent>
         if(module instanceof IRealBufferProvider)
         {
             ((IRealBufferProvider)module).setBufferListener(null);
+        }
+
+        if(module instanceof IAuxiliaryAudioProvider)
+        {
+            ((IAuxiliaryAudioProvider)module).setAuxiliaryAudioListener(null);
+            mAuxiliaryAudioProviderCount = Math.max(0, mAuxiliaryAudioProviderCount - 1);
+            updateAuxiliaryAudioSource();
         }
 
         if(module instanceof ISourceEventProvider)
@@ -991,6 +1021,22 @@ public class ProcessingChain implements Listener<ChannelEvent>
     public void removeSquelchStateListener(Listener<SquelchStateEvent> listener)
     {
         mSquelchStateEventBroadcaster.removeListener(listener);
+    }
+
+    /**
+     * Feeds the auxiliary decoders from the demodulated audio unless a primary decoder provides its own unprocessed
+     * auxiliary audio feed, so that auxiliary decoders never receive the same audio twice.
+     */
+    private void updateAuxiliaryAudioSource()
+    {
+        if(mAuxiliaryAudioProviderCount > 0)
+        {
+            mDemodulatedAudioBufferBroadcaster.removeListener(mAuxiliaryAudioBufferBroadcaster);
+        }
+        else
+        {
+            mDemodulatedAudioBufferBroadcaster.addListener(mAuxiliaryAudioBufferBroadcaster);
+        }
     }
 
     /**
