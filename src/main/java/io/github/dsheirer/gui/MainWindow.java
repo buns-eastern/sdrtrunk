@@ -274,7 +274,7 @@ public class MainWindow
         mStage.setMinHeight(480);
         mStage.setOnCloseRequest(event -> {
             event.consume();
-            exit();
+            confirmExit();
         });
 
         migrateSwingWindowLocation();
@@ -735,7 +735,7 @@ public class MainWindow
 
         MenuItem exit = new MenuItem("Exit", icon(FontAwesome.SIGN_OUT));
         exit.setAccelerator(new KeyCodeCombination(KeyCode.Q, KeyCombination.SHORTCUT_DOWN));
-        exit.setOnAction(event -> exit());
+        exit.setOnAction(event -> confirmExit());
 
         Menu file = new Menu("File", null, screenCapture, folders, new SeparatorMenuItem(), settings,
             new SeparatorMenuItem(), exit);
@@ -1233,6 +1233,27 @@ public class MainWindow
     public void exitApplication()
     {
         exit();
+    }
+
+    /**
+     * Asks before closing so an accidental window close (or Exit) doesn't quit the application.  On Yes the normal
+     * shutdown runs, which is where the window and table layout are saved.  On No nothing changes.
+     */
+    private void confirmExit()
+    {
+        ButtonType yes = new ButtonType("Yes", ButtonBar.ButtonData.YES);
+        ButtonType no = new ButtonType("No", ButtonBar.ButtonData.NO);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+            "Close SDRTrunk?  Any running channels and streams will stop.", yes, no);
+        alert.setTitle("Confirm Exit");
+        alert.setHeaderText(null);
+        alert.initOwner(mStage);
+        alert.getDialogPane().setMinWidth(520);
+
+        if(alert.showAndWait().orElse(no) == yes)
+        {
+            exit();
+        }
     }
 
     /**
