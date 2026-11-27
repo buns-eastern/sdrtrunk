@@ -21,6 +21,8 @@ package io.github.dsheirer.dsp.filter.resample;
 import com.laszlosystems.libresample4j.Resampler;
 import com.laszlosystems.libresample4j.SampleBuffers;
 import io.github.dsheirer.sample.Listener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
@@ -32,6 +34,7 @@ import java.util.List;
  */
 public class RealResampler
 {
+    private static final Logger mLog = LoggerFactory.getLogger(RealResampler.class);
 
     private Resampler mResampler;
     private Listener<float[]> mResampledListener;
@@ -98,14 +101,44 @@ public class RealResampler
     }
 
     /**
-     * Primary input method to the resampler
+     * Primary input method to the resampler.
+     *
+     * Loads the incoming samples in chunks that fit the remaining space in the fixed-size input buffer, processing
+     * each chunk before loading the next.  A caller can hand over more samples than the input buffer has room for (for
+     * example a long unsquelched NBFM transmission) and loading them all at once would overflow the buffer and stop
+     * the resampler from producing audio.  Only the final chunk is processed as the last batch.
+     *
      * @param samples to resample
      * @param lastBatch set to true if this is the last set of samples
      */
     public void resample(float[] samples, boolean lastBatch)
     {
-        mBufferManager.load(samples);
-        mResampler.process(mResampleFactor, mBufferManager, lastBatch);
+        int total = samples != null ? samples.length : 0;
+        int offset = 0;
+
+        if(total == 0)
+        {
+            mResampler.process(mResampleFactor, mBufferManager, lastBatch);
+        }
+
+        while(offset < total)
+        {
+            int free = mBufferManager.getInputBufferRemaining();
+
+            if(free <= 0)
+            {
+                //The resampler normally consumes nearly all of the input, so this shouldn't happen.  Drop the rest of
+                //this batch rather than loop forever.
+                mLog.warn("RealResampler input buffer full - dropping " + (total - offset) + " of " + total +
+                    " input samples to recover");
+                break;
+            }
+
+            int chunk = Math.min(free, total - offset);
+            mBufferManager.load(samples, offset, chunk);
+            mResampler.process(mResampleFactor, mBufferManager, lastBatch && (offset + chunk == total));
+            offset += chunk;
+        }
 
         if(lastBatch)
         {
@@ -159,6 +192,25 @@ public class RealResampler
         public void load(float[] samples)
         {
             mInputBuffer.put(samples);
+        }
+
+        /**
+         * Loads part of the samples array into the input buffer.
+         * @param samples array
+         * @param offset of the first sample to load
+         * @param length number of samples to load (no more than getInputBufferRemaining())
+         */
+        public void load(float[] samples, int offset, int length)
+        {
+            mInputBuffer.put(samples, offset, length);
+        }
+
+        /**
+         * Space remaining in the input buffer, in samples.
+         */
+        public int getInputBufferRemaining()
+        {
+            return mInputBuffer.remaining();
         }
 
         @Override
