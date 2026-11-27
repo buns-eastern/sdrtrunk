@@ -49,6 +49,7 @@ public class JmbeEditor extends VBox
 {
     private final static Logger mLog = LoggerFactory.getLogger(JmbeEditor.class);
     private Settings mSettings;
+    private boolean mAmbeLibrary = false;
     private Release mCurrentRelease;
     private Label mCurrentVersionLabel;
     private Label mUpdatedVersionLabel;
@@ -82,6 +83,10 @@ public class JmbeEditor extends VBox
     {
         if(request != null)
         {
+            mAmbeLibrary = request.isAmbeLibrary();
+            Version currentVersion = mAmbeLibrary ? mSettings.getJmbeLibrarySettings().getCurrentAmbeVersion() :
+                mSettings.getJmbeLibrarySettings().getCurrentVersion();
+            getCurrentVersionLabel().setText(currentVersion != null ? currentVersion.toString() : "(empty)");
             setCurrentRelease(request.getCurrentRelease());
         }
     }
@@ -155,7 +160,14 @@ public class JmbeEditor extends VBox
             else
             {
                 content = "JMBE library successfully created/updated";
-                mSettings.getJmbeLibrarySettings().setPathJmbeLibrary(jmbeCreator.getLibraryPath());
+                if(mAmbeLibrary)
+                {
+                    mSettings.getJmbeLibrarySettings().setPathJmbeAmbeLibrary(jmbeCreator.getLibraryPath());
+                }
+                else
+                {
+                    mSettings.getJmbeLibrarySettings().setPathJmbeLibrary(jmbeCreator.getLibraryPath());
+                }
                 getCurrentVersionLabel().setText(mCurrentRelease.getVersion().toString());
             }
             Alert alert = new Alert(Alert.AlertType.INFORMATION, content, ButtonType.OK);
