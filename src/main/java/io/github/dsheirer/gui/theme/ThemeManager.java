@@ -57,6 +57,25 @@ public class ThemeManager
     private volatile boolean mComplementaryAliasColors = false;
     /** Data URL of the currently-active per-theme accent stylesheet, or null. */
     private volatile String mAccentStylesheetUrl;
+    /**
+     * JavaFX logs a burst of warnings about its built-in stylesheet (modena) while it restyles after a theme change
+     * on Windows.  They're harmless: the colors settle right after.  This filter drops only those built-in stylesheet
+     * warnings, and only for a few seconds after a theme change.  The logger is held here so it isn't garbage
+     * collected along with the filter.
+     */
+    private static final java.util.logging.Logger CSS_LOGGER = java.util.logging.Logger.getLogger("javafx.css");
+    private static final long CSS_QUIET_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+    private static volatile long mQuietCssUntil = System.nanoTime();
+
+    static
+    {
+        CSS_LOGGER.setFilter(record -> !(System.nanoTime() - mQuietCssUntil < 0 &&
+            record.getLevel() == java.util.logging.Level.WARNING && record.getMessage() != null &&
+            record.getMessage().contains("modena")));
+    }
+
+    /** Every accent stylesheet URL built so far, so a window themed while closed can drop the stale ones. */
+    private final Set<String> mIssuedAccentUrls = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private ThemeManager()
     {
@@ -174,7 +193,7 @@ public class ThemeManager
 
     private void themeWindowWhenSceneReady(javafx.stage.Window window)
     {
-        if(window == null)
+        if(window == null || window instanceof javafx.stage.PopupWindow)
         {
             return;
         }
@@ -276,6 +295,11 @@ public class ThemeManager
         String nextAccentUrl = buildAccentStylesheet(theme);
         mAccentStylesheetUrl = nextAccentUrl;
 
+        if(nextAccentUrl != null)
+        {
+            mIssuedAccentUrls.add(nextAccentUrl);
+        }
+
         Runnable fxApply = () -> {
             synchronized(mScenes)
             {
@@ -287,7 +311,7 @@ public class ThemeManager
                     {
                         it.remove();
                     }
-                    else
+                    else if(isThemeable(scene.getWindow()))
                     {
                         applyToScene(scene, theme.isDark(), previousAccentUrl, nextAccentUrl);
                     }
@@ -297,28 +321,36 @@ public class ThemeManager
             for(javafx.stage.Window window: javafx.stage.Window.getWindows())
             {
                 Scene scene = window.getScene();
-                if(scene != null)
+                if(scene != null && isThemeable(window))
                 {
                     applyToScene(scene, theme.isDark(), previousAccentUrl, nextAccentUrl);
                 }
             }
         };
 
-        if(Platform.isFxApplicationThread())
+        //Always run on a later pass of the FX thread, even when already on it: picking a theme from the
+        //dropdown lands here while the dropdown is still closing, and restyling then races the dropdown on Windows
+        mQuietCssUntil = System.nanoTime() + CSS_QUIET_NANOS;
+
+        try
         {
-            fxApply.run();
+            Platform.runLater(fxApply);
         }
-        else
+        catch(IllegalStateException ignored)
         {
-            try
-            {
-                Platform.runLater(fxApply);
-            }
-            catch(IllegalStateException ignored)
-            {
-                //FX toolkit not started yet - scenes will be themed at registration time instead.
-            }
+            //FX toolkit not started yet - scenes will be themed at registration time instead.
         }
+    }
+
+    /**
+     * Theme changes go only to windows that are showing, and never to dropdown, menu or tooltip popups.  Popups take
+     * their styles from the window that owns them.  Restyling a popup directly, or a closed window that still has
+     * popups attached, makes JavaFX log a flood of CSS lookup warnings on Windows.  A closed window is themed again
+     * when it next opens.
+     */
+    private static boolean isThemeable(javafx.stage.Window window)
+    {
+        return window != null && window.isShowing() && !(window instanceof javafx.stage.PopupWindow);
     }
 
     /**
@@ -352,6 +384,9 @@ public class ThemeManager
             {
                 scene.getStylesheets().remove(previousAccentUrl);
             }
+
+            //A window that was closed during a theme change still has that theme's accent stylesheet
+            scene.getStylesheets().removeIf(url -> mIssuedAccentUrls.contains(url) && !url.equals(nextAccentUrl));
 
             if(nextAccentUrl != null && !scene.getStylesheets().contains(nextAccentUrl))
             {
