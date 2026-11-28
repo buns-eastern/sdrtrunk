@@ -46,6 +46,9 @@ public class AppearanceSettingsPage extends SettingsPage
     private ToggleSwitch mComplementaryAliasColorsSwitch;
     private Slider mGuiScaleSlider;
     private Label mGuiScaleValueLabel;
+    private Slider mNowPlayingTextSlider;
+    private Label mNowPlayingTextValueLabel;
+    private ComboBox<ApplicationSettings.RowSpacing> mRowSpacingComboBox;
 
     public AppearanceSettingsPage(Settings settings)
     {
@@ -70,6 +73,78 @@ public class AppearanceSettingsPage extends SettingsPage
                 mApplicationSettings.setGuiScale(value.doubleValue());
             })
             .help("Adjusts the size of all UI components. Takes effect immediately.");
+
+        SettingsSection nowPlaying = addSection("Now Playing");
+        getNowPlayingTextSlider().setPrefWidth(320);
+        nowPlaying.addRow("Text size", getNowPlayingTextSlider(), getNowPlayingTextValueLabel())
+            .defaultValue(getNowPlayingTextSlider().valueProperty(), ApplicationSettings.DEFAULT_NOW_PLAYING_TEXT_SCALE,
+                value -> getNowPlayingTextSlider().setValue(value.doubleValue()))
+            .help("Size of the text in the Now Playing table only. Takes effect immediately.");
+        nowPlaying.addRow("Row spacing", getRowSpacingComboBox())
+            .defaultValue(getRowSpacingComboBox().valueProperty(), ApplicationSettings.DEFAULT_NOW_PLAYING_ROW_SPACING,
+                getRowSpacingComboBox()::setValue)
+            .help("Space above and below each row in the Now Playing table. Tighter fits more rows.");
+    }
+
+    /**
+     * Now Playing text size slider: 70% to 130% in 5% steps, applied as it moves.
+     */
+    private Slider getNowPlayingTextSlider()
+    {
+        if(mNowPlayingTextSlider == null)
+        {
+            mNowPlayingTextSlider = new Slider(ApplicationSettings.MIN_NOW_PLAYING_TEXT_SCALE,
+                ApplicationSettings.MAX_NOW_PLAYING_TEXT_SCALE, mApplicationSettings.getNowPlayingTextScale());
+            mNowPlayingTextSlider.setMajorTickUnit(0.1d);
+            mNowPlayingTextSlider.setMinorTickCount(1); //5% steps
+            mNowPlayingTextSlider.setSnapToTicks(true);
+            mNowPlayingTextSlider.setShowTickMarks(true);
+            mNowPlayingTextSlider.setShowTickLabels(false);
+            mNowPlayingTextSlider.setBlockIncrement(0.05d);
+            mNowPlayingTextSlider.valueProperty().addListener((obs, oldV, newV) -> {
+                if(newV != null)
+                {
+                    double snapped = Math.round(newV.doubleValue() * 20) / 20.0;
+                    getNowPlayingTextValueLabel().setText(formatScale(snapped));
+
+                    if(Math.abs(snapped - mApplicationSettings.getNowPlayingTextScale()) > 1e-6)
+                    {
+                        mApplicationSettings.setNowPlayingTextScale(snapped);
+                    }
+                }
+            });
+        }
+
+        return mNowPlayingTextSlider;
+    }
+
+    private Label getNowPlayingTextValueLabel()
+    {
+        if(mNowPlayingTextValueLabel == null)
+        {
+            mNowPlayingTextValueLabel = new Label(formatScale(mApplicationSettings.getNowPlayingTextScale()));
+            mNowPlayingTextValueLabel.setMinWidth(50);
+        }
+
+        return mNowPlayingTextValueLabel;
+    }
+
+    private ComboBox<ApplicationSettings.RowSpacing> getRowSpacingComboBox()
+    {
+        if(mRowSpacingComboBox == null)
+        {
+            mRowSpacingComboBox = new ComboBox<>();
+            mRowSpacingComboBox.getItems().addAll(ApplicationSettings.RowSpacing.values());
+            mRowSpacingComboBox.setValue(mApplicationSettings.getNowPlayingRowSpacing());
+            mRowSpacingComboBox.valueProperty().addListener((obs, oldV, newV) -> {
+                if(newV != null && newV != mApplicationSettings.getNowPlayingRowSpacing())
+                {
+                    mApplicationSettings.setNowPlayingRowSpacing(newV);
+                }
+            });
+        }
+
+        return mRowSpacingComboBox;
     }
 
     /**

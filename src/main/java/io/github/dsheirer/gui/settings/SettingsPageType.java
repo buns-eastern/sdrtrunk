@@ -53,7 +53,7 @@ public enum SettingsPageType
         "Application health monitoring and channel start-up.",
         context -> new GeneralSettingsPage(context.settings())),
     APPEARANCE(Group.GENERAL, "Appearance", FontAwesome.PAINT_BRUSH,
-        "Theme, alias colors and the size of the user interface.",
+        "Theme, alias colors, the size of the user interface and the Now Playing table.",
         context -> new AppearanceSettingsPage(context.settings())),
     PERFORMANCE(Group.GENERAL, "Performance", FontAwesome.TACHOMETER,
         "CPU vector (SIMD) operations and their calibration.",

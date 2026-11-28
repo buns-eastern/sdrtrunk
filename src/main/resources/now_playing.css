@@ -114,3 +114,25 @@
 {
     -fx-fill: #ffffff;
 }
+
+/* Now Playing row spacing (Settings > Appearance).  Row height is in em so it follows the Now Playing text size. */
+.np-spacing-compact .table-row-cell
+{
+    -fx-cell-size: 1.6em;
+}
+
+.np-spacing-tight .table-row-cell
+{
+    -fx-cell-size: 1.35em;
+}
+
+.np-spacing-compact .table-cell,
+.np-spacing-tight .table-cell
+{
+    -fx-padding: 0 0.4em 0 0.4em;
+}
+
+.np-spacing-tight .np-state-chip
+{
+    -fx-padding: 0 8 0 8;
+}

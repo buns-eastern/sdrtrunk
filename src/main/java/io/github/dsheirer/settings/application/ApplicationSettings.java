@@ -41,12 +41,60 @@ public class ApplicationSettings extends AbstractSettings
     public static final double MIN_GUI_SCALE = 0.5d;
     public static final double MAX_GUI_SCALE = 2.0d;
     public static final double DEFAULT_GUI_SCALE = 1.0d;
+    public static final double MIN_NOW_PLAYING_TEXT_SCALE = 0.7d;
+    public static final double MAX_NOW_PLAYING_TEXT_SCALE = 1.3d;
+    public static final double DEFAULT_NOW_PLAYING_TEXT_SCALE = 1.0d;
+    public static final RowSpacing DEFAULT_NOW_PLAYING_ROW_SPACING = RowSpacing.NORMAL;
+
+    /**
+     * Space above and below each row in the Now Playing table.
+     */
+    public enum RowSpacing
+    {
+        NORMAL("Normal"),
+        COMPACT("Compact"),
+        TIGHT("Tight");
+
+        private final String mLabel;
+
+        RowSpacing(String label)
+        {
+            mLabel = label;
+        }
+
+        @Override
+        public String toString()
+        {
+            return mLabel;
+        }
+
+        /**
+         * Spacing for the stored name, or the default when it isn't recognized.
+         */
+        public static RowSpacing fromName(String name)
+        {
+            if(name != null)
+            {
+                for(RowSpacing spacing: values())
+                {
+                    if(spacing.name().equals(name))
+                    {
+                        return spacing;
+                    }
+                }
+            }
+
+            return DEFAULT_NOW_PLAYING_ROW_SPACING;
+        }
+    }
 
     private final static Logger mLog = LoggerFactory.getLogger(ApplicationSettings.class);
     private Integer mChannelAutoStartTimeout;
     private Boolean mAutomaticDiagnosticMonitoring;
     private Theme mTheme;
     private Double mGuiScale;
+    private Double mNowPlayingTextScale;
+    private RowSpacing mNowPlayingRowSpacing;
     private Boolean mComplementaryAliasColors;
 
     /**
@@ -219,6 +267,60 @@ public class ApplicationSettings extends AbstractSettings
     {
         mComplementaryAliasColors = enabled;
         Setting.APPLICATION_COMPLEMENTARY_ALIAS_COLORS.putBoolean(enabled);
+        notifySettingsUpdated();
+    }
+
+    /**
+     * Text size of the Now Playing table, where 1.0 is 100%.
+     */
+    public double getNowPlayingTextScale()
+    {
+        if(mNowPlayingTextScale == null)
+        {
+            mNowPlayingTextScale = clampNowPlayingTextScale(
+                Setting.APPLICATION_NOW_PLAYING_TEXT_SCALE.getDouble(DEFAULT_NOW_PLAYING_TEXT_SCALE));
+        }
+
+        return mNowPlayingTextScale;
+    }
+
+    /**
+     * Sets the text size of the Now Playing table.  Out-of-range values are clamped.
+     */
+    public void setNowPlayingTextScale(double scale)
+    {
+        mNowPlayingTextScale = clampNowPlayingTextScale(scale);
+        Setting.APPLICATION_NOW_PLAYING_TEXT_SCALE.putDouble(mNowPlayingTextScale);
+        notifySettingsUpdated();
+    }
+
+    private static double clampNowPlayingTextScale(double scale)
+    {
+        if(Double.isNaN(scale) || scale < MIN_NOW_PLAYING_TEXT_SCALE) return MIN_NOW_PLAYING_TEXT_SCALE;
+        if(scale > MAX_NOW_PLAYING_TEXT_SCALE) return MAX_NOW_PLAYING_TEXT_SCALE;
+        return scale;
+    }
+
+    /**
+     * Row spacing of the Now Playing table.
+     */
+    public RowSpacing getNowPlayingRowSpacing()
+    {
+        if(mNowPlayingRowSpacing == null)
+        {
+            mNowPlayingRowSpacing = RowSpacing.fromName(Setting.APPLICATION_NOW_PLAYING_ROW_SPACING.get(null));
+        }
+
+        return mNowPlayingRowSpacing;
+    }
+
+    /**
+     * Sets the row spacing of the Now Playing table.
+     */
+    public void setNowPlayingRowSpacing(RowSpacing spacing)
+    {
+        mNowPlayingRowSpacing = spacing != null ? spacing : DEFAULT_NOW_PLAYING_ROW_SPACING;
+        Setting.APPLICATION_NOW_PLAYING_ROW_SPACING.put(mNowPlayingRowSpacing.name());
         notifySettingsUpdated();
     }
 

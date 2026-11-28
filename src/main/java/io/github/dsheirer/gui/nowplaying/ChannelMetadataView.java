@@ -27,6 +27,7 @@ import io.github.dsheirer.channel.state.State;
 import io.github.dsheirer.controller.channel.Channel;
 import io.github.dsheirer.controller.channel.ChannelProcessingManager;
 import io.github.dsheirer.eventbus.MyEventBus;
+import io.github.dsheirer.settings.application.ApplicationSettings;
 import io.github.dsheirer.gui.playlist.channel.ViewChannelRequest;
 import io.github.dsheirer.gui.table.ColumnConfigurationButton;
 import io.github.dsheirer.gui.table.TableColumnMonitor;
@@ -96,6 +97,7 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
     }
 
     private final ChannelProcessingManager mChannelProcessingManager;
+    private final ApplicationSettings mApplicationSettings;
     private final ChannelMetadataModel mChannelMetadataModel;
     private final IconModel mIconModel;
     private final TalkgroupFormatSettings mTalkgroupFormatSettings;
@@ -122,6 +124,7 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
         mShowInWaterfallAction = new ShowInWaterfallAction(channelProcessingManager, tunerManager);
         mChannelMetadataModel = mChannelProcessingManager.getChannelMetadataModel();
         mIconModel = iconModel;
+        mApplicationSettings = settings.getApplicationSettings();
         mTalkgroupFormatSettings = settings.getTalkgroupFormatSettings();
 
         mTableView.getColumns().addAll(createColumns());
@@ -154,6 +157,7 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
             addRow(channelMetadata);
         }
 
+        applyTableSize();
         MyEventBus.getGlobalEventBus().register(this);
     }
 
@@ -178,13 +182,34 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
     /**
      * Receives preference update notifications via the event bus
      */
+    /**
+     * Applies the Now Playing text size and row spacing from the Appearance settings.  JavaFX thread.
+     */
+    private void applyTableSize()
+    {
+        double scale = mApplicationSettings.getNowPlayingTextScale();
+        mTableView.setStyle(Math.abs(scale - 1.0) < 1e-6 ? null :
+            String.format(java.util.Locale.ROOT, "-fx-font-size: %.2fem;", scale));
+        mTableView.getStyleClass().removeAll("np-spacing-compact", "np-spacing-tight");
+
+        switch(mApplicationSettings.getNowPlayingRowSpacing())
+        {
+            case COMPACT -> mTableView.getStyleClass().add("np-spacing-compact");
+            case TIGHT -> mTableView.getStyleClass().add("np-spacing-tight");
+            default -> {}
+        }
+    }
+
     @Subscribe
     public void settingsUpdated(SettingsType settingsType)
     {
         //Talkgroup format changes the identifiers and the application preference can change the alias colors
         if(settingsType == SettingsType.TALKGROUP_FORMAT || settingsType == SettingsType.APPLICATION)
         {
-            Platform.runLater(() -> mRows.forEach(Row::refresh));
+            Platform.runLater(() -> {
+                applyTableSize();
+                mRows.forEach(Row::refresh);
+            });
         }
     }
 
