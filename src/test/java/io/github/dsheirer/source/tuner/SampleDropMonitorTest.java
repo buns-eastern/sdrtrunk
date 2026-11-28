@@ -85,6 +85,14 @@ public class SampleDropMonitorTest
             mProduced += seconds * 1e9;
         }
 
+        /**
+         * The tuner stops its sample stream on purpose (ie the last channel stopped using it).
+         */
+        void streamStopped()
+        {
+            mMonitor.requestRestart();
+        }
+
         long dropped()
         {
             return mMonitor.getTotalDroppedSamples();
@@ -140,6 +148,24 @@ public class SampleDropMonitorTest
         Stream stream = new Stream(0, 0);
         stream.run(20);
         stream.pause(10);
+        stream.run(20);
+        assertEquals(0, stream.dropped());
+    }
+
+    /**
+     * A tuner used only for traffic channels stops streaming when a call ends and starts again when the next call
+     * lands, often within a second or two.  That idle time must not be reported as dropped samples.
+     */
+    @Test
+    void shortStreamStopBetweenCallsIsNotADrop()
+    {
+        Stream stream = new Stream(0, 0);
+        stream.run(20);
+        stream.streamStopped();
+        stream.pause(1.0);
+        stream.run(20);
+        stream.streamStopped();
+        stream.pause(1.7);
         stream.run(20);
         assertEquals(0, stream.dropped());
     }

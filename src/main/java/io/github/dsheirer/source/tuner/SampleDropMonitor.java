@@ -62,6 +62,7 @@ public class SampleDropMonitor
     private final DoubleSupplier mSampleRateSupplier;
     private final Supplier<String> mTunerNameSupplier;
     private boolean mStarted = false;
+    private volatile boolean mRestartRequested = false;
     private long mWindowStart;
     private long mLastBuffer;
     private long mLastLog;
@@ -94,6 +95,16 @@ public class SampleDropMonitor
     }
 
     /**
+     * Starts detection fresh with the next buffer.  Call when the tuner's sample stream is stopped or started on
+     * purpose (ie the last channel stops using the tuner, or the first channel starts), so that the idle time between
+     * streams isn't counted as dropped samples, however short it is.  Any thread.
+     */
+    public void requestRestart()
+    {
+        mRestartRequested = true;
+    }
+
+    /**
      * Processes a buffer of samples received from the tuner.
      * @param sampleCount number of (complex) samples in the buffer.
      */
@@ -109,8 +120,9 @@ public class SampleDropMonitor
      */
     void process(int sampleCount, long now)
     {
-        if(!mStarted || now - mLastBuffer > RESTART_GAP_NANOS)
+        if(!mStarted || mRestartRequested || now - mLastBuffer > RESTART_GAP_NANOS)
         {
+            mRestartRequested = false;
             restart(now);
             return;
         }

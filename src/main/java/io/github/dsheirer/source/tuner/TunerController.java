@@ -668,6 +668,13 @@ public abstract class TunerController implements Tunable, ISourceEventProcessor,
 
         try
         {
+            //The first listener starts the sample stream: start drop detection fresh so that the time the stream was
+            //stopped isn't counted as dropped samples
+            if(!mNativeBufferBroadcaster.hasListeners() && mSampleDropMonitor != null)
+            {
+                mSampleDropMonitor.requestRestart();
+            }
+
             mNativeBufferBroadcaster.addListener(listener);
         }
         finally
@@ -687,6 +694,13 @@ public abstract class TunerController implements Tunable, ISourceEventProcessor,
         try
         {
             mNativeBufferBroadcaster.removeListener(listener);
+
+            //The last listener stops the sample stream (ie an RTL tuner used only for traffic channels): start drop
+            //detection fresh with the next stream
+            if(!mNativeBufferBroadcaster.hasListeners() && mSampleDropMonitor != null)
+            {
+                mSampleDropMonitor.requestRestart();
+            }
         }
         finally
         {
