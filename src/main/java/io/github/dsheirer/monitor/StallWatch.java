@@ -163,49 +163,10 @@ public class StallWatch
 
         try
         {
-            //Platform threads with the locks each one holds and is waiting for
             StringBuilder sb = new StringBuilder();
             sb.append("sdrtrunk stall snapshot ").append(LocalDateTime.now()).append("\n");
             sb.append("Reason: ").append(reason).append("\n\n");
-
-            for(ThreadInfo info: ManagementFactory.getThreadMXBean().dumpAllThreads(true, true))
-            {
-                sb.append('"').append(info.getThreadName()).append("\" ").append(info.getThreadState());
-
-                if(info.getLockName() != null)
-                {
-                    sb.append(" waiting for ").append(info.getLockName());
-
-                    if(info.getLockOwnerName() != null)
-                    {
-                        sb.append(" held by \"").append(info.getLockOwnerName()).append('"');
-                    }
-                }
-
-                sb.append('\n');
-                StackTraceElement[] stack = info.getStackTrace();
-
-                for(int i = 0; i < stack.length; i++)
-                {
-                    sb.append("    at ").append(stack[i]).append('\n');
-
-                    for(MonitorInfo monitor: info.getLockedMonitors())
-                    {
-                        if(monitor.getLockedStackDepth() == i)
-                        {
-                            sb.append("      - locked ").append(monitor).append('\n');
-                        }
-                    }
-                }
-
-                for(LockInfo lock: info.getLockedSynchronizers())
-                {
-                    sb.append("    - holds ").append(lock).append('\n');
-                }
-
-                sb.append('\n');
-            }
-
+            sb.append(threadReport());
             Path platformFile = directory.resolve(stamp + "_sdrtrunk_stall_threads.log");
             Files.writeString(platformFile, sb.toString(), StandardCharsets.UTF_8);
             sLog.error("Stall detected - " + reason + " - thread snapshot saved to " + platformFile);
@@ -230,5 +191,53 @@ public class StallWatch
         {
             sLog.error("Unable to save the full thread snapshot: " + t.getMessage());
         }
+    }
+
+    /**
+     * Every platform thread with its full stack, the locks it holds and the lock it is waiting for.
+     */
+    static String threadReport()
+    {
+        StringBuilder sb = new StringBuilder();
+
+        for(ThreadInfo info: ManagementFactory.getThreadMXBean().dumpAllThreads(true, true))
+        {
+            sb.append('"').append(info.getThreadName()).append("\" ").append(info.getThreadState());
+
+            if(info.getLockName() != null)
+            {
+                sb.append(" waiting for ").append(info.getLockName());
+
+                if(info.getLockOwnerName() != null)
+                {
+                    sb.append(" held by \"").append(info.getLockOwnerName()).append('"');
+                }
+            }
+
+            sb.append('\n');
+            StackTraceElement[] stack = info.getStackTrace();
+
+            for(int i = 0; i < stack.length; i++)
+            {
+                sb.append("    at ").append(stack[i]).append('\n');
+
+                for(MonitorInfo monitor: info.getLockedMonitors())
+                {
+                    if(monitor.getLockedStackDepth() == i)
+                    {
+                        sb.append("      - locked ").append(monitor).append('\n');
+                    }
+                }
+            }
+
+            for(LockInfo lock: info.getLockedSynchronizers())
+            {
+                sb.append("    - holds ").append(lock).append('\n');
+            }
+
+            sb.append('\n');
+        }
+
+        return sb.toString();
     }
 }

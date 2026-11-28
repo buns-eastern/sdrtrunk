@@ -38,6 +38,7 @@ import io.github.dsheirer.module.log.EventLogManager;
 import io.github.dsheirer.module.decode.p25.phase1.ImbeStreamManager;
 import io.github.dsheirer.module.decode.p25.phase1.NetworkStreamManager;
 import io.github.dsheirer.monitor.StallWatch;
+import io.github.dsheirer.monitor.StartupWatch;
 import io.github.dsheirer.module.decode.p25.phase1.PcmStreamManager;
 import io.github.dsheirer.module.decode.p25.phase1.StandaloneChannelStreamManager;
 import io.github.dsheirer.monitor.DiagnosticMonitor;
@@ -112,6 +113,9 @@ public class SDRTrunk implements Listener<TunerEvent>
 
         mApplicationLog = new ApplicationLog(mSettings);
         mApplicationLog.start();
+
+        //Records what startup is doing if it's slow (ie no internet connection) - writes nothing on a normal start
+        StartupWatch.start(mSettings.getDirectorySettings().getDirectoryApplicationLog());
 
         Map<String,List<String>> duplicateLibraries = DuplicateLibraryDetector.findDuplicates();
 
@@ -254,6 +258,8 @@ public class SDRTrunk implements Listener<TunerEvent>
                     return null;
                 });
             }
+
+            StartupWatch.finished();
         }
 
         TunerSpectralDisplayManager tunerSpectralDisplayManager = new TunerSpectralDisplayManager(
