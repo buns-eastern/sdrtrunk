@@ -42,7 +42,8 @@ public enum Setting
     APPLICATION_DARK_MODE(Node.APPLICATION, "dark.mode"),
     APPLICATION_GUI_SCALE(Node.APPLICATION, "ui.gui.scale"),
     APPLICATION_NOW_PLAYING_TEXT_SCALE(Node.APPLICATION, "ui.nowplaying.text.scale"),
-    APPLICATION_NOW_PLAYING_ROW_SPACING(Node.APPLICATION, "ui.nowplaying.row.spacing"),
+    APPLICATION_NOW_PLAYING_ROW_SPACING(Node.APPLICATION, "ui.nowplaying.row.spacing"), //Earlier builds, read to migrate
+    APPLICATION_NOW_PLAYING_ROW_HEIGHT(Node.APPLICATION, "ui.nowplaying.row.height"),
     APPLICATION_THEME(Node.APPLICATION, "ui.theme"),
     //Theme chosen in earlier fork builds, read once to carry the choice over.  Never written.
     APPLICATION_THEME_LEGACY_FORK(Node.SWING, "application.appearance.theme"),

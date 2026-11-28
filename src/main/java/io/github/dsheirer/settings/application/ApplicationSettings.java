@@ -44,49 +44,9 @@ public class ApplicationSettings extends AbstractSettings
     public static final double MIN_NOW_PLAYING_TEXT_SCALE = 0.7d;
     public static final double MAX_NOW_PLAYING_TEXT_SCALE = 1.3d;
     public static final double DEFAULT_NOW_PLAYING_TEXT_SCALE = 1.0d;
-    public static final RowSpacing DEFAULT_NOW_PLAYING_ROW_SPACING = RowSpacing.NORMAL;
-
-    /**
-     * Space above and below each row in the Now Playing table.
-     */
-    public enum RowSpacing
-    {
-        NORMAL("Normal"),
-        COMPACT("Compact"),
-        TIGHT("Tight");
-
-        private final String mLabel;
-
-        RowSpacing(String label)
-        {
-            mLabel = label;
-        }
-
-        @Override
-        public String toString()
-        {
-            return mLabel;
-        }
-
-        /**
-         * Spacing for the stored name, or the default when it isn't recognized.
-         */
-        public static RowSpacing fromName(String name)
-        {
-            if(name != null)
-            {
-                for(RowSpacing spacing: values())
-                {
-                    if(spacing.name().equals(name))
-                    {
-                        return spacing;
-                    }
-                }
-            }
-
-            return DEFAULT_NOW_PLAYING_ROW_SPACING;
-        }
-    }
+    public static final double MIN_NOW_PLAYING_ROW_HEIGHT = 0.6d;
+    public static final double MAX_NOW_PLAYING_ROW_HEIGHT = 1.5d;
+    public static final double DEFAULT_NOW_PLAYING_ROW_HEIGHT = 1.0d;
 
     private final static Logger mLog = LoggerFactory.getLogger(ApplicationSettings.class);
     private Integer mChannelAutoStartTimeout;
@@ -94,7 +54,7 @@ public class ApplicationSettings extends AbstractSettings
     private Theme mTheme;
     private Double mGuiScale;
     private Double mNowPlayingTextScale;
-    private RowSpacing mNowPlayingRowSpacing;
+    private Double mNowPlayingRowHeight;
     private Boolean mComplementaryAliasColors;
 
     /**
@@ -302,26 +262,46 @@ public class ApplicationSettings extends AbstractSettings
     }
 
     /**
-     * Row spacing of the Now Playing table.
+     * Row height of the Now Playing table relative to the normal row height, where 1.0 is 100%.  The earlier Normal /
+     * Compact / Tight choice carries over as its matching height.
      */
-    public RowSpacing getNowPlayingRowSpacing()
+    public double getNowPlayingRowHeight()
     {
-        if(mNowPlayingRowSpacing == null)
+        if(mNowPlayingRowHeight == null)
         {
-            mNowPlayingRowSpacing = RowSpacing.fromName(Setting.APPLICATION_NOW_PLAYING_ROW_SPACING.get(null));
+            double height = DEFAULT_NOW_PLAYING_ROW_HEIGHT;
+            String legacy = Setting.APPLICATION_NOW_PLAYING_ROW_SPACING.get(null);
+
+            if("COMPACT".equals(legacy))
+            {
+                height = 0.8d;
+            }
+            else if("TIGHT".equals(legacy))
+            {
+                height = 0.7d;
+            }
+
+            mNowPlayingRowHeight = clampNowPlayingRowHeight(Setting.APPLICATION_NOW_PLAYING_ROW_HEIGHT.getDouble(height));
         }
 
-        return mNowPlayingRowSpacing;
+        return mNowPlayingRowHeight;
     }
 
     /**
-     * Sets the row spacing of the Now Playing table.
+     * Sets the row height of the Now Playing table.  Out-of-range values are clamped.
      */
-    public void setNowPlayingRowSpacing(RowSpacing spacing)
+    public void setNowPlayingRowHeight(double height)
     {
-        mNowPlayingRowSpacing = spacing != null ? spacing : DEFAULT_NOW_PLAYING_ROW_SPACING;
-        Setting.APPLICATION_NOW_PLAYING_ROW_SPACING.put(mNowPlayingRowSpacing.name());
+        mNowPlayingRowHeight = clampNowPlayingRowHeight(height);
+        Setting.APPLICATION_NOW_PLAYING_ROW_HEIGHT.putDouble(mNowPlayingRowHeight);
         notifySettingsUpdated();
+    }
+
+    private static double clampNowPlayingRowHeight(double height)
+    {
+        if(Double.isNaN(height) || height < MIN_NOW_PLAYING_ROW_HEIGHT) return MIN_NOW_PLAYING_ROW_HEIGHT;
+        if(height > MAX_NOW_PLAYING_ROW_HEIGHT) return MAX_NOW_PLAYING_ROW_HEIGHT;
+        return height;
     }
 
     /**

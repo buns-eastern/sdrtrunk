@@ -48,7 +48,8 @@ public class AppearanceSettingsPage extends SettingsPage
     private Label mGuiScaleValueLabel;
     private Slider mNowPlayingTextSlider;
     private Label mNowPlayingTextValueLabel;
-    private ComboBox<ApplicationSettings.RowSpacing> mRowSpacingComboBox;
+    private Slider mRowHeightSlider;
+    private Label mRowHeightValueLabel;
 
     public AppearanceSettingsPage(Settings settings)
     {
@@ -80,9 +81,10 @@ public class AppearanceSettingsPage extends SettingsPage
             .defaultValue(getNowPlayingTextSlider().valueProperty(), ApplicationSettings.DEFAULT_NOW_PLAYING_TEXT_SCALE,
                 value -> getNowPlayingTextSlider().setValue(value.doubleValue()))
             .help("Size of the text in the Now Playing table only. Takes effect immediately.");
-        nowPlaying.addRow("Row spacing", getRowSpacingComboBox())
-            .defaultValue(getRowSpacingComboBox().valueProperty(), ApplicationSettings.DEFAULT_NOW_PLAYING_ROW_SPACING,
-                getRowSpacingComboBox()::setValue)
+        getRowHeightSlider().setPrefWidth(320);
+        nowPlaying.addRow("Row spacing", getRowHeightSlider(), getRowHeightValueLabel())
+            .defaultValue(getRowHeightSlider().valueProperty(), ApplicationSettings.DEFAULT_NOW_PLAYING_ROW_HEIGHT,
+                value -> getRowHeightSlider().setValue(value.doubleValue()))
             .help("Space above and below each row in the Now Playing table. Tighter fits more rows.");
     }
 
@@ -129,22 +131,47 @@ public class AppearanceSettingsPage extends SettingsPage
         return mNowPlayingTextValueLabel;
     }
 
-    private ComboBox<ApplicationSettings.RowSpacing> getRowSpacingComboBox()
+    /**
+     * Now Playing row height slider: 60% to 150% of the normal row height in 5% steps, applied as it moves.
+     */
+    private Slider getRowHeightSlider()
     {
-        if(mRowSpacingComboBox == null)
+        if(mRowHeightSlider == null)
         {
-            mRowSpacingComboBox = new ComboBox<>();
-            mRowSpacingComboBox.getItems().addAll(ApplicationSettings.RowSpacing.values());
-            mRowSpacingComboBox.setValue(mApplicationSettings.getNowPlayingRowSpacing());
-            mRowSpacingComboBox.valueProperty().addListener((obs, oldV, newV) -> {
-                if(newV != null && newV != mApplicationSettings.getNowPlayingRowSpacing())
+            mRowHeightSlider = new Slider(ApplicationSettings.MIN_NOW_PLAYING_ROW_HEIGHT,
+                ApplicationSettings.MAX_NOW_PLAYING_ROW_HEIGHT, mApplicationSettings.getNowPlayingRowHeight());
+            mRowHeightSlider.setMajorTickUnit(0.1d);
+            mRowHeightSlider.setMinorTickCount(1); //5% steps
+            mRowHeightSlider.setSnapToTicks(true);
+            mRowHeightSlider.setShowTickMarks(true);
+            mRowHeightSlider.setShowTickLabels(false);
+            mRowHeightSlider.setBlockIncrement(0.05d);
+            mRowHeightSlider.valueProperty().addListener((obs, oldV, newV) -> {
+                if(newV != null)
                 {
-                    mApplicationSettings.setNowPlayingRowSpacing(newV);
+                    double snapped = Math.round(newV.doubleValue() * 20) / 20.0;
+                    getRowHeightValueLabel().setText(formatScale(snapped));
+
+                    if(Math.abs(snapped - mApplicationSettings.getNowPlayingRowHeight()) > 1e-6)
+                    {
+                        mApplicationSettings.setNowPlayingRowHeight(snapped);
+                    }
                 }
             });
         }
 
-        return mRowSpacingComboBox;
+        return mRowHeightSlider;
+    }
+
+    private Label getRowHeightValueLabel()
+    {
+        if(mRowHeightValueLabel == null)
+        {
+            mRowHeightValueLabel = new Label(formatScale(mApplicationSettings.getNowPlayingRowHeight()));
+            mRowHeightValueLabel.setMinWidth(50);
+        }
+
+        return mRowHeightValueLabel;
     }
 
     /**

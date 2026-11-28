@@ -98,6 +98,7 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
 
     private final ChannelProcessingManager mChannelProcessingManager;
     private final ApplicationSettings mApplicationSettings;
+    private String mRowHeightStylesheet;
     private final ChannelMetadataModel mChannelMetadataModel;
     private final IconModel mIconModel;
     private final TalkgroupFormatSettings mTalkgroupFormatSettings;
@@ -190,13 +191,23 @@ public class ChannelMetadataView extends VBox implements ChannelMetadataModel.Li
         double scale = mApplicationSettings.getNowPlayingTextScale();
         mTableView.setStyle(Math.abs(scale - 1.0) < 1e-6 ? null :
             String.format(java.util.Locale.ROOT, "-fx-font-size: %.2fem;", scale));
-        mTableView.getStyleClass().removeAll("np-spacing-compact", "np-spacing-tight");
-
-        switch(mApplicationSettings.getNowPlayingRowSpacing())
+        //Row height: a small stylesheet just for this table, since a row's height can't be set from the table's own style
+        if(mRowHeightStylesheet != null)
         {
-            case COMPACT -> mTableView.getStyleClass().add("np-spacing-compact");
-            case TIGHT -> mTableView.getStyleClass().add("np-spacing-tight");
-            default -> {}
+            mTableView.getStylesheets().remove(mRowHeightStylesheet);
+            mRowHeightStylesheet = null;
+        }
+
+        double height = mApplicationSettings.getNowPlayingRowHeight();
+
+        if(Math.abs(height - 1.0) > 1e-6)
+        {
+            //Normal rows are 2.0em tall.  Shorter rows also drop the cell's top and bottom padding so text isn't clipped.
+            String css = String.format(java.util.Locale.ROOT, ".table-row-cell { -fx-cell-size: %.3fem; }%s", 2.0 * height,
+                height < 1.0 ? " .table-cell { -fx-padding: 0 0.4em 0 0.4em; } .np-state-chip { -fx-padding: 0 8 0 8; }" : "");
+            mRowHeightStylesheet = "data:text/css;base64," +
+                java.util.Base64.getEncoder().encodeToString(css.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            mTableView.getStylesheets().add(mRowHeightStylesheet);
         }
     }
 
